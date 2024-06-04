@@ -1,0 +1,7 @@
+defaults:
+  - model: gpt2
+  - dataset: pile
+  - optimizer: adam
+  - train
+  - logging
+  - checkpoint

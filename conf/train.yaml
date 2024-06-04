@@ -1,0 +1,31 @@
+max_steps: 50000
+
+# clip the gradient to have l2 norm at most this value
+gradient_clip_val: 10.0
+
+# whether to wrap the optimizer with online to nonconvex conversion
+# for some most optimizers/online learners, they have default value of wrap_o2nc 
+# (e.g., some online learners are always wrapped, and some optimizers are never wrapped),
+# which overwrites this setting.
+wrap_o2nc: False
+
+# random scaling options. supports "exponential".
+random_scaling: "exponential"
+random_scaling_seed: 0
+
+# whether to use automatic mixed precision
+use_amp: True
+# value to cast to in mixed precision training.
+precision: float16
+
+batch_size: 4 # number of examples placed on each GPU
+
+# shuffle buffer for data loader. 0 means no shuffle.
+shuffle_buffer_size: 0
+
+# following settings chosen after
+# some experimentation with a tiny model.
+# may not be optimal for all machines, but
+# hopefully with a reasonably sized model this will
+# prevent dataloading from being the bottleneck.
+dataloader_workers: 2

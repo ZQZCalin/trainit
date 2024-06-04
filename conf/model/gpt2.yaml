@@ -1,0 +1,17 @@
+name: gpt
+
+# global architecture
+dim: 768                  # embedding dimension of input tokens.
+num_heads: 12             # number of heads in multi-head attention.
+num_blocks: 12            # number of stacked transformer blocks.
+context_length: 1024      # maximum lenght of input tokens.
+rescale_residuals: False  # will not be used in new implementation.
+
+# dropout probability of corresponding dropout layers
+attn_dropout: 0           
+attn_linear_dropout: 0
+transformer_dropout: 0
+gpt_dropout: 0
+
+# use_bias of corresponding linear layers
+head_bias: False          # whether the final linear (head) layer of GPT uses bias. defaults to false.

@@ -1,0 +1,39 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# pytest cache
+.pytest_cache/
+
+# Environment directories
+.env
+.venv/
+venv/
+env/
+
+# VS Code settings
+.vscode/
+
+# hydra outputs
+outputs/
+
+# wandb log files
+wandb/
+
+# batch job and output files
+batch_job/
+*.sh.*
+
+# checkpoint files
+checkpoint/
+
+# other directories
+opt/
+mechanic.py
+trainer.py
+test.py
+scc_setup.sh
+activate_env.sh
+check_env.py
+requirements.txt
