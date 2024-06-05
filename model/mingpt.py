@@ -58,7 +58,7 @@ class CausalSelfAttention(eqx.Module):
         # Apply attn_fc and split into multi-heads of q,k,v.
         qkv = jax.vmap(self.attn_fc)(data)                  # [L,D] -> [L,3D]
         qkv = jnp.reshape(qkv, (L,3,n,d))                   # [L,3D] -> [L,3,n,d]
-        qkv = jnp.transpose(qkv, (1,2,0,3))                   # [L,3,n,d] -> [3,n,L,d]
+        qkv = jnp.transpose(qkv, (1,2,0,3))                 # [L,3,n,d] -> [3,n,L,d]
         q, k, v = qkv[0], qkv[1], qkv[2]                    # [n,L,d]
 
         # Compute attention score for each head.
@@ -74,7 +74,7 @@ class CausalSelfAttention(eqx.Module):
 
         # Concatenate all heads and apply final linear layer.
         output = jax.vmap(jnp.matmul)(attn, v)              # [n,L,L] @ [n,L,d] -> [n,L,d]
-        output = jnp.transpose(output, (1,0,2))               # [n,L,d] -> [L,n,d]
+        output = jnp.transpose(output, (1,0,2))             # [n,L,d] -> [L,n,d]
         output = jnp.reshape(output, (L,D))                 # [L,n,d] -> [L,D]
         output = jax.vmap(self.linear)(output)              # [L,D] -> [L,D]
         output = self.linear_dropout(output, key=linear_key)
@@ -168,7 +168,7 @@ class GPT(eqx.Module):
         # for position embedding, there's a more clever way than using jax.vmap(...)([1,2,...,L]).
         # note that the positional embedding of the i-th token is always the i-th row of the lookup table.
         # in other words, the position embedded data is just the first L rows of the lookup table.
-        positions = self.position_embedding.weight[:L, :]          # [L,D]
+        positions = self.position_embedding.weight[:L, :]   # [L,D]
 
         x = tokens + positions                              # [L,D]
         x = self.dropout(x, key=dropout_key)                # [L,D]
