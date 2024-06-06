@@ -12,6 +12,8 @@ __pycache__/
 venv/
 env/
 
+minGPT/
+
 # VS Code settings
 .vscode/
 

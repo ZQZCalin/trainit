@@ -12,6 +12,55 @@ from typing import Union, Optional, Sequence
 
 from jax import named_scope
 
+import warnings
+
+
+# To load paramters from Pytorch models, we extend basic equinox modules with the _load_params method.
+# We will not modify the static fields (e.g., use_weight, use_bias), and these fields have higher priority
+# than input parameters. For example, if a Linear layer sets use_bias = False, then the bias will remain None
+# even if the input bias is not None.
+class Linear(nn.Linear):
+    """Extends equinox.nn.Linear with _load_params."""
+    def _load_params(self, weight: Array, bias: Optional[Array] = None) -> nn.Linear:
+        assert weight.shape == self.weight.shape, \
+            f"input weight shape {weight.shape} does not match current weight shape {self.weight.shape}"
+        if self.use_bias != (bias is not None):
+            warnings.warn(f"Input bias does not match use_bias={self.use_bias}, and it will be neglected.")
+            bias = self.bias
+        else:
+            if self.use_bias:
+                assert bias.shape == self.bias.shape, \
+                    f"input weight shape {bias.shape} does not match current weight shape {self.bias.shape}"
+        return eqx.tree_at(lambda m: (m.weight, m.bias), self, (weight, bias))
+
+
+class Embedding(nn.Embedding):
+    """Extends equinox.nn.Embedding with _load_params."""
+    def _load_params(self, weight: Array):
+        assert weight.shape == self.weight.shape, \
+            f"input weight shape {weight.shape} does not match current weight shape {self.weight.shape}"
+        return eqx.tree_at(lambda m: m.weight, self, weight)
+
+
+class LayerNorm(nn.LayerNorm):
+    """Extends equinox.nn.LayerNorm with _load_params."""
+    def _load_params(self, weight: Optional[Array] = None, bias: Optional[Array] = None):
+        if self.use_weight != (weight is not None):
+            warnings.warn(f"Input weight does not match use_weight={self.use_weight}, and it will be neglected.")
+            weight = self.weight
+        else:
+            if self.use_weight:
+                assert weight.shape == self.weight.shape, \
+                    f"input weight shape {weight.shape} does not match current weight shape {self.weight.shape}"
+        if self.use_bias != (bias is not None):
+            warnings.warn(f"Input bias does not match use_bias={self.use_bias}, and it will be neglected.")
+            bias = self.bias
+        else:
+            if self.use_bias:
+                assert bias.shape == self.bias.shape, \
+                    f"input weight shape {bias.shape} does not match current weight shape {self.bias.shape}"
+        return eqx.tree_at(lambda m: (m.weight, m.bias), self, (weight, bias))
+
 
 class CausalSelfAttention(eqx.Module):
     dim: int = eqx.field(static=True)
@@ -43,6 +92,9 @@ class CausalSelfAttention(eqx.Module):
         # Define the mask index matrix: lower triangular one matrix.
         # This masks out upper triangles where j > i in i-th row (which correspond to future tokens).
         self.mask = jnp.tril(jnp.ones((config.context_length, config.context_length)))
+
+    def _load_params(self, params):
+        """params: curated pytree of model parameters."""
 
     @named_scope("gpt2.CausalSelfAttention")
     def __call__(self, data, *, key: PRNGKeyArray):
