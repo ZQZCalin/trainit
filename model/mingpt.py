@@ -2,64 +2,22 @@
 Equinox implementation of GPT2 model based on the [mingpt repo](https://github.com/karpathy/minGPT/blob/master/mingpt/model.py).
 """
 import jax
+from jax import named_scope
 from jax import numpy as jnp
-from jaxtyping import Array, PRNGKeyArray
+from jax import random as jr
 
 import equinox as eqx
 from equinox import nn
-from jax import random as jr
-from typing import Union, Optional, Sequence
+from . import extend_nn as enn
 
-from jax import named_scope
+import torch
 
-import warnings
-
-
-# To load paramters from Pytorch models, we extend basic equinox modules with the _load_params method.
-# We will not modify the static fields (e.g., use_weight, use_bias), and these fields have higher priority
-# than input parameters. For example, if a Linear layer sets use_bias = False, then the bias will remain None
-# even if the input bias is not None.
-class Linear(nn.Linear):
-    """Extends equinox.nn.Linear with _load_params."""
-    def _load_params(self, weight: Array, bias: Optional[Array] = None) -> nn.Linear:
-        assert weight.shape == self.weight.shape, \
-            f"input weight shape {weight.shape} does not match current weight shape {self.weight.shape}"
-        if self.use_bias != (bias is not None):
-            warnings.warn(f"Input bias does not match use_bias={self.use_bias}, and it will be neglected.")
-            bias = self.bias
-        else:
-            if self.use_bias:
-                assert bias.shape == self.bias.shape, \
-                    f"input weight shape {bias.shape} does not match current weight shape {self.bias.shape}"
-        return eqx.tree_at(lambda m: (m.weight, m.bias), self, (weight, bias))
+from typing import Union, Optional, Sequence, Literal
+from jaxtyping import Array, PRNGKeyArray
+import re
 
 
-class Embedding(nn.Embedding):
-    """Extends equinox.nn.Embedding with _load_params."""
-    def _load_params(self, weight: Array):
-        assert weight.shape == self.weight.shape, \
-            f"input weight shape {weight.shape} does not match current weight shape {self.weight.shape}"
-        return eqx.tree_at(lambda m: m.weight, self, weight)
-
-
-class LayerNorm(nn.LayerNorm):
-    """Extends equinox.nn.LayerNorm with _load_params."""
-    def _load_params(self, weight: Optional[Array] = None, bias: Optional[Array] = None):
-        if self.use_weight != (weight is not None):
-            warnings.warn(f"Input weight does not match use_weight={self.use_weight}, and it will be neglected.")
-            weight = self.weight
-        else:
-            if self.use_weight:
-                assert weight.shape == self.weight.shape, \
-                    f"input weight shape {weight.shape} does not match current weight shape {self.weight.shape}"
-        if self.use_bias != (bias is not None):
-            warnings.warn(f"Input bias does not match use_bias={self.use_bias}, and it will be neglected.")
-            bias = self.bias
-        else:
-            if self.use_bias:
-                assert bias.shape == self.bias.shape, \
-                    f"input weight shape {bias.shape} does not match current weight shape {self.bias.shape}"
-        return eqx.tree_at(lambda m: (m.weight, m.bias), self, (weight, bias))
+StateDict = dict[str, torch.Tensor]
 
 
 class CausalSelfAttention(eqx.Module):
@@ -71,20 +29,26 @@ class CausalSelfAttention(eqx.Module):
     linear_dropout: nn.Dropout
     mask: Array
 
-    def __init__(self, config, *, key: PRNGKeyArray):
+    def __init__(self, config, state_dict: Optional[StateDict] = None, *, key: Optional[PRNGKeyArray] = None):
         """Initializes a multi-head self-attention layer for GPT model.
 
         Args:
             config (_type_): _description_
             key (PRNGKeyArray): _description_
         """
+        assert config.dim % config.num_heads == 0, \
+            f"Number of heads {config.num_heads} does not divide embedding dimension {config.dim}."
         self.dim = config.dim
         self.num_heads = config.num_heads
-        assert self.dim % self.num_heads == 0, \
-            f"Number of heads {self.num_heads} does not divide embedding dimension {self.dim}."
         
+        if state_dict is None:
+            self._init_default(config, key=key)
+        else:
+            self._init_from_torch(config, state_dict=state_dict)
+
+    def _init_default(self, config, *, key: PRNGKeyArray):
+        """Default initialization."""
         attn_key, linear_key = jr.split(key, 2)
-        
         self.attn_fc = nn.Linear(self.dim, 3*self.dim, key=attn_key)
         self.linear = nn.Linear(self.dim, self.dim, key=linear_key)
         self.attn_dropout = nn.Dropout(config.attn_dropout)
@@ -93,8 +57,15 @@ class CausalSelfAttention(eqx.Module):
         # This masks out upper triangles where j > i in i-th row (which correspond to future tokens).
         self.mask = jnp.tril(jnp.ones((config.context_length, config.context_length)))
 
-    def _load_params(self, params):
-        """params: curated pytree of model parameters."""
+    def _init_from_torch(self, config, *, state_dict: StateDict):
+        """Initialize from pytorch state_dict."""
+        def get_params(name):
+            return jnp.array(state_dict[name])
+        self.attn_fc = enn.Linear(weight=get_params("c_attn.weight"), bias=get_params("c_attn.bias"))
+        self.linear = enn.Linear(weight=get_params("c_proj.weight"), bias=get_params("c_proj.bias"))
+        self.attn_dropout = nn.Dropout(config.attn_dropout)
+        self.linear_dropout = nn.Dropout(config.attn_linear_dropout)
+        self.mask = jnp.tril(jnp.ones((config.context_length, config.context_length)))
 
     @named_scope("gpt2.CausalSelfAttention")
     def __call__(self, data, *, key: PRNGKeyArray):
@@ -141,19 +112,47 @@ class TransformerBlock(eqx.Module):
     reduce_fc: nn.Linear
     dropout: nn.Dropout
 
-    def __init__(self, config, *, key: PRNGKeyArray):
+    def __init__(self, config, state_dict: Optional[StateDict] = None, *, key: Optional[PRNGKeyArray] = None):
         """Initializes a transformer block for GPT model.
 
         Args:
             config: specifies (dim, transformer_dropout).
             key: random key for initialization.
         """
+        if state_dict is None:
+            self._init_default(config, key=key)
+        else:
+            self._init_from_torch(config, state_dict=state_dict)
+
+    def _init_default(self, config, *, key: PRNGKeyArray):
+        """Default initialization."""
         attn_key, expand_key, reduce_key = jr.split(key, 3)
         self.ln1 = nn.LayerNorm(config.dim)         # nn.LayerNorm is deterministically initialized to ones, so no key needed.
         self.attn = CausalSelfAttention(config, key=attn_key)
         self.ln2 = nn.LayerNorm(config.dim)
         self.expand_fc = nn.Linear(config.dim, 4*config.dim, key=expand_key)
         self.reduce_fc = nn.Linear(4*config.dim, config.dim, key=reduce_key)
+        self.dropout = nn.Dropout(p=config.transformer_dropout)
+
+    def _init_from_torch(self, config, *, state_dict: StateDict):
+        """Initialize from pytorch state_dict"""
+        # Parse attention params into dictionary.
+        attn_params = {}
+        pattern = re.compile(r'^attn\.')    # use ^ to indicate word start.
+        for k in state_dict.keys():
+            match = pattern.match(k)
+            if match:
+                new_k = pattern.sub('', k)
+                attn_params.update({new_k: state_dict[k]})
+
+        # Construct transformer model.
+        def get_params(name):
+            return jnp.array(state_dict[name])
+        self.ln1 = enn.LayerNorm(weight=get_params("ln_1.weight"), bias=get_params("ln_1.bias"))
+        self.attn = CausalSelfAttention(config, state_dict=attn_params)
+        self.ln2 = enn.LayerNorm(weight=get_params("ln_2.weight"), bias=get_params("ln_2.bias"))
+        self.expand_fc = enn.Linear(weight=get_params("mlp.c_fc.weight"), bias=get_params("mlp.c_fc.bias"))
+        self.reduce_fc = enn.Linear(weight=get_params("mlp.c_proj.weight"), bias=get_params("mlp.c_proj.bias"))
         self.dropout = nn.Dropout(p=config.transformer_dropout)
 
     @named_scope("gpt2.TransformerBlock")
@@ -183,7 +182,7 @@ class GPT(eqx.Module):
     ln: nn.LayerNorm
     head: nn.Linear
 
-    def __init__(self, vocab_size, config, *, key: PRNGKeyArray):
+    def __init__(self, vocab_size, config, state_dict: Optional[StateDict] = None, *, key: Optional[PRNGKeyArray] = None):
         """Initializes GPT model based on config.
         
         Args:
@@ -193,9 +192,22 @@ class GPT(eqx.Module):
                     gpt_dropout, transformer_dropout, attn_dropout, attn_linear_dropout
                 ).
             key: random key used for initialization.
+            state_dict: pytorch model.state_dict(). If state_dict is provided, the model is intialized using provided params.
+        
+        Note:
+            If state_dict is provided, we assume config matches the pytorch config.
+            We *do not* check whether two configs match.
+            However, the extended Linear and LayerNorm checks dimensionality.
         """
         self.context_length = config.context_length
 
+        if state_dict is None:
+            self._init_default(vocab_size, config, key=key)
+        else:
+            self._init_from_torch(config, state_dict=state_dict)
+    
+    def _init_default(self, vocab_size, config, *, key: PRNGKeyArray):
+        """Initializes GPT with random initialization."""
         token_key, position_key, transformer_key, head_key = jr.split(key, 4)
         transformer_key = jr.split(transformer_key, config.num_blocks)
 
@@ -207,6 +219,40 @@ class GPT(eqx.Module):
         ])
         self.ln = nn.LayerNorm(config.dim)
         self.head = nn.Linear(config.dim, vocab_size, use_bias=config.head_bias, key=head_key)
+
+    def _init_from_torch(self, config, *, state_dict: StateDict):
+        """Initializes GPT with provided pytorch params."""
+        # Pre-process state_dict: split transformer blocks into list.
+        pattern = re.compile(r'^transformer\.h\.(\d+)\.')
+        num_blocks = float("-inf")
+        for k in state_dict.keys():
+            match = pattern.match(k)
+            if match:
+                n = int(match.group(1))
+                if n+1 > num_blocks:
+                    num_blocks = n+1
+        if config.num_blocks != num_blocks:
+            raise ValueError("number of transformer blocks must match.")
+        
+        transformer_params = [{} for _ in range(num_blocks)]
+        for k in state_dict.keys():
+            match = pattern.match(k)
+            if match:
+                n = int(match.group(1))
+                new_k = pattern.sub('', k)
+                transformer_params[n].update({new_k: state_dict[k]})
+
+        # Construct model.
+        def get_params(name):
+            return jnp.array(state_dict[name])
+        self.token_embedding = nn.Embedding(weight=get_params("transformer.wte.weight"))
+        self.position_embedding = nn.Embedding(weight=get_params("transformer.wpe.weight"))
+        self.dropout = nn.Dropout(config.gpt_dropout)
+        self.transformer_blocks = nn.Sequential([
+            TransformerBlock(config, state_dict=transformer_params[i]) for i in range(config.num_blocks)
+        ])
+        self.ln = enn.LayerNorm(weight=get_params("transformer.ln_f.weight"), bias=get_params("transformer.ln_f.bias"))
+        self.head = enn.Linear(weight=get_params("lm_head.weight"))
 
     @named_scope("gpt2.GPT")
     def __call__(self, input, *, key: PRNGKeyArray):

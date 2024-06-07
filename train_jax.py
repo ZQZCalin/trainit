@@ -16,9 +16,9 @@ from jax import tree_util as jtu
 import optax
 import equinox as eqx
 
-from jax import Array
 from jaxamp import amp, DynamicScalerState, dynamic_scale_value_and_grad
 from typing import Tuple, Any, Optional, Sequence, Union, NamedTuple, Callable
+from jaxtyping import Array, PRNGKeyArray
 
 import tqdm
 import wandb
@@ -29,24 +29,19 @@ import utils
 from utils import softmax_cross_entropy, tree_norm, get_accuracy, get_dtype
 import logstate
 from logger import TimeKeeper, RateLimitedWandbLog
-from model.gpt import GPT
+from model.mingpt import GPT
 from loader.lm_loader import get_lm_loader_next_token
 
-import os
-import sys
-sys.path.append('./optimizers')
-from optimizers.o2nc import deterministic_online_nonconvex, wrap_random_scaling
-import optimizers.online_learners as ol
-import optimizers.benchmark as benchmark
-import optimizers.scheduler as scheduler
-import optimizers.optim as optim
-
-
-divider = "="*100
-
-
-def alert_message(msg):
-    print(f">>> Alert!: {msg}")
+import os, sys
+sys.path.append('./optimizer')
+from optimizer.o2nc import deterministic_online_nonconvex, wrap_random_scaling
+import optimizer.online_learners as ol
+import optimizer.benchmark as benchmark
+import optimizer.scheduler as scheduler
+import optimizer.optim as optim
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'minGPT')))
+sys.path.append('./minGPT')
+from mingpt.model import GPT as torch_GPT
 
 
 class AuxState(NamedTuple):
@@ -56,9 +51,6 @@ class AuxState(NamedTuple):
     past_grads: Optional[optax.Updates]         # sum_{i=1}^{n-1} grad_i
     random_scalar: Optional[Array]              # s_n
     logging: Optional[dict]
-    # cumulative_loss_ol: Optional[Array]         # sum_{i=1}^n <grad_i, Delta_i>
-    # cumulative_loss_optim: Optional[Array]      # sum_{i=1}^n f(x_i, z_i) - f(x_{i-1}, z_i)
-    # num_inf_grads: Optional[Array]              # sum_{i=1}^n one(grad_i = nan)
 
 
 class TrainState(NamedTuple):
@@ -71,31 +63,38 @@ class TrainState(NamedTuple):
 
 
 def load_lm_data(config: DictConfig, tokenizer: Any, split: str = "train"):
-    """Wrapper for Pile dataset.
+    """Wrapper for Pile dataset. 
+    config: global config.
 
     Returns:
         torch.utils.data.DataLoader.
     """
+    context_length = config.model.context_length
+    config = config.dataset
+    if config.name not in ["c4", "pile"]:
+        raise ValueError("dataset name must be c4 or pile.")
     loader = get_lm_loader_next_token(
         tokenizer,
         split=split,
-        batch_size=config.train.batch_size,
-        max_length=config.model.context_length,
-        shuffle_buffer_size=config.train.shuffle_buffer_size,
-        pad_to_multiple_of=config.model.context_length,
-        num_workers=config.train.dataloader_workers,
-        dataset=config.train.dataset,
+        batch_size=config.batch_size,
+        max_length=context_length,
+        shuffle_buffer_size=config.shuffle_buffer_size,
+        pad_to_multiple_of=context_length,
+        num_workers=config.dataloader_workers,
+        dataset=config.name,
     )
     return loader
 
 
 def loss_fn(model: eqx.Module, batch: Tuple[Array, Array], key: Array):
     """Wrapper for cross entropy loss.
+    Applies jax.vmap to all data in a data batch.
 
     Args:
         model: equinox module
-        batch: _description_
-        key: PRNGKeyArray
+        batch: data batch of form (feature, target).
+        key: random key used for model forward. 
+            This will be neglected if model forward is deterministic (e.g., no dropout).
 
     Returns:
         Loss value and logits (model outputs).
@@ -110,6 +109,23 @@ def loss_fn(model: eqx.Module, batch: Tuple[Array, Array], key: Array):
     loss, logits = vmapped_loss_fn(input, target)
 
     return jnp.mean(loss), logits
+
+
+def init_model(vocab_size: int, config: DictConfig, key: PRNGKeyArray) -> eqx.Module:
+    """Initializes model. config: global_config.model"""
+    if not config.load_pytorch:
+        model = GPT(vocab_size, config, key=key)
+    else:
+        model_config = torch_GPT.get_default_config()
+        model_config.model_type = 'gpt2'
+        model_config.vocab_size = vocab_size                    # openai's model vocabulary
+        model_config.block_size = config.context_length         # openai's model block_size (i.e. input context length)
+        model_config.embd_pdrop = config.transformer_dropout
+        model_config.resid_pdrop = config.attn_linear_dropout
+        model_config.attn_pdrop = config.attn_dropout
+        torch_model = torch_GPT(model_config)
+        model = GPT(vocab_size, config, state_dict=torch_model.state_dict())
+    return model
 
 
 def init_scheduler(
@@ -168,6 +184,7 @@ def init_scheduler(
     return learning_rate
 
 
+# TODO: deprecate logging wrapper. instead, we can log learning rate inside corresponding optimizer that calls it.
 def wrap_scheduler(
     learning_rate: optax.ScalarOrSchedule,
     logger: None,
@@ -197,7 +214,7 @@ def init_optimizer(
         Initial optimizer and opt_state.
     """
     # Initialize base optimizer / online learner.
-    name = config.train.optimizer
+    name = config.optimizer.name
     max_steps = config.train.max_steps
 
     def init_adamw(config: DictConfig, **kwargs):
@@ -222,29 +239,30 @@ def init_optimizer(
             weight_decay=config.weight_decay
         )
 
+    opt_config = config.optimizer
     if name == "adamw":
-        optimizer = init_adamw(config=config.adamw)
+        optimizer = init_adamw(config=opt_config)
     elif name == "sgdm":
-        optimizer = init_sgdm(config=config.sgdm)
+        optimizer = init_sgdm(config=opt_config)
     elif name == "polar":
         optimizer = optim.polar_descent(
-            direction_optim=init_adamw(config=config.polar.direction),
-            magnitude_optim=init_adamw(config=config.polar.magnitude, schedule_title="schedule_2"),
+            direction_optim=init_adamw(config=opt_config.direction),
+            magnitude_optim=init_adamw(config=opt_config.magnitude, schedule_title="schedule_2"),
         )
     elif name == "jump":
         optimizer = optim.jump_trajectory(
-            normal_optim=init_adamw(config=config.jump.normal),
-            jump_optim=init_adamw(config=config.jump.jump, schedule_title="schedule_2"),
-            normal_steps=config.jump.normal_steps,
-            jump_steps=config.jump.jump_steps,
+            normal_optim=init_adamw(config=opt_config.normal),
+            jump_optim=init_adamw(config=opt_config.jump, schedule_title="schedule_2"),
+            normal_steps=opt_config.normal_steps,
+            jump_steps=opt_config.jump_steps,
         )
     elif name == "ogd_md":
         learning_rate = wrap_scheduler(
-            init_scheduler(config.ogd_md.lr_config, max_steps=max_steps), logger=logger)
+            init_scheduler(opt_config.lr_config, max_steps=max_steps), logger=logger)
         optimizer = ol.ogd_mirror_descent(
             learning_rate=learning_rate,
-            beta=config.ogd_md.beta,
-            mu=config.ogd_md.mu,
+            beta=opt_config.beta,
+            mu=opt_config.mu,
         )
 
     # Wrap online to non-convex.
@@ -261,7 +279,7 @@ def init_optimizer(
     optimizer = wrap_random_scaling(
         gradient_transformation=optimizer,
         random_scaling=config.train.random_scaling,
-        seed=config.train.random_scaling_seed
+        seed=config.train.random_scaling_seed   # TODO: deprecate. use PRNGKey passed from argument instead of random seed.
     )
     
     # Gradient clipping and finite gradient wrapper.
@@ -561,6 +579,8 @@ def train_loop(
 
 
 def train(config: DictConfig):
+    # Some san check of config.
+
     # Initialize C4 dataloader for gpt2.
     tokenizer = transformers.GPT2TokenizerFast.from_pretrained("gpt2")
     tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
@@ -575,15 +595,20 @@ def train(config: DictConfig):
     else:
         limited_log = None
 
+    # Initialize random keys
+    key = jr.PRNGKey(config.random_seed)
+    model_key, train_key = jr.split(key, 2)
+
     # Initialize optimizer and train state.
-    model = GPT(tokenizer.vocab_size, config.model, key=jr.PRNGKey(42))
+    # (Experimental) load weight from pytorch model.
+    model = init_model(tokenizer.vocab_size, config.model, key=model_key)
     optimizer, opt_state = init_optimizer(model, config, logger=limited_log)
     train_state = TrainState(
         model=model,
         opt_state=opt_state,
         dynamic_scaler_state=DynamicScalerState() if config.train.use_amp else None,
         iteration=jnp.array(0),
-        train_key=jr.PRNGKey(0),
+        train_key=train_key,
         aux_state=init_aux_state(config.logging, model)
     )
 
@@ -606,7 +631,7 @@ def train(config: DictConfig):
     )
 
 
-@hydra.main(version_base=None, config_path="conf", config_name="config_gpt2")
+@hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(config: DictConfig) -> None:
     """Main training process integrated with checkpoing saving and loading.
     
@@ -639,15 +664,6 @@ def main(config: DictConfig) -> None:
         logging.info(OmegaConf.to_yaml(config))
     # Main train function.
     train(config)
-
-
-
-@hydra.main(version_base=None, config_path="conf", config_name="config")
-def main(config: DictConfig):
-    # print(OmegaConf.to_yaml(config))
-    print(config.optimizer)
-    print(config.optimizer.lr_config)
-    pass
 
 
 if __name__ == "__main__":

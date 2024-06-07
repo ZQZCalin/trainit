@@ -1,0 +1,8 @@
+checkpoint:
+  # checkpoint mode if path is not null
+  path: null
+  num_steps: 50000
+  save_steps: 10000   # save checkpoint every save_steps iterations.
+  load_model: null
+  # USE WITH CAUTION: if true, overwrites the entire config file (besides checkpoint)
+  overwrite: False

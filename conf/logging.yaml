@@ -1,0 +1,26 @@
+logging:
+  wandb_project: "jax_torch"
+  wandb_logs_per_sec: 1.0
+
+  # this will slow down computation a bit (I believe due to extra GPU/CPU communication),
+  # but will log more stuff (like learning rates).
+  # Still working on nice way to do this logging - we really should only incur one communication
+  # round per iteration and I don't think the logging data should significantly impact it.
+  log_callback_data: True
+
+  # logging these additional stats requires another forward pass and additional memory.
+  # you can save memory/computation by turning off each of the following configurations.
+  # *In terms of memory cost:
+  # stores the last gradient g(n-1)
+  store_last_grads: True
+  # stores the sum of past gradients g(1:n-1)
+  store_past_grads: True
+  # stores the change in parameter x(n) - x(n-1)
+  store_last_params: True
+  # *In terms of computation cost:
+  # computes f(x(n-1), zn), which costs an additional forward pass
+  compute_last_loss: True
+  # computes g(x(n-1), zn), which costs an additional forward and backward pass
+  compute_last_grads: False
+
+  running_stats_window: 1000

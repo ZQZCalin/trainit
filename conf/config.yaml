@@ -1,7 +1,9 @@
 defaults:
-  - model: gpt2
+  - model: gpt
   - dataset: pile
   - optimizer: adam
   - train
   - logging
   - checkpoint
+
+random_seed: 42   # this controls the entire randomness during training

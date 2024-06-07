@@ -4,12 +4,13 @@ from jax import numpy as jnp
 from jax import random as jr
 from jaxtyping import Array
 
+import re
 import torch
 import equinox as eqx
 from equinox import nn
 
 
-def state_dict_to_pytree():
+def parse_state_dict(params: list[str]) -> list[str]:
     """Bruteforce parsing the pytorch state_dict of mingpt model into jax pytree.
 
     The state_dict should be model.state_dict() where model is a GPT class from
@@ -33,3 +34,12 @@ def state_dict_to_pytree():
         "c_attn": "attn_fc",
         "c_proj": "linear",
     }
+    output = []
+    for param in params:
+        # Manually drops the mask matrices in multi-head attention layers.
+        if ".attn.bias" in param:
+            continue
+        for key, value in lookup_table.items():
+            param = re.sub(re.escape(key), value, param)
+        output.append(param)
+    return output

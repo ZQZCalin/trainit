@@ -1,1 +1,14 @@
-name: "pile"
+name: pile
+
+# number of examples placed on each GPU
+batch_size: 4 
+
+# shuffle buffer for data loader. 0 means no shuffle.
+shuffle_buffer_size: 0
+
+# following settings chosen after
+# some experimentation with a tiny model.
+# may not be optimal for all machines, but
+# hopefully with a reasonably sized model this will
+# prevent dataloading from being the bottleneck.
+dataloader_workers: 2
