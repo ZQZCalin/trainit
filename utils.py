@@ -156,9 +156,8 @@ def check_tree_structures_match(tree1, tree2):
     """Check whether tree1 and tree2 have the same tree structure. 
         Raises error when structures do not match.
     """
-    err_msg = "Input Pytrees do not have the same structure"
-    is_match = jtu.tree_structure(tree1) == jtu.tree_structure(tree2)
-    assert is_match, err_msg
+    if jtu.tree_structure(tree1) != jtu.tree_structure(tree2):
+        raise ValueError("Input Pytrees do not have the same structure")
 
 
 # ===============================================

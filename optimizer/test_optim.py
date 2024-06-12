@@ -7,13 +7,14 @@ from optax import Updates, Params, OptState, ScalarOrSchedule, GradientTransform
 from typing import Any, Tuple, NamedTuple, Optional, Union, Callable, Protocol
 from tqdm import tqdm
 import sys
-sys.path.append('../jaxoptimizers')
+sys.path.append('../trainit')
 import utils
 import online_learners as ol
 from o2nc import online_nonconvex
 import benchmark
 import scheduler
 import optim
+from model.mingpt import GPT
 
 
 def test_optimizer(
@@ -92,6 +93,36 @@ def test_jump():
     test_optimizer(optimizer)
 
 
+def test_adam_wd():
+    params = {
+        'a': [jnp.array(1.), jnp.array(2.)],  # List of arrays
+        'b': (jnp.array(3.), jnp.array(4.)),  # Tuple of arrays
+        'c': {'d': jnp.array(5.)}  # Nested dictionary with an array
+    }
+    grads = jtu.tree_map(jnp.ones_like, params)
+    adam = benchmark.adamw(
+        learning_rate=0.01, weight_decay=params
+    )
+    opt_state = adam.init(params)
+    adam.update(grads, opt_state, params)
+
+
+def test_sgdm_wd():
+    params = {
+        'a': [jnp.array(1.), jnp.array(2.)],  # List of arrays
+        'b': (jnp.array(3.), jnp.array(4.)),  # Tuple of arrays
+        'c': {'d': jnp.array(5.)}  # Nested dictionary with an array
+    }
+    grads = jtu.tree_map(jnp.ones_like, params)
+    sgdm = benchmark.sgdm(
+        learning_rate=0.01, weight_decay=params
+    )
+    opt_state = sgdm.init(params)
+    sgdm.update(grads, opt_state, params)
+
+
 if __name__ == "__main__":
     # test_sgdm()
-    test_jump()
+    # test_jump()
+    # test_adam_wd()
+    test_sgdm_wd()

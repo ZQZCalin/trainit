@@ -7,7 +7,7 @@ from jax import tree_util as jtu
 import chex
 import optax
 from optax import Updates, Params, OptState, ScalarOrSchedule, GradientTransformation
-from typing import Any, Tuple, NamedTuple, Optional, Callable
+from typing import Any, Tuple, NamedTuple, Optional, Callable, Union
 from online_learners import OnlineLearner, unconstrained_ogd
 import sys
 sys.path.append('../trainit')
@@ -16,6 +16,9 @@ from logger import RateLimitedWandbLog
 import logstate
 import online_learners as ol
 import scheduler
+
+
+ScalarOrPytree = Union[float, Any]
 
 
 class AdamWState(NamedTuple):
@@ -30,7 +33,7 @@ def adamw(
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
-    weight_decay: float = 0.0,
+    weight_decay: ScalarOrPytree = 0.0,
     debias_beta1: bool = True,
     debias_beta2: bool = True,
 ) -> GradientTransformation:
@@ -49,7 +52,12 @@ def adamw(
         A `GradientTransformation` object.
     """
 
+    use_pytree_wd = type(weight_decay) != float
+
     def init_fn(params):
+        # Checks weight_decay structure during initialization.
+        if use_pytree_wd and jtu.tree_structure(weight_decay)!=jtu.tree_structure(params):
+            raise ValueError("structure of weight_decay must match model structure.")
         return AdamWState(
             count=jnp.zeros([], jnp.int32),
             mu=jtu.tree_map(jnp.zeros_like, params),
@@ -74,10 +82,16 @@ def adamw(
         # Unpack learning rate schedule.
         eta = scheduler.get_current_lr(learning_rate, state.count)
         # Compute one-step update: -eta * [mu / (eps+sqrt(nu)) + lam * params]
-        new_updates = jtu.tree_map(
-            lambda m, v, p: -eta * (m/(eps+jnp.sqrt(v)) + weight_decay*p),
-            mu_hat, nu_hat, params
-        )
+        if not use_pytree_wd:
+            new_updates = jtu.tree_map(
+                lambda m, v, p: -eta * (m/(eps+jnp.sqrt(v)) + weight_decay*p),
+                mu_hat, nu_hat, params
+            )
+        else:
+            new_updates = jtu.tree_map(
+                lambda m, v, p, wd: -eta * (m/(eps+jnp.sqrt(v)) + wd*p),
+                mu_hat, nu_hat, params, weight_decay
+            )
         return new_updates, AdamWState(
             count=count_inc, mu=mu, nu=nu)
     
@@ -92,7 +106,7 @@ class SgdmState(NamedTuple):
 def sgdm(
     learning_rate: ScalarOrSchedule,
     beta: float=0.0,
-    weight_decay: float=0.0,
+    weight_decay: ScalarOrPytree=0.0,
 ) -> GradientTransformation:
     """SGD with momentum.
     
@@ -109,7 +123,11 @@ def sgdm(
         A `GradientTransformation` object.
     """
     
+    use_pytree_wd = type(weight_decay) != float
+
     def init_fn(params):
+        if use_pytree_wd and jtu.tree_structure(weight_decay)!=jtu.tree_structure(params):
+            raise ValueError("structure of weight_decay must match model structure.")
         return SgdmState(
             count = jnp.zeros([], jnp.int32),
             momentum = jtu.tree_map(jnp.zeros_like, params),
@@ -122,8 +140,12 @@ def sgdm(
         eta = scheduler.get_current_lr(learning_rate, state.count)
         new_momentum = jtu.tree_map(
             lambda m, g: beta*m + (1-beta)*g, state.momentum, updates)
-        new_updates = jtu.tree_map(
-            lambda m, x: -eta * (m + weight_decay*x), new_momentum, params)
+        if not use_pytree_wd:
+            new_updates = jtu.tree_map(
+                lambda m, x: -eta * (m + weight_decay*x), new_momentum, params)
+        else:
+            new_updates = jtu.tree_map(
+                lambda m, x, wd: -eta * (m + wd*x), new_momentum, params, weight_decay)
         return new_updates, SgdmState(
             count = optax.safe_int32_increment(state.count),
             momentum = new_momentum
