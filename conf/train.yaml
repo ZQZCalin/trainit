@@ -11,7 +11,7 @@ train:
   wrap_o2nc: False
 
   # random scaling options. supports "exponential".
-  random_scaling: "exponential"
+  random_scaling: null
   random_scaling_seed: 0  # to be deprecated. we should only use one global random seed and generate sub-keys by jr.split()
 
   # whether to use automatic mixed precision

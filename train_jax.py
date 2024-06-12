@@ -43,6 +43,10 @@ import optimizer.optim as optim
 sys.path.append('./minGPT')
 from mingpt.model import GPT as torch_GPT
 
+import random
+import numpy as np
+import torch
+
 
 class AuxState(NamedTuple):
     """Auxiliary states stored for additional loggings."""
@@ -601,7 +605,7 @@ def train(config: DictConfig):
 
     # Initialize optimizer and train state.
     # (Experimental) load weight from pytorch model.
-    model = init_model(tokenizer.vocab_size, config.model, key=model_key)
+    model = init_model(len(tokenizer), config.model, key=model_key)
     optimizer, opt_state = init_optimizer(model, config, logger=limited_log)
     train_state = TrainState(
         model=model,
@@ -643,6 +647,11 @@ def main(config: DictConfig) -> None:
         - The updated config will be saved to config.yaml.
     If checkpoint.path==null, train the model in the standard way without checkpointing.
     """
+    # TODO: this is temporary
+    seed = config.random_seed
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
     # Config handling.
     if config.checkpoint.path:
         checkpoint_dir = os.path.join(os.getcwd(), 'checkpoint', config.checkpoint.path)
