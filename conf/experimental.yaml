@@ -1,0 +1,15 @@
+# Stores all experimental / temporary configs
+# Will be neglected in stable training pipeline
+experimental:
+  use_hugging_face: False       # if true, uses hugging face implementation
+  use_loadit: False             # if true, uses pre-processed loadit dataset
+  use_streaming_loadit: False   # if true, turns off random shuffle for loadit dataset
+
+  save_checkpoint:
+    use: False
+    iter: 900
+    path: checkpoint/06-14-01/hfgpt_adam_loadit_stream_iter_900.pth
+
+  load_checkpoint:
+    use: False
+    path: checkpoint/06-14-01/hfgpt_adam_loadit_stream_iter_900.pth
