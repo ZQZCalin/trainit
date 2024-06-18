@@ -103,6 +103,23 @@ def compute_prev_loss(model, prev_params, batch):
     return loss
 
 
+def check_frequency(tensor, threshold, ignores=None):
+    """Returns true if there exists some element in tensor that has frequency > threshold.
+    
+    If ignores (array-like) is not None, will not count the frequency in ignores.
+    """
+    tensor = tensor.flatten()
+    # Mask out ignored elements.
+    if ignores is not None:
+        mask = torch.ones_like(tensor, dtype=bool)
+        for value in ignores:
+            mask &= (tensor != value)
+        tensor = tensor[mask]
+    threshold_count = tensor.numel() * threshold
+    _, counts = torch.unique(tensor, return_counts=True)
+    return bool((counts > threshold_count).any())
+
+
 # ======================================================================
 # Custom optimizers: adam and sgdm (too lazy to move to another file)
 # ======================================================================
@@ -522,6 +539,10 @@ def train(config: DictConfig) -> None:
     # Training starts here...
     tokenizer = init_tokenizer(config)
     model = init_model(tokenizer, config)
+    # EXPERIMENTAL: load checkpoint state_dict
+    ckpt_config = config.experimental.load_checkpoint
+    if ckpt_config.use:
+        model.load_state_dict(torch.load(ckpt_config.path))
     train_dataloader = init_dataloaders(tokenizer, config)
     eval_dataloader = None
     optimizer, lr_scheduler = init_optimzier(model, config)
@@ -540,36 +561,71 @@ def train(config: DictConfig) -> None:
     max_steps = config.train.max_steps
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    # EXPERIMENTAL: save checkpoint
+    ckpt_config = config.experimental.save_checkpoint
+    filter_config = config.experimental.data_conditioning
+
     if config.experimental.use_loadit:
         num_data_points = 1000000
         sample_size = max_steps
-        sampled_indices = random.sample(range(num_data_points), sample_size)
+        # sampled_indices = random.sample(range(num_data_points), sample_size)
+        sampled_indices = random.sample(range(num_data_points), 2*sample_size)
 
         # EXPERIMENTAL: turn off streaming of loadit
         if config.experimental.use_streaming_loadit:
-            sampled_indices = range(max_steps)
+            # sampled_indices = range(max_steps)
+            sampled_indices = range(2*max_steps)
 
         pbar = tqdm(enumerate(sampled_indices), total=max_steps)
         for it, batch_idx in pbar:
-            if it > max_steps:
+            if logstate.iteration > max_steps:
+                break
+            # EXPERIMENTAL: save checkpoint model and terminate
+            if ckpt_config.use and logstate.iteration > ckpt_config.iter:
+                torch.save(
+                    accelerator.unwrap_model(model).state_dict(),
+                    ckpt_config.path
+                )
                 break
             batch = train_dataloader[batch_idx]
             batch = {key: value.to(device) if isinstance(value, torch.Tensor) else value for key, value in batch.items()}
+
+            # EXPERIMENTAL: apply data filtering
+            if filter_config.use and check_frequency(batch["input_ids"], filter_config.threshold):
+                continue
+
             logstate = train_step(logstate, model, batch, optimizer, lr_scheduler, accelerator, config)
 
             pbar.set_description(f"iteration: {it+1}, avg_train_loss: {logstate.logs['f(x_t,z_t)_avg']:.2f}")
             if config.logging.wandb_project:
-                wandb.log(logstate.logs, step=logstate.iteration)
+                logs = logstate.logs
+                logs.update({"batches": it})
+                wandb.log(logs, step=logstate.iteration)
     else:
         pbar = tqdm(enumerate(train_dataloader), total=max_steps)
         for it, batch in pbar:
-            if it > max_steps:
+            if logstate.iteration > max_steps:
                 break
+            # EXPERIMENTAL: save checkpoint model and terminate
+            if ckpt_config.use and logstate.iteration > ckpt_config.iter:
+                torch.save(
+                    accelerator.unwrap_model(model).state_dict(),
+                    ckpt_config.path
+                )
+                break
+
+            # EXPERIMENTAL: apply data filtering (NOTE: we ignore the padding token)
+            pad_token = tokenizer("<|pad|>")["input_ids"]
+            if filter_config.use and check_frequency(batch["input_ids"], filter_config.threshold, ignores=pad_token):
+                continue
+
             logstate = train_step(logstate, model, batch, optimizer, lr_scheduler, accelerator, config)
 
             pbar.set_description(f"iteration: {it+1}, avg_train_loss: {logstate.logs['f(x_t,z_t)_avg']:.2f}")
             if config.logging.wandb_project:
-                wandb.log(logstate.logs, step=logstate.iteration)
+                logs = logstate.logs
+                logs.update({"batches": it})
+                wandb.log(logs, step=logstate.iteration)
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")

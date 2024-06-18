@@ -13,3 +13,7 @@ experimental:
   load_checkpoint:
     use: False
     path: checkpoint/06-14-01/hfgpt_adam_loadit_stream_iter_900.pth
+
+  data_conditioning:
+    use: False
+    threshold: 0.3
