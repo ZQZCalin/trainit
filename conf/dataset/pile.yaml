@@ -5,7 +5,7 @@ name: pile
 batch_size: 4 
 
 # shuffle buffer for data loader. 0 means no shuffle.
-shuffle_buffer_size: 0
+shuffle_buffer_size: 10000
 
 # following settings chosen after
 # some experimentation with a tiny model.

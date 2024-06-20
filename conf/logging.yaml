@@ -1,5 +1,5 @@
 logging:
-  wandb_project: "jax_torch"
+  wandb_project: null
   wandb_logs_per_sec: 1.0
 
   # this will slow down computation a bit (I believe due to extra GPU/CPU communication),

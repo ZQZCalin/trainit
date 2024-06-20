@@ -6,7 +6,7 @@
 
 
 import logging
-import transformers
+import warnings
 
 import jax
 from jax import numpy as jnp
@@ -15,6 +15,8 @@ from jax import tree_util as jtu
 
 import optax
 import equinox as eqx
+
+import transformers
 
 from jaxamp import amp, DynamicScalerState, dynamic_scale_value_and_grad
 from typing import Tuple, Any, Optional, Sequence, Union, NamedTuple, Callable
@@ -30,7 +32,8 @@ from utils import softmax_cross_entropy, tree_norm, get_accuracy, get_dtype
 import logstate
 from logger import TimeKeeper, RateLimitedWandbLog
 from model.mingpt import GPT
-from loader.lm_loader import get_lm_loader_next_token
+from loader.lm_loader import get_lm_loader_next_token, shift_labels
+from loadit import LoadIt, chunk_shuffle
 
 import os, sys
 sys.path.append('./optimizer')
@@ -39,7 +42,7 @@ import optimizer.online_learners as ol
 import optimizer.benchmark as benchmark
 import optimizer.scheduler as scheduler
 import optimizer.optim as optim
-# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'minGPT')))
+
 sys.path.append('./minGPT')
 from mingpt.model import GPT as torch_GPT
 
@@ -54,7 +57,7 @@ class AuxState(NamedTuple):
     last_grads: Optional[optax.Updates]         # grad_{n-1}
     past_grads: Optional[optax.Updates]         # sum_{i=1}^{n-1} grad_i
     random_scalar: Optional[Array]              # s_n
-    logging: Optional[dict]
+    loggings: Optional[dict]
 
 
 class TrainState(NamedTuple):
@@ -74,19 +77,29 @@ def load_lm_data(config: DictConfig, tokenizer: Any, split: str = "train"):
         torch.utils.data.DataLoader.
     """
     context_length = config.model.context_length
+    max_steps = config.train.max_steps
+    seed = config.random_seed
     config = config.dataset
-    if config.name not in ["c4", "pile"]:
-        raise ValueError("dataset name must be c4 or pile.")
-    loader = get_lm_loader_next_token(
-        tokenizer,
-        split=split,
-        batch_size=config.batch_size,
-        max_length=context_length,
-        shuffle_buffer_size=config.shuffle_buffer_size,
-        pad_to_multiple_of=context_length,
-        num_workers=config.dataloader_workers,
-        dataset=config.name,
-    )
+    if config.use_loadit:
+        loadit_path = config.loadit_path
+        if loadit_path is None:
+            loadit_path = "/projectnb/aclab/tranhp/trainDataloader_pile/"
+        loader = LoadIt(loadit_path)
+        if config.shuffle_buffer_size > 0:
+            loader = chunk_shuffle(loader, chunk_size=config.shuffle_buffer_size, length=max_steps, seed=seed)
+    else:
+        if config.name not in ["c4", "pile"]:
+            raise ValueError("dataset name must be c4 or pile.")
+        loader = get_lm_loader_next_token(
+            tokenizer,
+            split=split,
+            batch_size=config.batch_size,
+            max_length=context_length,
+            shuffle_buffer_size=config.shuffle_buffer_size,
+            pad_to_multiple_of=context_length,
+            num_workers=config.dataloader_workers,
+            dataset=config.name,
+        )
     return loader
 
 
@@ -115,7 +128,19 @@ def loss_fn(model: eqx.Module, batch: Tuple[Array, Array], key: Array):
     return jnp.mean(loss), logits
 
 
-def init_model(vocab_size: int, config: DictConfig, key: PRNGKeyArray) -> eqx.Module:
+def init_tokenizer(config: DictConfig, pad_token: bool = True):
+    """Initializes tokenizer. If `pad_token` is true, adds pad_token as a special token. Defaults to true."""
+    model_name = config.model.name
+    if model_name == "gpt":
+        tokenizer = transformers.GPT2TokenizerFast.from_pretrained("gpt2")
+        if pad_token:
+            tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
+    else:
+        raise ValueError(f"model {model_name} is not supported.")
+    return tokenizer
+
+
+def init_model(vocab_size: int, config: DictConfig, *, key: PRNGKeyArray) -> eqx.Module:
     """Initializes model. config: global_config.model"""
     if not config.load_pytorch:
         model = GPT(vocab_size, config, key=key)
@@ -132,10 +157,7 @@ def init_model(vocab_size: int, config: DictConfig, key: PRNGKeyArray) -> eqx.Mo
     return model
 
 
-def init_scheduler(
-    lr_config: DictConfig,
-    **kwargs
-) -> optax.ScalarOrSchedule:
+def init_scheduler(lr_config: DictConfig, **kwargs) -> optax.ScalarOrSchedule:
     """Parses the config and initializes a learning rate scheduler.
 
     Args:
@@ -185,6 +207,8 @@ def init_scheduler(
                 init_value=config.lr,
                 decay_steps=config.max_steps,
             )
+    else:
+        raise ValueError(f"schedule type {config.schedule} is not supported.")
     return learning_rate
 
 
@@ -298,90 +322,142 @@ def init_optimizer(
     return optimizer, opt_state
 
 
-def init_aux_state(config: DictConfig, model: eqx.Module) -> AuxState:
+def init_aux_state(config: DictConfig, model: eqx.Module, opt_state: optax.OptState) -> AuxState:
     """Initializes aux_state from confg."""
     if not config.log_callback_data:
         return None
+    opt_loggings = utils.merge_dicts(*logstate.list_of_logs(opt_state))
+    if "update/random_scaling" not in opt_loggings.keys():
+        warnings.warn("Optimizer has no key named 'update/random_scaling,",
+                      "so random scaling is not recognized in logging.",
+                      "Wrap your optimizer with o2nc.wrap_random_scaling for correct logging.")
+        random_scalar = jnp.ones([])
+    else:
+        random_scalar = opt_loggings["update/random_scaling"]
+    loggings = {
+        "grads/norm": jnp.zeros([]),
+        "grads/l1-norm": jnp.zeros([]),
+        "update/<gn, Delta(n)>": jnp.zeros([]),
+        "update/<gn, Delta(n)>_sum": jnp.zeros([]),
+        "update/fn-f(n-1)": jnp.zeros([]),
+        "update/fn-f(n-1)_sum": jnp.zeros([]),
+        "update/<gn, xn-x(n-1)>": jnp.zeros([]),
+        "update/<gn, xn-x(n-1)>_sum": jnp.zeros([]),
+        "grads/<gn, g(n-1)>": jnp.zeros([]),
+        "grads/<gn, g(1:n-1)>": jnp.zeros([]),
+        "grads/cos(gn, g(n-1))": jnp.zeros([]),
+        "grads/cos(gn, g(1:n-1))": jnp.zeros([]),
+        "grads/inf_grads": jnp.zeros([], jnp.int32),
+    }
+    loggings.update(opt_loggings)
     zeros = utils.zero_tree(eqx.filter(model, eqx.is_array))
     return AuxState(
         params_diff = zeros if config.store_last_params else None,
         last_grads = zeros if config.store_last_grads else None,
         past_grads = zeros if config.store_past_grads else None,
-        random_scalar = jnp.ones([]),
-        logging = {
-            "update/<gn, Delta(n)>": jnp.zeros([]),
-            "update/<gn, Delta(n)>_sum": jnp.zeros([]),
-            "update/fn-f(n-1)": jnp.zeros([]),
-            "update/fn-f(n-1)_sum": jnp.zeros([]),
-            "update/<gn, xn-x(n-1)>": jnp.zeros([]),
-            "update/<gn, xn-x(n-1)>_sum": jnp.zeros([]),
-            "grads/<gn, g(n-1)>": jnp.zeros([]),
-            "grads/<gn, g(1:n-1)>": jnp.zeros([]),
-            "grads/cos(gn, g(n-1))": jnp.zeros([]),
-            "grads/cos(gn, g(1:n-1))": jnp.zeros([]),
-            "grads/inf_grads": jnp.zeros([], jnp.int32),
-        } if config.log_callback_data else None,
+        random_scalar = random_scalar,
+        loggings = loggings,
     )
 
 
 def update_aux_state(
-    aux_state: AuxState,
+    train_state: TrainState,
     updates: optax.Updates,
     grads: optax.Updates,
-    random_scalar: Array,
+    batch: Tuple[Array, Array],
+    loss: Array,
     config: DictConfig,
-    model, batch, key, loss,
-) -> AuxState:
+) -> TrainState:
+    """Updates aux_state. config: global config.
+    Note: train_state.model uses new_model, i.e., x_(n+1).
+    """
+    global_config = config
+    config = config.logging
     if not config.log_callback_data:
         return None
-
-    def update_nan(state):
-        logging = state.logging
-        logging.update({
-            "grads/inf_grads": optax.safe_int32_increment(logging["grads/inf_grads"])
-        })
-        return state._replace(logging=logging)
     
-    def update_finite(state):
-        logging = state.logging
+    model = eqx.apply_updates(
+        train_state.model, utils.negative_tree(updates))    # x_n
+    opt_state = train_state.opt_state
+    aux_state = train_state.aux_state
+    dynamic_scaler_state = train_state.dynamic_scaler_state
+    key, new_key = jr.split(train_state.train_key)
+    
+    base_loggings = {
+        "grads/norm": utils.tree_l2_norm(grads),
+        "grads/l1-norm": utils.tree_l1_norm(grads),
+    }
+    opt_loggings = utils.merge_dicts(*logstate.list_of_logs(opt_state))
+    base_loggings.update(opt_loggings)
+
+    def update_nan(state, base_loggings, dynamic_scaler_state):
+        loggings = state.loggings
+        loggings.update({
+            "grads/inf_grads": optax.safe_int32_increment(loggings["grads/inf_grads"])
+        })
+        loggings.update(base_loggings)
+        return state._replace(loggings=loggings), dynamic_scaler_state
+    
+    def update_finite(state, base_loggings, dynamic_scaler_state):
+        loggings = state.loggings
         if config.store_last_params:
             inner_g_dx = utils.tree_inner_product(grads, state.params_diff)
             inner_g_Delta = inner_g_dx / state.random_scalar
-            logging.update({
+            loggings.update({
                 "update/<gn, Delta(n)>": inner_g_Delta,
-                "update/<gn, Delta(n)>_sum": logging["update/<gn, Delta(n)>_sum"]+inner_g_Delta,
+                "update/<gn, Delta(n)>_sum": loggings["update/<gn, Delta(n)>_sum"]+inner_g_Delta,
                 "update/<gn, xn-x(n-1)>": inner_g_dx,
-                "update/<gn, xn-x(n-1)>_sum": logging["update/<gn, xn-x(n-1)>_sum"]+inner_g_dx,
+                "update/<gn, xn-x(n-1)>_sum": loggings["update/<gn, xn-x(n-1)>_sum"]+inner_g_dx,
             })
         if config.store_last_params and config.compute_last_loss:
             last_model = eqx.apply_updates(
                 model, utils.negative_tree(state.params_diff))
-            last_loss, _ = loss_fn(last_model, batch, key)
+            if global_config.train.use_amp:
+                amp_loss_fn = amp(loss_fn, compute_dtype=get_dtype(global_config.train.precision))
+                # dynamic_scaler_state, (last_loss, _) = amp_loss_fn(
+                #     last_model, batch, key=key, dynamic_scaler_state=dynamic_scaler_state)
+                last_loss, _ = amp_loss_fn(last_model, batch, key=key)
+            else:
+                last_loss, _ = loss_fn(last_model, batch, key=key)
             df = loss - last_loss
-            logging.update({
+            loggings.update({
                 "update/fn-f(n-1)": df,
-                "update/fn-f(n-1)_sum": logging["update/fn-f(n-1)_sum"]+df,
+                "update/fn-f(n-1)_sum": loggings["update/fn-f(n-1)_sum"]+df,
             })
         if config.store_last_grads:
-            logging.update({
+            loggings.update({
                 "grads/<gn, g(n-1)>": utils.tree_inner_product(grads, state.last_grads),
                 "grads/cos(gn, g(n-1))": utils.tree_cosine_similarity(grads, state.last_grads),
             })
         if config.store_past_grads:
-            logging.update({
+            loggings.update({
                 "grads/<gn, g(1:n-1)>": utils.tree_inner_product(grads, state.past_grads),
                 "grads/cos(gn, g(1:n-1))": utils.tree_cosine_similarity(grads, state.past_grads),
             })
+        loggings.update(base_loggings)
+        if "update/random_scaling" in opt_loggings.keys():
+            random_scalar = opt_loggings["update/random_scaling"]
+        else:
+            random_scalar = state.random_scalar
         return state._replace(
             params_diff = updates if config.store_last_params else None,
             last_grads = grads if config.store_last_grads else None,
             past_grads = utils.tree_add(state.past_grads, grads) if config.store_past_grads else None,
             random_scalar = random_scalar,
-            logging = logging,
-        )
-
-    return jax.lax.cond(
-        utils.is_finite_tree(grads), update_finite, update_nan, aux_state)
+            loggings = loggings,
+        ), dynamic_scaler_state
+    
+    aux_state, dynamic_scaler_state = jax.lax.cond(
+        utils.is_finite_tree(grads), update_finite, update_nan, aux_state, base_loggings, dynamic_scaler_state)
+    
+    return TrainState(
+        model = train_state.model,
+        opt_state = opt_state,
+        dynamic_scaler_state = dynamic_scaler_state,
+        iteration = train_state.iteration,
+        train_key = new_key,
+        aux_state = aux_state
+    )
 
 
 def train_step(
@@ -390,11 +466,9 @@ def train_step(
     optimizer: optax.GradientTransformation,
     config: DictConfig,
 ):
-    logging_config = config.logging
-    config = config.train
     # Apply auto mixed precision.
-    if config.use_amp:
-        amp_loss_fn = amp(loss_fn, compute_dtype=get_dtype(config.precision))
+    if config.train.use_amp:
+        amp_loss_fn = amp(loss_fn, compute_dtype=get_dtype(config.train.precision))
         value_and_grad_fn = dynamic_scale_value_and_grad(
             amp_loss_fn, filter=True, has_aux=True, redo_on_nan=0
         )
@@ -407,36 +481,17 @@ def train_step(
     key, new_key = jr.split(train_state.train_key)
 
     # Apply one-step update: compute f(x_n, z_n) and g(x_n, z_n).
-    if config.use_amp:
+    if config.train.use_amp:
         dynamic_scaler_state, ((loss, logits), grads) = value_and_grad_fn(
-            model, batch, key, dynamic_scaler_state=dynamic_scaler_state
+            model, batch, key=key, dynamic_scaler_state=dynamic_scaler_state
         )
     else:
-        (loss, logits), grads = value_and_grad_fn(model, batch, key)
-
-    # NOTE: it seems that all JAX updates are "immutable", so it's ok to just make a shallow copy as follows.
+        (loss, logits), grads = value_and_grad_fn(model, batch, key=key)
     updates, opt_state = optimizer.update(
         grads, opt_state, eqx.filter(model, eqx.is_array)
     )                                                               # s_(n+1) * Delta_(n+1) = x_(n+1) - x_n
     new_model = eqx.apply_updates(model, updates)                   # x_(n+1)
 
-    # Compute train accuracy.
-    accuracy = get_accuracy(logits, batch)
-
-    # Log to wandb.
-    log_data = {
-        "grads/norm": tree_norm(grads),
-        "grads/l1-norm": utils.tree_l1_norm(grads),
-    }
-    opt_logs = utils.merge_dicts(*logstate.list_of_logs(opt_state))
-    log_data.update(opt_logs)
-
-    aux_state = update_aux_state(
-        train_state.aux_state, updates, grads, random_scalar=opt_logs["update/random_scaling"], config=logging_config,
-        model=model, batch=batch, key=key, loss=loss)
-
-    log_data.update(aux_state.logging)
-    
     # Update new train_state.
     train_state = TrainState(
         model=new_model,
@@ -444,9 +499,14 @@ def train_step(
         dynamic_scaler_state=dynamic_scaler_state,
         iteration=train_state.iteration + 1,
         train_key=new_key,
-        aux_state=aux_state,
+        aux_state=train_state.aux_state,
     )
 
+    # Update aux_state and related loggings.
+    accuracy = get_accuracy(logits, batch)
+    train_state = update_aux_state(
+        train_state, updates, grads, batch, loss, config=config)
+    log_data = train_state.aux_state.loggings
     return loss, accuracy, log_data, train_state
 
 
@@ -467,43 +527,47 @@ def load_checkpoint(path: str, structure: TrainState) -> TrainState:
 
 def train_loop(
     train_state: TrainState,
-    optimizer: Any,
+    optimizer: optax.GradientTransformation,
     dataloader: Any,
     config: DictConfig,
     time_keeper: TimeKeeper,
     logger: RateLimitedWandbLog,
 ) -> TrainState:
-    pbar = tqdm.tqdm(enumerate(dataloader), total=config.train.max_steps)
+    # Handling restarting from checkpoints.
+    save_checkpoint = config.checkpoint.save
+    checkpoint_path = config.checkpoint.save_path
+    num_steps = config.train.max_steps
+    if save_checkpoint:
+        if checkpoint_path is None:
+            raise ValueError("checkpoint.save_path cannot be empty.")
+        checkpoint_path = os.path.join(os.getcwd(), "checkpoint", checkpoint_path)
+        if not os.path.exists(checkpoint_path):
+            raise ValueError(f"checkpoint path {checkpoint_path} does not exist.")
+        if config.checkpoint.num_steps is not None:
+            num_steps = config.checkpoint.num_steps
+    start_steps = train_state.iteration                 # 0 if not loading from checkpoint
+    end_steps = start_steps + num_steps
+    dataloader = dataloader[start_steps:end_steps]      # get the subset for this checkpoint
+    pbar = tqdm.tqdm(enumerate(dataloader), total=num_steps)
 
     running_loss, running_accuracy, total_tokens = 0, 0, 0
     
     train_step_jit = eqx.filter_jit(
         jtu.Partial(train_step, config=config),
     )
-    # Just-in-time compilation of the train_step(..., config=config.train) function.
-    # [jax.jit](https://jax.readthedocs.io/en/latest/jax-101/02-jitting.html)
-    # [eqx.filter_jit](https://docs.kidger.site/equinox/api/transformations/#equinox.filter_jit)
-    # [jtu.Partial](https://jax.readthedocs.io/en/latest/_autosummary/jax.tree_util.Partial.html)
     
     # Initialize Wandb Logger
     beta = 1.0 - 1.0 / config.logging.running_stats_window
     iteration_timing_events = ["iteration", "dataloader", "train_step"]
     time_keeper.mark(start_events=["dataloader", "iteration", "tokens", "samples"])
 
-    use_checkpoint = config.checkpoint.path is not None
-    num_steps = config.checkpoint.num_steps if use_checkpoint else config.train.max_steps
-    start_steps = train_state.iteration     # 0 if not loading from checkpoint
-    max_steps = start_steps + num_steps
-
     for it, batch in pbar:
-        if it < start_steps:
-            # A dumb way to skip trained data points.
-            # TODO: import loadit and for more efficient data loading.
-            # right now it takes 50 iter/s to load data (so ~5hr to load 10^6 data).
-            continue
-        if it > max_steps:
+        if it >= num_steps:
             break
         # Load training batch.
+        # Manually shift labels for loadit dataset.
+        if config.dataset.use_loadit:
+            batch = shift_labels(batch)
         input_ids = jnp.asarray(batch["input_ids"])
         labels = jnp.asarray(batch["labels"])
         tokens = jnp.sum(jnp.asarray(batch["attention_mask"]))
@@ -514,6 +578,8 @@ def train_loop(
         loss, accuracy, log_data, train_state = train_step_jit(
             train_state, (input_ids, labels), optimizer
         )
+        if jnp.isnan(loss):
+            break
         time_keeper.mark(
             end_events={"train_step": 1},
         )
@@ -575,21 +641,20 @@ def train_loop(
 
         # ======================================================================
         # Saving Checkpoint.
-        if use_checkpoint and train_state.iteration % config.checkpoint.save_steps == 0:
-            checkpoint_path = os.path.join(os.getcwd(), 'checkpoint', config.checkpoint.path, f'{train_state.iteration}.json')
-            save_checkpoint(checkpoint_path, train_state)
+        if save_checkpoint and train_state.iteration % config.checkpoint.save_steps == 0:
+            save_checkpoint(os.path.join(checkpoint_path, f"iter_{train_state.iteration}.json"), train_state)
 
     return train_state
 
 
 def train(config: DictConfig):
     # Some san check of config.
-
-    # Initialize C4 dataloader for gpt2.
-    tokenizer = transformers.GPT2TokenizerFast.from_pretrained("gpt2")
-    tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
-
-    train_loader = load_lm_data(config, tokenizer)
+    
+    # TODO: this is temporary
+    seed = config.random_seed
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
 
     # Initialize Wandb logging.
     if config.logging.wandb_project is not None:
@@ -599,12 +664,16 @@ def train(config: DictConfig):
     else:
         limited_log = None
 
+    # Initialize dataloader for gpt2.
+    tokenizer = init_tokenizer(config)
+
+    train_loader = load_lm_data(config, tokenizer)
+
     # Initialize random keys
     key = jr.PRNGKey(config.random_seed)
     model_key, train_key = jr.split(key, 2)
 
     # Initialize optimizer and train state.
-    # (Experimental) load weight from pytorch model.
     model = init_model(len(tokenizer), config.model, key=model_key)
     optimizer, opt_state = init_optimizer(model, config, logger=limited_log)
     train_state = TrainState(
@@ -613,14 +682,15 @@ def train(config: DictConfig):
         dynamic_scaler_state=DynamicScalerState() if config.train.use_amp else None,
         iteration=jnp.array(0),
         train_key=train_key,
-        aux_state=init_aux_state(config.logging, model)
+        aux_state=init_aux_state(config.logging, model, opt_state)
     )
 
     # Load train state from checkpoint.
-    if config.checkpoint.path and config.checkpoint.load_model:
-        checkpoint_path = os.path.join(os.getcwd(), 'checkpoint', config.checkpoint.path, str(config.checkpoint.load_model)+'.json')
+    if config.checkpoint.load:
+        checkpoint_path = config.checkpoint.load_path
+        checkpoint_path = os.path.join(os.getcwd(), "checkpoint", checkpoint_path)
         if not os.path.exists(checkpoint_path):
-            raise(f"Error: Checkpoint file {checkpoint_path} does not exist.")
+            raise ValueError(f"checkpoint path {checkpoint_path} does not exist.")
         train_state = load_checkpoint(checkpoint_path, train_state)
 
     time_keeper = TimeKeeper()
@@ -635,43 +705,47 @@ def train(config: DictConfig):
     )
 
 
-@hydra.main(version_base=None, config_path="conf", config_name="config")
-def main(config: DictConfig) -> None:
+def init_config(config: DictConfig) -> DictConfig:
     """Main training process integrated with checkpoing saving and loading.
     
-    Upon loading config, if checkpoint.path!=null, enter checkpoint mode:
+    Upon loading config, if checkpoint.save is not None, will process the config in the following way:
         - A new checkpoint directory will be created if checkpoint.path doesn't exist.
         - If config.yaml already exists, it will be loaded and will overwrite the config template beside the checkpoint section.
         - If config.yaml already exists and you want to overwrite it, you can turn on checkpoint.overwrite=True. Use this with caution
-          as this overwrites the existing config file.
+          since this overwrites the existing config file.
         - The updated config will be saved to config.yaml.
-    If checkpoint.path==null, train the model in the standard way without checkpointing.
     """
-    # TODO: this is temporary
-    seed = config.random_seed
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-    # Config handling.
-    if config.checkpoint.path:
-        checkpoint_dir = os.path.join(os.getcwd(), 'checkpoint', config.checkpoint.path)
-        config_path = os.path.join(checkpoint_dir, 'config.yaml')
-        # Create checkpoint directory.
-        if not os.path.exists(checkpoint_dir):
-            os.makedirs(checkpoint_dir)
-            print(f"Directory {checkpoint_dir} created.")
-        # Load existing config file if exists.
-        if os.path.exists(config_path) and not config.checkpoint.overwrite:
-            checkpoint_config = config.checkpoint
-            config = OmegaConf.load(config_path)
-            config.checkpoint = checkpoint_config
+    # Save new config file if checkpoint.save is true.
+    if config.checkpoint.save:
+        checkpoint_path = config.checkpoint.save_path
+        if checkpoint_path is None:
+            raise ValueError("checkpoint.save_path cannot be empty.")
+        checkpoint_path = os.path.join(os.getcwd(), 'checkpoint', checkpoint_path)
+        config_path = os.path.join(checkpoint_path, 'config.yaml')
+        if not os.path.exists(checkpoint_path):
+            # Create checkpoint directory.
+            os.makedirs(checkpoint_path)
+            print(f"Directory {checkpoint_path} created.")
+        elif os.path.exists(config_path):
+            if config.checkpoint.overwrite:
+                warnings.warn("checkpoint.overwrite is true. this will overwrite existing config.yaml.")
+            else:
+                # Load existing config file.
+                checkpoint_config = config.checkpoint
+                config = OmegaConf.load(config_path)
+                config.checkpoint = checkpoint_config
         config.checkpoint.overwrite = False     # manually turn off checkpoint.overwrite
         # Update config file.
         with open(config_path, 'w') as f:
             OmegaConf.save(config, f)
         print(f"Config file {config_path} updated.")
-        logging.info(OmegaConf.to_yaml(config))
-    # Main train function.
+    logging.info(OmegaConf.to_yaml(config))
+    return config
+
+
+@hydra.main(version_base=None, config_path="conf", config_name="config")
+def main(config: DictConfig) -> None:
+    config = init_config(config)
     train(config)
 
 
