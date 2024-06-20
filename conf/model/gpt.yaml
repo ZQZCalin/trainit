@@ -16,5 +16,5 @@ gpt_dropout: 0
 # use_bias of corresponding linear layers
 head_bias: False          # whether the final linear (head) layer of GPT uses bias. defaults to false.
 
-# whether to load weights from pytorch initialization.
+# EXPERIMENTAL: whether to load weights from pytorch initialization.
 load_pytorch: False

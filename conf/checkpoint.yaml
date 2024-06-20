@@ -1,8 +1,13 @@
 checkpoint:
-  # checkpoint mode if path is not null
-  path: null
-  num_steps: 50000
-  save_steps: 10000   # save checkpoint every save_steps iterations.
-  load_model: null
-  # USE WITH CAUTION: if true, overwrites the entire config file (besides checkpoint)
+  save: False
+  load: False
+  # if save is true, save checkpoint to "/checkpoint/{save_path}/iter_{it}.json" when it % save_steps = 0
+  save_path: null
+  save_steps: null
+  # if load is true, load checkpoint from "/checkpoint/{load_path}"
+  load_path: null
+  # if not None, specify total steps in one checkpoint training
+  num_steps: null
+  # USE WITH CAUTION: if true, overwrite the existing "/checkpoint/{save_path}/config.yaml".
+  # This could result in two chcekpoint runs having different configurations.
   overwrite: False

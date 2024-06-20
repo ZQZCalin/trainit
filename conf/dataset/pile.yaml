@@ -1,6 +1,7 @@
 name: pile
 
-# number of examples placed on each GPU
+# number of examples placed on each GPU. 
+# will be overwritten if use_loadit is true.
 batch_size: 4 
 
 # shuffle buffer for data loader. 0 means no shuffle.
@@ -12,3 +13,7 @@ shuffle_buffer_size: 0
 # hopefully with a reasonably sized model this will
 # prevent dataloading from being the bottleneck.
 dataloader_workers: 2
+
+# if true, will use the loadit dataset in {loadit_path}
+use_loadit: true
+loadit_path: null

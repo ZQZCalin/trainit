@@ -39,3 +39,5 @@ scc_setup.sh
 activate_env.sh
 check_env.py
 requirements.txt
+test_data.jsonl
+loadit_iterator.py
