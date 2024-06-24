@@ -35,9 +35,9 @@ opt/
 mechanic.py
 trainer.py
 test.py
-scc_setup.sh
+# scc_setup.sh
 activate_env.sh
-check_env.py
-requirements.txt
+# check_env.py
+# requirements.txt
 test_data.jsonl
 loadit_iterator.py
