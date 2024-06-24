@@ -15,5 +15,3 @@ module unload cuda
 module load cuda/12.2
 pip install --upgrade "jax==0.4.23" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 pip install --upgrade "jaxlib==0.4.23" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
-module load cuda pytorch
