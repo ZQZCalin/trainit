@@ -29,9 +29,38 @@ python check_env.py
 
 ## Usage
 
+### Run the Training Pipeline
+
+To reproduce the optimal benchmark:
+
+```bash
+python train_jax.py logging.wandb_project=PROJECT_NAME
+```
+
+You can also customize your own configurations. For example, if you want to train SGDM:
+
+```bash
+python train_jax.py logging.wandb_project=PROJECT_NAME \
+    optimizer=sgdm optimizer.lr_config.lr=1.0 ...
+```
+See [later](#configurations) for details.
+
+### Checkpoint your Training
+
+We have implemented a checkpointing system for you. All you need is changing the checkpoint configuration:
+
+```bash
+python train_jax.py logging.wandb_project=PROJECT_NAME \
+    checkpoint.save=True checkpoint.save_path=CHECKPOINT_DIR checkpoint.save_steps=10000 \  # enable checkpoint saving
+    checkpoint.load=True checkpoint.load_path=CHECKPOINT_DIR/iter_10000.json \              # enable checkpoing loading
+    checkpoint.num_steps=null       # specify number of steps in one checkpoint (optional)
+```
+
+## Advanced
+
 ### The Training Pipeline
 
-The main training pipeline is `train_jax.py`. The pipeline consists of several major components:
+The main training pipeline `train_jax.py` is highly modulized, which consists of the following major components:
 
 - **Initialization**
     - `load_lm_data`: initializes the dataloader;
@@ -42,6 +71,8 @@ The main training pipeline is `train_jax.py`. The pipeline consists of several m
 - **Training Process**
     - `train_step`: one-step training update;
     - `update_aux_state`: optional training update to log training statistics.
+
+You can modify each component for your own needs.
 
 ### Configurations
 
@@ -64,35 +95,7 @@ conf/
 |-- checkpoint.yaml
 |-- experimental.yaml
 ```
-The current configuration is recorded from the optimal Adam benchmark. You can easily change configuration in cmd.
-
-### Submit A Training Batch Job
-
-To reproduce the optimal benchmark:
-
-```bash
-python train_jax.py logging.wandb_project=PROJECT_NAME
-```
-
-You can also customize your own configurations. For example, if you want to train SGDM:
-
-```bash
-python train_jax.py logging.wandb_project=PROJECT_NAME \
-    optimizer=sgdm optimizer.lr_config.lr=1.0 ...
-```
-
-### Checkpoint
-
-We have implemented checkpointing system for you. All you need is change the checkpoint configuration:
-
-```bash
-python train_jax.py logging.wandb_project=PROJECT_NAME \
-    checkpoint.save=True checkpoint.save_path=CHECKPOINT_DIR checkpoint.save_steps=10000 \  # enable checkpoint saving
-    checkpoint.load=True checkpoint.load_path=CHECKPOINT_DIR/iter_10000.json \              # enable checkpoing loading
-    checkpoint.num_steps=null       # specify number of steps in one checkpoint (optional)
-```
-
-## Advanced
+The current configuration is recorded from the optimal Adam benchmark. You can easily change configuration in command line as shown earlier.
 
 ### Implement Your Own Optimizer
 
