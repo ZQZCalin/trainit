@@ -16,7 +16,3 @@ equinox==0.11.3
 datasets==2.18.0
 transformers==4.38.2
 jaxamp
-
-# we install jax and related packages last because otherwise pytorch will overwrite the CUDA installation with
-# an older one and jax will complain that it cannot use the GPU
--f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html "jax[cuda12_pip]" 
