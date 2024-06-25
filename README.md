@@ -8,12 +8,23 @@
 
 ## Installation
 
-### Clone Repo
+### First-time setup
 
 ```bash
 git clone https://github.com/ZQZCalin/trainit.git
 cd trainit
 source scc_setup.sh
+```
+
+
+To setup wandb logging:
+```bash
+wandb login
+```
+
+We use [minGPT](https://github.com/karpathy/minGPT) to confirm pytorch/jax equivalence.
+```bash
+git clone https://github.com/karpathy/minGPT.git
 ```
 
 ### Activate Environment
@@ -22,8 +33,8 @@ Every time when you need to re-activate the environment:
 
 ```bash
 cd /YOUR/PATH/trainit
+module load python3/3.10.12 cuda/12.2
 source env/bin/activate
-module load python3/3.10.12 cuda pytorch
 python check_env.py
 ```
 
@@ -37,12 +48,20 @@ To reproduce the optimal benchmark:
 python train_jax.py logging.wandb_project=PROJECT_NAME
 ```
 
+This may fail if your GPU does not have enough memory (24GB should be enough). If you want to use a 12GB GPU like a V100, you can cut down the memory significantly by disabling some logging:
+```bash
+python train_jax.py logging.wandb_project=PROJECT_NAME logging.store_last_grads=false logging.store_past_grads=false logging.store_last_params=false logging.compute_last_
+loss=false logging.compute_last_grads=false
+```
+
 You can also customize your own configurations. For example, if you want to train SGDM:
 
 ```bash
 python train_jax.py logging.wandb_project=PROJECT_NAME \
     optimizer=sgdm optimizer.lr_config.lr=1.0 ...
 ```
+
+
 See [later](#configurations) for details.
 
 ### Checkpoint your Training
