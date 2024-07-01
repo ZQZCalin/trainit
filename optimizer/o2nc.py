@@ -215,7 +215,7 @@ def wrap_random_scaling(
                 "update/params_norm": jnp.zeros([]),
                 "update/update_norm_pre_scaling": jnp.zeros([]),
                 "update/update_norm_post_scaling": jnp.zeros([]),
-                "update/random_scaling": jnp.zeros([]),
+                "update/random_scaling": jnp.ones([]),      # random scalar should be initialized to 1 (to avoid divide by 0 issue).
             }
 
         def __call__(self, **kargs):
