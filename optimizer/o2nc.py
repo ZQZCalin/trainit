@@ -84,6 +84,8 @@ class OnlineNonconvexState(NamedTuple):
     logging: logstate.Log
 
 
+# deprecated: please use deterministic_online_nonconvex together with wrap_random_scaling, where
+# the former handles wrapping online learners and the latter handles random scaling.
 def online_nonconvex(
     online_learner: OnlineLearner,
     random_scaling: SampleFunction = None,
@@ -170,7 +172,10 @@ def deterministic_online_nonconvex(
         A wrapped `GradientTransformation` object.
     """
 
-    def init_fn(params):
+    def init_fn(params, init_zero=True):
+        """If init_zero is true, initialize to zero array; otherwise, initialize to params."""
+        if init_zero:
+            params = jtu.tree_map(jnp.zeros_like, params)
         return DeterministicOnlineNonconvexState(
             params=params, state=online_learner.init(params))
     
