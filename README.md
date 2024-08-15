@@ -16,6 +16,7 @@ cd trainit
 source scc_setup.sh
 ```
 
+Please note that you must set up the environment on a device with a supported GPU. For instance, if you are using the SCC, initiate a GPU interactive session and set up on that session.
 
 To setup wandb logging:
 ```bash

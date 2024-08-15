@@ -3,15 +3,14 @@
 #$ -pe omp 8
 #$ -l gpus=1
 #$ -l gpu_c=7.0
-#$ -l gpu_memory=24G
-#$ -l h_rt=8:00:00   # Specify the hard time limit for the job
+#$ -l gpu_memory=24G    # Specifies GPU memory
+#$ -l h_rt=8:00:00      # Specifies the hard time limit for the job
 
-### Latest batch script updated on 2024/05/14.
+### Records batch scripts in 2024/06.
 
 cd /projectnb/aclab/qinziz/trainit
+module load python3/3.10.12 cuda/12.2
 source env/bin/activate
-
-module load python3/3.10.12 cuda pytorch
 python check_env.py
 
 # Actual training script
