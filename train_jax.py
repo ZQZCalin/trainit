@@ -483,12 +483,15 @@ def train_step(
     key, new_key = jr.split(train_state.train_key)
 
     # Apply one-step update: compute f(x_n, z_n) and g(x_n, z_n).
+    # TODO: LARGE BATCH FEATURE: change batch to a list of batches, and compute the 
+    # average gradient, average loss, average accuracy w.r.t. this larger batch
     if config.train.use_amp:
         dynamic_scaler_state, ((loss, logits), grads) = value_and_grad_fn(
             model, batch, key=key, dynamic_scaler_state=dynamic_scaler_state
         )
     else:
         (loss, logits), grads = value_and_grad_fn(model, batch, key=key)
+
     updates, opt_state = optimizer.update(
         grads, opt_state, eqx.filter(model, eqx.is_array)
     )                                                               # s_(n+1) * Delta_(n+1) = x_(n+1) - x_n
@@ -505,7 +508,7 @@ def train_step(
     )
 
     # Update aux_state and related loggings.
-    accuracy = get_accuracy(logits, batch)
+    accuracy = get_accuracy(logits, batch)  # TODO: move accuracy to grads and loss (more consistent for large batch)
     train_state = update_aux_state(
         train_state, updates, grads, batch, loss, config=config)
     log_data = train_state.aux_state.loggings
@@ -521,7 +524,7 @@ def train_loop(
     time_keeper: TimeKeeper,
     logger: RateLimitedWandbLog,
 ) -> TrainState:
-    # Handling restarting from checkpoints.
+    # [CHECKPOINT]: Handling restarting from checkpoints.
     do_save_checkpoint = config.checkpoint.save
     checkpoint_path = config.checkpoint.save_path
     num_steps = config.train.max_steps
@@ -554,6 +557,8 @@ def train_loop(
             break
         # Load training batch.
         # Manually shift labels for loadit dataset.
+        # TODO: I think it's a better practice to define config.dataset.shift_label
+        # in the config pre-processing part. See init_config() later.
         if config.dataset.use_loadit:
             batch = shift_labels(batch)
         input_ids = jnp.asarray(batch["input_ids"])
@@ -628,7 +633,7 @@ def train_loop(
             )
 
         # ======================================================================
-        # Saving Checkpoint.
+        # [CHECKPOINT]: Saving checkpoint.
         if do_save_checkpoint and train_state.iteration % config.checkpoint.save_steps == 0:
             serializer.save(os.path.join(checkpoint_path, f"iter_{train_state.iteration}.ckpt"), train_state)
 
@@ -673,7 +678,7 @@ def train(config: DictConfig):
         aux_state=init_aux_state(config.logging, model, opt_state)
     )
 
-    # Load train state from checkpoint.
+    # [CHECKPOINT]: Load train state from checkpoint.
     if config.checkpoint.load:
         checkpoint_path = config.checkpoint.load_path
         if not os.path.exists(checkpoint_path):
@@ -693,16 +698,21 @@ def train(config: DictConfig):
 
 
 def init_config(config: DictConfig) -> DictConfig:
-    """Main training process integrated with checkpoing saving and loading.
-    
-    Upon loading config, if checkpoint.save is not None, will process the config in the following way:
-        - A new checkpoint directory will be created if checkpoint.path doesn't exist.
-        - If config.yaml already exists, it will be loaded and will overwrite the config template beside the checkpoint section.
-        - If config.yaml already exists and you want to overwrite it, you can turn on checkpoint.overwrite=True. Use this with caution
-          since this overwrites the existing config file.
-        - The updated config will be saved to config.yaml.
-    """
-    # Save new config file if checkpoint.save is true.
+    """Pre-process config"""
+    # ======================================================================
+    # TODO: pre-process config.dataset.shift_label
+    # for now, this is true only when config.dataset.use_loadit = True
+
+    # ======================================================================
+    # [CHECKPOINT]: Pre-process config for saving checkpoint.
+    # Upon loading config, if checkpoint.save is not None, will process the config in the following way:
+    # - A new checkpoint directory will be created if checkpoint.path doesn't exist.
+    # - If config.yaml already exists, it will be loaded and will overwrite the config template beside the checkpoint section.
+    # - If config.yaml already exists and you want to overwrite it, you can turn on checkpoint.overwrite=True. Use this with caution
+    #   since this overwrites the existing config file.
+    # - The updated config will be saved to config.yaml.
+
+    # Save new config file if checkpoint.save is true (i.e., we need to save checkpoint).
     if config.checkpoint.save:
         checkpoint_path = config.checkpoint.save_path
         if checkpoint_path is None:
@@ -725,6 +735,7 @@ def init_config(config: DictConfig) -> DictConfig:
         with open(config_path, 'w') as f:
             OmegaConf.save(config, f)
         print(f"Config file {config_path} updated.")
+
     logging.info(OmegaConf.to_yaml(config))
     return config
 
