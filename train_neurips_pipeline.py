@@ -1,4 +1,5 @@
 # A simplified script to log non-smooth statistics.
+# NOTE: This code is not updated since 2024/06 (and probably won't be updated in the future)
 import logging
 import random
 from itertools import chain

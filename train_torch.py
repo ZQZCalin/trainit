@@ -1,4 +1,5 @@
 # A simplified script to log non-smooth statistics.
+# NOTE: This code is not updated since 2024/06.
 import logging
 import random
 import numpy as np
