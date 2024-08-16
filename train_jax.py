@@ -557,9 +557,7 @@ def train_loop(
             break
         # Load training batch.
         # Manually shift labels for loadit dataset.
-        # TODO: I think it's a better practice to define config.dataset.shift_label
-        # in the config pre-processing part. See init_config() later.
-        if config.dataset.use_loadit:
+        if config.dataset.shift_labels:
             batch = shift_labels(batch)
         input_ids = jnp.asarray(batch["input_ids"])
         labels = jnp.asarray(batch["labels"])
@@ -700,16 +698,22 @@ def train(config: DictConfig):
 def init_config(config: DictConfig) -> DictConfig:
     """Pre-process config"""
     # ======================================================================
-    # TODO: pre-process config.dataset.shift_label
-    # for now, this is true only when config.dataset.use_loadit = True
+    # Pre-process pile dataset.
+    # If using loadit data, turn on shift_labels and fix batch_size=2.
+    if config.dataset.name == "pile":
+        if config.dataset.use_loadit:
+            config.dataset.batch_size = 2
+            config.dataset.shift_labels = True
+        else:
+            config.dataset.shift_labels = False
 
     # ======================================================================
     # [CHECKPOINT]: Pre-process config for saving checkpoint.
     # Upon loading config, if checkpoint.save is not None, will process the config in the following way:
     # - A new checkpoint directory will be created if checkpoint.path doesn't exist.
     # - If config.yaml already exists, it will be loaded and will overwrite the config template beside the checkpoint section.
-    # - If config.yaml already exists and you want to overwrite it, you can turn on checkpoint.overwrite=True. Use this with caution
-    #   since this overwrites the existing config file.
+    # - If config.yaml already exists and you want to overwrite it, you can turn on checkpoint.overwrite=True. 
+    #   Use this with caution since this overwrites the existing config file.
     # - The updated config will be saved to config.yaml.
 
     # Save new config file if checkpoint.save is true (i.e., we need to save checkpoint).
