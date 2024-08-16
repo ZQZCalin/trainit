@@ -171,7 +171,7 @@ def merge_dicts(*to_merge):
     return result
 
 
-def get_accuracy(logits: Array, batch: Tuple[Array], ignore_index: int = -100):
+def get_accuracy(logits: Array, batch: Tuple[Array, Array], ignore_index: int = -100):
     input, target = batch # [N, L],  [N, L]
     predictions = jnp.argmax(logits, axis=2) # [N, L, C] -> [N, L]
     return jnp.sum(predictions == target) / jnp.sum(target != ignore_index)
