@@ -1,8 +1,13 @@
 name: pile
 
 # number of examples placed on each GPU. 
-# will be overwritten if use_loadit is true.
+# will be overwritten to 2 if use_loadit is true.
 batch_size: 4 
+
+# total number of samples in one iteration.
+# by default, it's set to batch_size
+# otherwise, must be a multiple of batch_size 
+total_batch_size: null
 
 # shuffle buffer for data loader. 0 means no shuffle.
 shuffle_buffer_size: 10000

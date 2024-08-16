@@ -19,7 +19,7 @@ import equinox as eqx
 import transformers
 
 from jaxamp import amp, DynamicScalerState, dynamic_scale_value_and_grad
-from typing import Tuple, Any, Optional, Sequence, Union, NamedTuple, Callable
+from typing import List, Tuple, Any, Optional, Sequence, Union, NamedTuple, Callable
 from jaxtyping import Array, PRNGKeyArray
 
 import tqdm
@@ -105,7 +105,7 @@ def load_lm_data(config: DictConfig, tokenizer: Any, split: str = "train"):
     return loader
 
 
-def loss_fn(model: eqx.Module, batch: Tuple[Array, Array], key: Array):
+def loss_fn(model: eqx.Module, batch: Tuple[Array, Array], key: PRNGKeyArray):
     """Wrapper for cross entropy loss.
     Applies jax.vmap to all data in a data batch.
 
@@ -366,7 +366,7 @@ def update_aux_state(
     train_state: TrainState,
     updates: optax.Updates,
     grads: optax.Updates,
-    batch: Tuple[Array, Array],
+    batches: List[Tuple[Array, Array]],
     loss: Array,
     config: DictConfig,
 ) -> TrainState:
@@ -414,13 +414,15 @@ def update_aux_state(
         if config.store_last_params and config.compute_last_loss:
             last_model = eqx.apply_updates(
                 model, utils.negative_tree(state.params_diff))
-            if global_config.train.use_amp:
-                amp_loss_fn = amp(loss_fn, compute_dtype=get_dtype(global_config.train.precision))
-                # dynamic_scaler_state, (last_loss, _) = amp_loss_fn(
-                #     last_model, batch, key=key, dynamic_scaler_state=dynamic_scaler_state)
-                last_loss, _ = amp_loss_fn(last_model, batch, key=key)
-            else:
-                last_loss, _ = loss_fn(last_model, batch, key=key)
+            last_loss = 0
+            for batch in batches:
+                if global_config.train.use_amp:
+                    amp_loss_fn = amp(loss_fn, compute_dtype=get_dtype(global_config.train.precision))
+                    last_loss_, _ = amp_loss_fn(last_model, batch, key=key)
+                else:
+                    last_loss_, _ = loss_fn(last_model, batch, key=key)
+                last_loss += last_loss_
+            last_loss /= len(batches)   # average last loss over all batches
             df = loss - last_loss
             loggings.update({
                 "update/fn-f(n-1)": df,
@@ -462,12 +464,16 @@ def update_aux_state(
     )
 
 
-def train_step(
+def back_prop(
     train_state: TrainState,
-    batch: Tuple[Array, Array],
-    optimizer: optax.GradientTransformation,
+    batches: List[Tuple[Array, Array]],
     config: DictConfig,
 ):
+    """Computes (potentially multi-batch average) loss, grads, accuracy.
+    
+    Returns:
+        train_state, loss, accuracy, grads (averaged over batches)
+    """
     # Apply auto mixed precision.
     if config.train.use_amp:
         amp_loss_fn = amp(loss_fn, compute_dtype=get_dtype(config.train.precision))
@@ -478,20 +484,54 @@ def train_step(
         value_and_grad_fn = eqx.filter_value_and_grad(loss_fn, has_aux=True)
 
     model = train_state.model                                       # x_n
-    opt_state = train_state.opt_state                               # opt_state of x_n
     dynamic_scaler_state = train_state.dynamic_scaler_state
-    key, new_key = jr.split(train_state.train_key)
+    current_key, new_key = jr.split(train_state.train_key)
+    num_batches = len(batches)
+    keys = jr.split(current_key, num_batches)
 
-    # Apply one-step update: compute f(x_n, z_n) and g(x_n, z_n).
-    # TODO: LARGE BATCH FEATURE: change batch to a list of batches, and compute the 
-    # average gradient, average loss, average accuracy w.r.t. this larger batch
-    if config.train.use_amp:
-        dynamic_scaler_state, ((loss, logits), grads) = value_and_grad_fn(
-            model, batch, key=key, dynamic_scaler_state=dynamic_scaler_state
-        )
-    else:
-        (loss, logits), grads = value_and_grad_fn(model, batch, key=key)
+    # Compute f(x_n, z_n) and g(x_n, z_n) for multi-batches.
+    loss = 0
+    accuracy = 0
+    grads = jtu.tree_map(jnp.zeros_like, eqx.filter(model, eqx.is_array))
+    for batch, key in zip(batches, keys):
+        if config.train.use_amp:
+            dynamic_scaler_state, ((loss_, logits_), grads_) = value_and_grad_fn(
+                model, batch, key=key, dynamic_scaler_state=dynamic_scaler_state
+            )
+        else:
+            (loss_, logits_), grads_ = value_and_grad_fn(model, batch, key=key)
+        loss += loss_
+        accuracy += get_accuracy(logits_, batch)
+        grads = utils.tree_add(grads, grads_)
+    loss /= num_batches
+    accuracy /= num_batches
+    grads = utils.tree_scalar_multiply(grads, 1/num_batches)
 
+    train_state = TrainState(
+        model=model,
+        opt_state=train_state.opt_state,
+        dynamic_scaler_state=dynamic_scaler_state,
+        iteration=train_state.iteration,
+        train_key=new_key,
+        aux_state=train_state.aux_state,
+    )
+
+    return train_state, loss, accuracy, grads
+
+
+def train_step(
+    train_state: TrainState,
+    batches: List[Tuple[Array, Array]],
+    optimizer: optax.GradientTransformation,
+    config: DictConfig,
+):
+    model = train_state.model                                       # x_n
+    opt_state = train_state.opt_state                               # opt_state of x_n
+
+    # Compute f(x_n, z_n) and g(x_n, z_n).
+    train_state, loss, accuracy, grads = back_prop(train_state, batches, config)
+
+    # Apply one-step update.
     updates, opt_state = optimizer.update(
         grads, opt_state, eqx.filter(model, eqx.is_array)
     )                                                               # s_(n+1) * Delta_(n+1) = x_(n+1) - x_n
@@ -501,19 +541,17 @@ def train_step(
     train_state = TrainState(
         model=new_model,
         opt_state=opt_state,
-        dynamic_scaler_state=dynamic_scaler_state,
+        dynamic_scaler_state=train_state.dynamic_scaler_state,
         iteration=train_state.iteration + 1,
-        train_key=new_key,
+        train_key=train_state.train_key,
         aux_state=train_state.aux_state,
     )
 
     # Update aux_state and related loggings.
-    accuracy = get_accuracy(logits, batch)  # TODO: move accuracy to grads and loss (more consistent for large batch)
     train_state = update_aux_state(
-        train_state, updates, grads, batch, loss, config=config)
+        train_state, updates, grads, batches, loss, config=config)
     log_data = train_state.aux_state.loggings
     return loss, accuracy, log_data, train_state
-
 
 
 def train_loop(
@@ -536,10 +574,14 @@ def train_loop(
             raise ValueError(f"checkpoint path {checkpoint_path} does not exist.")
         if config.checkpoint.num_steps is not None:
             num_steps = config.checkpoint.num_steps
+
+    num_batches = config.dataset.total_batch_size // config.dataset.batch_size   # number of mini-batches per iter
     start_steps = train_state.iteration                 # 0 if not loading from checkpoint
     end_steps = start_steps + num_steps
-    dataloader = dataloader[start_steps:end_steps]      # get the subset for this checkpoint
-    pbar = tqdm.tqdm(enumerate(dataloader), total=num_steps)
+    # dataloader = dataloader[start_steps:end_steps]      # get the subset for this checkpoint
+    # pbar = tqdm.tqdm(enumerate(dataloader), total=num_steps)  #NOTE
+    dataloader_idx = range(start_steps*num_batches, end_steps*num_batches, num_batches)
+    pbar = tqdm.tqdm(enumerate(dataloader_idx), total=num_steps)
 
     running_loss, running_accuracy, total_tokens = 0, 0, 0
     
@@ -552,23 +594,31 @@ def train_loop(
     iteration_timing_events = ["iteration", "dataloader", "train_step"]
     time_keeper.mark(start_events=["dataloader", "iteration", "tokens", "samples"])
 
-    for it, batch in pbar:
+    # for it, batch in pbar:    #NOTE
+    for it, batch_idx in pbar:
         if it >= num_steps:
             break
         # Load training batch.
-        # Manually shift labels for loadit dataset.
-        if config.dataset.shift_labels:
-            batch = shift_labels(batch)
-        input_ids = jnp.asarray(batch["input_ids"])
-        labels = jnp.asarray(batch["labels"])
-        tokens = jnp.sum(jnp.asarray(batch["attention_mask"]))
-        samples = labels.shape[0]
+        batches = []
+        tokens = 0
+        samples = 0
+        for batch in dataloader[batch_idx: batch_idx+num_batches]:
+            # Manually shift labels for loadit dataset.
+            if config.dataset.shift_labels:
+                batch = shift_labels(batch)
+            input_ids = jnp.asarray(batch["input_ids"])
+            labels = jnp.asarray(batch["labels"])
+            batches.append((input_ids, labels))
+            tokens += jnp.sum(jnp.asarray(batch["attention_mask"]))
+            samples += labels.shape[0]
+
         time_keeper.mark(end_events={"dataloader": 1}, start_events=["train_step"])
 
         # Apply one-step train_step.
         loss, accuracy, log_data, train_state = train_step_jit(
-            train_state, (input_ids, labels), optimizer
+            train_state, batches, optimizer
         )
+        # A dumb san check: end train loop if loss is infinite.
         if jnp.isnan(loss):
             break
         time_keeper.mark(
@@ -706,6 +756,10 @@ def init_config(config: DictConfig) -> DictConfig:
             config.dataset.shift_labels = True
         else:
             config.dataset.shift_labels = False
+
+    # Pre-process total_batch_size.
+    if not config.dataset.total_batch_size:
+        config.dataset.total_batch_size = config.dataset.batch_size
 
     # ======================================================================
     # [CHECKPOINT]: Pre-process config for saving checkpoint.
