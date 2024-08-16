@@ -88,7 +88,8 @@ def load_lm_data(config: DictConfig, tokenizer: Any, split: str = "train"):
             loadit_path = "/projectnb/aclab/tranhp/trainDataloader_pile/"
         loader = LoadIt(loadit_path)
         if config.shuffle_buffer_size > 0:
-            loader = chunk_shuffle(loader, chunk_size=config.shuffle_buffer_size, length=max_steps, seed=seed)
+            length = max_steps * config.total_batch_size
+            loader = chunk_shuffle(loader, chunk_size=config.shuffle_buffer_size, length=length, seed=seed)
     else:
         if config.name not in ["c4", "pile"]:
             raise ValueError("dataset name must be c4 or pile.")
@@ -384,6 +385,7 @@ def update_aux_state(
     aux_state = train_state.aux_state
     dynamic_scaler_state = train_state.dynamic_scaler_state
     key, new_key = jr.split(train_state.train_key)
+    batches = jnp.array(batches)
     
     base_loggings = {
         "grads/norm": utils.tree_l2_norm(grads),
@@ -414,14 +416,17 @@ def update_aux_state(
         if config.store_last_params and config.compute_last_loss:
             last_model = eqx.apply_updates(
                 model, utils.negative_tree(state.params_diff))
-            last_loss = 0
-            for batch in batches:
+            def compute_last_loss(i, val):
+                batch = batches[i]
                 if global_config.train.use_amp:
                     amp_loss_fn = amp(loss_fn, compute_dtype=get_dtype(global_config.train.precision))
                     last_loss_, _ = amp_loss_fn(last_model, batch, key=key)
                 else:
                     last_loss_, _ = loss_fn(last_model, batch, key=key)
-                last_loss += last_loss_
+                return val + last_loss_
+            last_loss = jax.lax.fori_loop(
+                0, len(batches), compute_last_loss, init_val=0
+            )
             last_loss /= len(batches)   # average last loss over all batches
             df = loss - last_loss
             loggings.update({
@@ -489,25 +494,6 @@ def back_prop(
     keys = jr.split(current_key, num_batches)
 
     # Compute f(x_n, z_n) and g(x_n, z_n) for multi-batches.
-    # loss = 0
-    # accuracy = 0
-    # grads = jtu.tree_map(jnp.zeros_like, eqx.filter(model, eqx.is_array))
-    # dynamic_scaler_state = train_state.dynamic_scaler_state
-    # for batch, key in zip(batches, keys):
-    #     if config.train.use_amp:
-    #         dynamic_scaler_state, ((loss_, logits_), grads_) = value_and_grad_fn(
-    #             model, batch, key=key, dynamic_scaler_state=dynamic_scaler_state
-    #         )
-    #     else:
-    #         (loss_, logits_), grads_ = value_and_grad_fn(model, batch, key=key)
-    #     loss += loss_
-    #     accuracy += get_accuracy(logits_, batch)
-    #     grads = utils.tree_add(grads, grads_)
-    # loss /= num_batches
-    # accuracy /= num_batches
-    # grads = utils.tree_scalar_multiply(grads, 1/num_batches)
-
-    # TODO: use jax.lax.fori_loop to replace classical for loop
     batches = jnp.array(batches)
     keys = jnp.array(keys)
     def back_prop_single_batch(i, val):
