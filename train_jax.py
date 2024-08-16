@@ -484,16 +484,35 @@ def back_prop(
         value_and_grad_fn = eqx.filter_value_and_grad(loss_fn, has_aux=True)
 
     model = train_state.model                                       # x_n
-    dynamic_scaler_state = train_state.dynamic_scaler_state
     current_key, new_key = jr.split(train_state.train_key)
     num_batches = len(batches)
     keys = jr.split(current_key, num_batches)
 
     # Compute f(x_n, z_n) and g(x_n, z_n) for multi-batches.
-    loss = 0
-    accuracy = 0
-    grads = jtu.tree_map(jnp.zeros_like, eqx.filter(model, eqx.is_array))
-    for batch, key in zip(batches, keys):
+    # loss = 0
+    # accuracy = 0
+    # grads = jtu.tree_map(jnp.zeros_like, eqx.filter(model, eqx.is_array))
+    # dynamic_scaler_state = train_state.dynamic_scaler_state
+    # for batch, key in zip(batches, keys):
+    #     if config.train.use_amp:
+    #         dynamic_scaler_state, ((loss_, logits_), grads_) = value_and_grad_fn(
+    #             model, batch, key=key, dynamic_scaler_state=dynamic_scaler_state
+    #         )
+    #     else:
+    #         (loss_, logits_), grads_ = value_and_grad_fn(model, batch, key=key)
+    #     loss += loss_
+    #     accuracy += get_accuracy(logits_, batch)
+    #     grads = utils.tree_add(grads, grads_)
+    # loss /= num_batches
+    # accuracy /= num_batches
+    # grads = utils.tree_scalar_multiply(grads, 1/num_batches)
+
+    # TODO: use jax.lax.fori_loop to replace classical for loop
+    batches = jnp.array(batches)
+    keys = jnp.array(keys)
+    def back_prop_single_batch(i, val):
+        loss, accuracy, grads, dynamic_scaler_state = val
+        batch, key = batches[i], keys[i]
         if config.train.use_amp:
             dynamic_scaler_state, ((loss_, logits_), grads_) = value_and_grad_fn(
                 model, batch, key=key, dynamic_scaler_state=dynamic_scaler_state
@@ -503,6 +522,17 @@ def back_prop(
         loss += loss_
         accuracy += get_accuracy(logits_, batch)
         grads = utils.tree_add(grads, grads_)
+        return (loss, accuracy, grads, dynamic_scaler_state)
+    
+    loss = 0
+    accuracy = 0
+    grads = jtu.tree_map(jnp.zeros_like, eqx.filter(model, eqx.is_array))
+    dynamic_scaler_state = train_state.dynamic_scaler_state
+
+    loss, accuracy, grads, dynamic_scaler_state = jax.lax.fori_loop(
+        0, num_batches, back_prop_single_batch,
+        (loss, accuracy, grads, dynamic_scaler_state)
+    )
     loss /= num_batches
     accuracy /= num_batches
     grads = utils.tree_scalar_multiply(grads, 1/num_batches)
