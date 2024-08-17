@@ -26,6 +26,7 @@ wandb/
 # batch job and output files
 # batch_job/
 *.sh.*
+batch_job/optimistic.sh
 
 # checkpoint files
 checkpoint/
