@@ -8,11 +8,13 @@ train:
   # for some most optimizers/online learners, they have default value of wrap_o2nc 
   # (e.g., some online learners are always wrapped, and some optimizers are never wrapped),
   # which overwrites this setting.
+  # TODO: will deprecate this config. init_optimizer will take care of wrapping o2nc.
   wrap_o2nc: False
 
   # random scaling options. supports "exponential".
   random_scaling: null
   random_scaling_seed: 0  # to be deprecated. we should only use one global random seed and generate sub-keys by jr.split()
+  use_importance_sampling: true
 
   # whether to use automatic mixed precision
   use_amp: True
