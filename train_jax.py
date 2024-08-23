@@ -310,6 +310,7 @@ def init_optimizer(
     optimizer = wrap_random_scaling(
         gradient_transformation=optimizer,
         random_scaling=config.train.random_scaling,
+        use_importance_sampling=config.train.use_importance_sampling,
         seed=config.train.random_scaling_seed   # TODO: deprecate. use PRNGKey passed from argument instead of random seed.
     )
     

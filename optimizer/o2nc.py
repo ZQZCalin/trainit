@@ -191,11 +191,11 @@ def get_random_scaling(
 ) -> Tuple[RandomScalingFn, ImportanceSamplingFn]:
     """Returns a tuple of random scaling and importance sampling."""
     exponential_rs = lambda key: jr.exponential(key)
-    exponential_is = lambda s: 1
+    exponential_is = lambda s: jnp.ones([])
     uniform_rs = lambda key, low, high: jr.uniform(key, minval=low, maxval=high)
     uniform_is = lambda s, low, high: high - s
-    null_rs = lambda key: 1
-    null_is = lambda s: 1
+    null_rs = lambda key: jnp.ones([])
+    null_is = lambda s: jnp.ones([])
 
     if name == "exponential":
         return exponential_rs, exponential_is
@@ -224,10 +224,13 @@ def wrap_random_scaling(
     
     random_scaling_fn, importance_sampling_fn = get_random_scaling(random_scaling)
     if not use_importance_sampling:
-        importance_sampling_fn = lambda s: 1
+        importance_sampling_fn = lambda s: jnp.ones([])
 
     class LogChecker(object):
         """A dummy class to make sure all logs have the same structure and data type."""
+        def check_type(self, a):
+            return isinstance(a, jnp.ndarray) and a.dtype == jnp.float32 and a.size == 1
+        
         def __init__(self):
             self.logging = {
                 "update/params_norm": jnp.zeros([]),
@@ -238,14 +241,12 @@ def wrap_random_scaling(
             }
 
         def __call__(self, **kargs):
-            def check_type(a):
-                return isinstance(a, jnp.ndarray) and a.dtype == jnp.float32 and a.size == 1
-            # safe check logging messages have the same data type.
             for key, value in kargs.items():
-                if key in self.logging and check_type(value):
-                    self.logging[key] = value
-                else:
-                    raise ValueError(f"Alert: Item '{key}' either does not exist in A or is not compatible.")
+                if key not in self.logging:
+                    raise ValueError(f"Key '{key}' does not exist.")
+                if not self.check_type(value):
+                    raise TypeError(f"Key '{key}' is not a 1d float32 array.")
+                self.logging[key] = value
             return logstate.Log(self.logging)
     
     logger = LogChecker()
