@@ -226,37 +226,19 @@ def wrap_random_scaling(
     if not use_importance_sampling:
         importance_sampling_fn = lambda s: jnp.ones([])
 
-    class LogChecker(object):
-        """A dummy class to make sure all logs have the same structure and data type."""
-        def check_type(self, a):
-            return isinstance(a, jnp.ndarray) and a.dtype == jnp.float32 and a.size == 1
-        
-        def __init__(self):
-            self.logging = {
-                "update/params_norm": jnp.zeros([]),
-                "update/update_norm_pre_scaling": jnp.zeros([]),
-                "update/update_norm_post_scaling": jnp.zeros([]),
-                "update/random_scaling": jnp.ones([]),      # random scalar should be initialized to 1 (to avoid divide by 0 issue).
-                "update/importance_sampling": jnp.ones([]),
-            }
-
-        def __call__(self, **kargs):
-            for key, value in kargs.items():
-                if key not in self.logging:
-                    raise ValueError(f"Key '{key}' does not exist.")
-                if not self.check_type(value):
-                    raise TypeError(f"Key '{key}' is not a 1d float32 array.")
-                self.logging[key] = value
-            return logstate.Log(self.logging)
-    
-    logger = LogChecker()
-
     def init_fn(params):
+        logging = {
+            "update/params_norm": jnp.zeros([]),
+            "update/update_norm_pre_scaling": jnp.zeros([]),
+            "update/update_norm_post_scaling": jnp.zeros([]),
+            "update/random_scaling": jnp.ones([]),      # random scalar should be initialized to 1 (to avoid divide by 0 issue).
+            "update/importance_sampling": jnp.ones([]),
+        }
         return WrapRandomScalingState(
             opt_state=gradient_transformation.init(params),
             weight=jnp.ones([]),
             key=jr.PRNGKey(seed),
-            logging=logger(),
+            logging=logstate.Log(logging),
         )
     
     def update_fn(updates, state, params):
@@ -267,17 +249,18 @@ def wrap_random_scaling(
         weight = importance_sampling_fn(scalar)
         new_updates = tree_scalar_multiply(updates, scalar)
         update_norm = tree_norm(updates)
+        logging = {
+            "update/params_norm": tree_norm(params),
+            "update/update_norm_pre_scaling": update_norm,
+            "update/update_norm_post_scaling": update_norm*scalar,
+            "update/random_scaling": scalar,
+            "update/importance_sampling": weight,
+        }
         return new_updates, WrapRandomScalingState(
             opt_state=opt_state,
             weight=weight,
             key=new_key,
-            logging=logger(**{
-                "update/params_norm": tree_norm(params),
-                "update/update_norm_pre_scaling": update_norm,
-                "update/update_norm_post_scaling": update_norm*scalar,
-                "update/random_scaling": scalar,
-                "update/importance_sampling": weight,
-            })
+            logging=logstate.Log(logging),
         )
     
     return GradientTransformation(init_fn, update_fn)

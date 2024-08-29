@@ -76,3 +76,79 @@ python check_env.py
 # python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=2000 dataset.total_batch_size=128 \
 #     optimizer.lr_config.warmup=200 optimizer.lr_config.max_steps=2000 optimizer.lr_config.lr=1e-5 \
 #     train.random_scaling=exponential
+
+
+# 08/23: uniform random scaling
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.warmup=200 optimizer.lr_config.max_steps=2000 optimizer.lr_config.lr=3e-4 \
+#     train.random_scaling=uniform
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.warmup=200 optimizer.lr_config.max_steps=2000 optimizer.lr_config.lr=1e-3 \
+#     train.random_scaling=uniform
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.warmup=200 optimizer.lr_config.max_steps=2000 optimizer.lr_config.lr=3e-3 \
+#     train.random_scaling=uniform
+
+
+# 08/25: testing different batch sizes (B=32)
+# No Random Scaling
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=8000 dataset.total_batch_size=32 \
+#     optimizer.lr_config.warmup=800 optimizer.lr_config.max_steps=8000 optimizer.lr_config.lr=3e-4
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=8000 dataset.total_batch_size=32 \
+#     optimizer.lr_config.warmup=800 optimizer.lr_config.max_steps=8000 optimizer.lr_config.lr=1e-3
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=8000 dataset.total_batch_size=32 \
+#     optimizer.lr_config.warmup=800 optimizer.lr_config.max_steps=8000 optimizer.lr_config.lr=3e-3
+
+# Exponential Random Scaling
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=8000 dataset.total_batch_size=32 \
+#     optimizer.lr_config.warmup=800 optimizer.lr_config.max_steps=8000 optimizer.lr_config.lr=3e-4 \
+#     train.random_scaling=exponential
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=8000 dataset.total_batch_size=32 \
+#     optimizer.lr_config.warmup=800 optimizer.lr_config.max_steps=8000 optimizer.lr_config.lr=1e-3 \
+#     train.random_scaling=exponential
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=8000 dataset.total_batch_size=32 \
+#     optimizer.lr_config.warmup=800 optimizer.lr_config.max_steps=8000 optimizer.lr_config.lr=3e-3 \
+#     train.random_scaling=exponential
+
+# Uniform Random Scaling
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=8000 dataset.total_batch_size=32 \
+#     optimizer.lr_config.warmup=800 optimizer.lr_config.max_steps=8000 optimizer.lr_config.lr=3e-4 \
+#     train.random_scaling=uniform
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=8000 dataset.total_batch_size=32 \
+#     optimizer.lr_config.warmup=800 optimizer.lr_config.max_steps=8000 optimizer.lr_config.lr=1e-3 \
+#     train.random_scaling=uniform
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=8000 dataset.total_batch_size=32 \
+#     optimizer.lr_config.warmup=800 optimizer.lr_config.max_steps=8000 optimizer.lr_config.lr=3e-3 \
+#     train.random_scaling=uniform
+
+
+# 08/26: testing different batch sizes (B=8)
+# No Random Scaling
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=32000 dataset.total_batch_size=8 \
+#     optimizer.lr_config.warmup=3200 optimizer.lr_config.max_steps=32000 optimizer.lr_config.lr=3e-4
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=32000 dataset.total_batch_size=8 \
+#     optimizer.lr_config.warmup=3200 optimizer.lr_config.max_steps=32000 optimizer.lr_config.lr=1e-3
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=32000 dataset.total_batch_size=8 \
+#     optimizer.lr_config.warmup=3200 optimizer.lr_config.max_steps=32000 optimizer.lr_config.lr=3e-3
+
+# Exponential Random Scaling
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=32000 dataset.total_batch_size=8 \
+#     optimizer.lr_config.warmup=3200 optimizer.lr_config.max_steps=32000 optimizer.lr_config.lr=3e-4 \
+#     train.random_scaling=exponential
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=32000 dataset.total_batch_size=8 \
+#     optimizer.lr_config.warmup=3200 optimizer.lr_config.max_steps=32000 optimizer.lr_config.lr=1e-3 \
+#     train.random_scaling=exponential
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=32000 dataset.total_batch_size=8 \
+#     optimizer.lr_config.warmup=3200 optimizer.lr_config.max_steps=32000 optimizer.lr_config.lr=3e-3 \
+#     train.random_scaling=exponential
+
+# Uniform Random Scaling
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=32000 dataset.total_batch_size=8 \
+#     optimizer.lr_config.warmup=3200 optimizer.lr_config.max_steps=32000 optimizer.lr_config.lr=3e-4 \
+#     train.random_scaling=uniform
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=32000 dataset.total_batch_size=8 \
+#     optimizer.lr_config.warmup=3200 optimizer.lr_config.max_steps=32000 optimizer.lr_config.lr=1e-3 \
+#     train.random_scaling=uniform
+# python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=32000 dataset.total_batch_size=8 \
+#     optimizer.lr_config.warmup=3200 optimizer.lr_config.max_steps=32000 optimizer.lr_config.lr=3e-3 \
+#     train.random_scaling=uniform

@@ -133,3 +133,24 @@ def list_of_logs(tree: PyTree, keep_none=False):
 
 def set_all_logs(tree: PyTree, value=None):
     return map_logs(lambda x: value, tree)
+
+
+class SafeDict(dict):
+    """Extends dict.update: adds a jax.lax.cond-proof checker."""
+    def update(self, *args, **kwargs):
+        def check_type(a):
+            # check if the item is a 1D float32 jnp array.
+            return isinstance(a, jnp.ndarray) and a.dtype == jnp.float32 and a.size == 1
+        def safe_update(key, value):
+            if key not in self:
+                raise ValueError(f"Key '{key}' does not exist.")
+            if not check_type(value):
+                raise TypeError(f"Key '{key}' is not a 1d float32 array.")
+            super().update({key: value})
+        for arg in args:
+            if isinstance(arg, dict):
+                for key, value in arg.items():
+                    safe_update(key, value)
+        if kwargs:
+            for key, value in kwargs.items():
+                safe_update(key, value)

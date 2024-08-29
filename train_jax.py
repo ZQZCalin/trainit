@@ -59,6 +59,7 @@ class AuxState(NamedTuple):
     last_grads: Optional[optax.Updates]         # grad_{n-1}
     past_grads: Optional[optax.Updates]         # sum_{i=1}^{n-1} grad_i
     random_scalar: Optional[Array]              # s_n
+    importance_sampling: Optional[Array]        # w_n = [1-P(s)] / p(s)
     loggings: Optional[dict]
 
 
@@ -331,18 +332,27 @@ def init_aux_state(config: DictConfig, model: eqx.Module, opt_state: optax.OptSt
     if not config.log_callback_data:
         return None
     opt_loggings = utils.merge_dicts(*logstate.list_of_logs(opt_state))
-    if "update/random_scaling" not in opt_loggings.keys():
+    if "update/random_scaling" not in opt_loggings:
         warnings.warn("Optimizer has no key named 'update/random_scaling,",
-                      "so random scaling is not recognized in logging.",
+                      "and random scaling is default to one.",
                       "Wrap your optimizer with o2nc.wrap_random_scaling for correct logging.")
         random_scalar = jnp.ones([])
     else:
         random_scalar = opt_loggings["update/random_scaling"]
+    if "update/importance_sampling" not in opt_loggings:
+        warnings.warn("Optimizer has no key named 'update/importance_sampling,",
+                      "and importance sampling is default to one.",
+                      "Wrap your optimizer with o2nc.wrap_random_scaling for correct logging.")
+        importance_sampling = jnp.ones([])
+    else:
+        importance_sampling = opt_loggings["update/importance_sampling"]
     loggings = {
         "grads/norm": jnp.zeros([]),
         "grads/l1-norm": jnp.zeros([]),
         "update/<gn, Delta(n)>": jnp.zeros([]),
         "update/<gn, Delta(n)>_sum": jnp.zeros([]),
+        "update/wn*<gn, Delta(n)>": jnp.zeros([]),
+        "update/wn*<gn, Delta(n)>_sum": jnp.zeros([]),
         "update/fn-f(n-1)": jnp.zeros([]),
         "update/fn-f(n-1)_sum": jnp.zeros([]),
         "update/<gn, xn-x(n-1)>": jnp.zeros([]),
@@ -360,6 +370,7 @@ def init_aux_state(config: DictConfig, model: eqx.Module, opt_state: optax.OptSt
         last_grads = zeros if config.store_last_grads else None,
         past_grads = zeros if config.store_past_grads else None,
         random_scalar = random_scalar,
+        importance_sampling = importance_sampling,
         loggings = loggings,
     )
 
@@ -408,11 +419,14 @@ def update_aux_state(
         if config.store_last_params:
             inner_g_dx = utils.tree_inner_product(grads, state.params_diff)
             inner_g_Delta = inner_g_dx / state.random_scalar
+            inner_g_wDelta = inner_g_Delta * state.importance_sampling
             loggings.update({
-                "update/<gn, Delta(n)>": inner_g_Delta,
-                "update/<gn, Delta(n)>_sum": loggings["update/<gn, Delta(n)>_sum"]+inner_g_Delta,
                 "update/<gn, xn-x(n-1)>": inner_g_dx,
                 "update/<gn, xn-x(n-1)>_sum": loggings["update/<gn, xn-x(n-1)>_sum"]+inner_g_dx,
+                "update/<gn, Delta(n)>": inner_g_Delta,
+                "update/<gn, Delta(n)>_sum": loggings["update/<gn, Delta(n)>_sum"]+inner_g_Delta,
+                "update/wn*<gn, Delta(n)>": inner_g_wDelta,
+                "update/wn*<gn, Delta(n)>_sum": loggings["update/wn*<gn, Delta(n)>_sum"]+inner_g_wDelta,
             })
         if config.store_last_params and config.compute_last_loss:
             last_model = eqx.apply_updates(
@@ -445,15 +459,20 @@ def update_aux_state(
                 "grads/cos(gn, g(1:n-1))": utils.tree_cosine_similarity(grads, state.past_grads),
             })
         loggings.update(base_loggings)
-        if "update/random_scaling" in opt_loggings.keys():
+        if "update/random_scaling" in opt_loggings:
             random_scalar = opt_loggings["update/random_scaling"]
         else:
             random_scalar = state.random_scalar
+        if "update/importance_sampling" in opt_loggings:
+            importance_sampling = opt_loggings["update/importance_sampling"]
+        else:
+            importance_sampling = state.importance_sampling
         return state._replace(
             params_diff = updates if config.store_last_params else None,
             last_grads = grads if config.store_last_grads else None,
             past_grads = utils.tree_add(state.past_grads, grads) if config.store_past_grads else None,
             random_scalar = random_scalar,
+            importance_sampling = importance_sampling,
             loggings = loggings,
         ), dynamic_scaler_state
     
