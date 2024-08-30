@@ -493,6 +493,7 @@ def back_prop(
     train_state: TrainState,
     batches: List[Tuple[Array, Array]],
     config: DictConfig,
+    no_grads: bool = False,
 ):
     """Computes (potentially multi-batch average) loss, grads, accuracy.
     
@@ -519,12 +520,21 @@ def back_prop(
     def back_prop_single_batch(i, val):
         loss, accuracy, grads, dynamic_scaler_state = val
         batch, key = batches[i], keys[i]
-        if config.train.use_amp:
-            dynamic_scaler_state, ((loss_, logits_), grads_) = value_and_grad_fn(
-                model, batch, key=key, dynamic_scaler_state=dynamic_scaler_state
-            )
+        if no_grads:
+            # Forward prop without gradient.
+            if config.train.use_amp:
+                loss_, logits_ = amp_loss_fn(model, batch, key=key)
+            else:
+                loss_, logits_ = loss_fn(model, batch, key=key)
+            grads_ = utils.zero_tree(grads)
         else:
-            (loss_, logits_), grads_ = value_and_grad_fn(model, batch, key=key)
+            # Back prop with gradient.
+            if config.train.use_amp:
+                dynamic_scaler_state, ((loss_, logits_), grads_) = value_and_grad_fn(
+                    model, batch, key=key, dynamic_scaler_state=dynamic_scaler_state
+                )
+            else:
+                (loss_, logits_), grads_ = value_and_grad_fn(model, batch, key=key)
         loss += loss_
         accuracy += get_accuracy(logits_, batch)
         grads = utils.tree_add(grads, grads_)
