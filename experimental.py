@@ -12,6 +12,7 @@ from jax import random as jr
 from jax import tree_util as jtu
 
 import optax
+from optax import GradientTransformation, Updates, OptState, Params
 import equinox as eqx
 
 import transformers
@@ -26,7 +27,6 @@ import hydra
 from omegaconf import OmegaConf, DictConfig
 
 import utils
-from utils import softmax_cross_entropy, tree_norm, get_accuracy, get_dtype
 import logstate
 from logger import TimeKeeper, RateLimitedWandbLog
 from model.mingpt import GPT
@@ -41,18 +41,15 @@ import optimizer.benchmark as benchmark
 import optimizer.scheduler as scheduler
 import optimizer.optim as optim
 
-sys.path.append('./minGPT')
-from mingpt.model import GPT as torch_GPT
-
 import random
 import numpy as np
 import torch
 
 import serialize.serializer as serializer
 
-from train_jax import TrainState, AuxState, \
-    load_lm_data, loss_fn, init_tokenizer, init_model, init_optimizer, init_config, back_prop, \
-    init_aux_state, update_aux_state
+from train_jax import TrainState, \
+    init_tokenizer, init_aux_state, load_lm_data, init_model, init_optimizer, init_config, \
+    back_prop, update_aux_state
 
 
 def train_step(
@@ -61,32 +58,56 @@ def train_step(
     optimizer: optax.GradientTransformation,
     config: DictConfig,
 ):
+    """Modified train step for interpolate-O2NC:
+    
+    $$x_n = x_{n-1} + \Delta_n, w_n = x_{n-1} + s_n\Delta_n$$
+
+    Evaluate loss at F(xn) and gradient at \nabla F(wn), fix random scaling with s_n=Unif(0,1).
+    """
+    # Compute interpolate parameter w_n.
     model = train_state.model                                       # x_n
     opt_state = train_state.opt_state                               # opt_state of x_n
+    aux_state = train_state.aux_state
+    key = train_state.train_key
+    
+    key, new_key = jr.split(key)
+    random_scalar = jr.uniform(key, minval=0, maxval=1)             # s_n  NOTE: this is not logged (will log later)
+    params_diff = aux_state.params_diff                             # Delta_n = x_n - x_(n-1)
+    interpolate_diff = jtu.tree_map(
+        lambda delta: -random_scalar * delta, params_diff 
+    )
+    interpolate_model = eqx.apply_updates(model, interpolate_diff)  # w_n = x_(n-1) + (1-s_n) * Delta_n
+    train_state = train_state._replace(
+        train_key = new_key
+    )
 
-    # Compute f(x_n, z_n) and g(x_n, z_n).
-    train_state, loss, accuracy, grads = back_prop(train_state, batches, config)
+    # Compute f(x_n, z_n) and g(w_n, z_n). NOTE: we use the same batch for loss and gradient evaluations.
+    train_state, loss, accuracy, _ = back_prop(train_state, batches, config, no_grads=True) # f(x_n, z_n)
+    train_state = train_state._replace(model=interpolate_model)
+    train_state, _, _, grads = back_prop(train_state, batches, config)                      # g(w_n, z_n)
 
     # Apply one-step update.
     updates, opt_state = optimizer.update(
         grads, opt_state, eqx.filter(model, eqx.is_array)
-    )                                                               # s_(n+1) * Delta_(n+1) = x_(n+1) - x_n
+    )                                                               # Delta_(n+1) = x_(n+1) - x_n
     new_model = eqx.apply_updates(model, updates)                   # x_(n+1)
 
     # Update new train_state.
-    train_state = TrainState(
-        model=new_model,
-        opt_state=opt_state,
-        dynamic_scaler_state=train_state.dynamic_scaler_state,
-        iteration=train_state.iteration + 1,
-        train_key=train_state.train_key,
-        aux_state=train_state.aux_state,
+    train_state = train_state._replace(
+        model = new_model,
+        opt_state = opt_state,
+        iteration = train_state.iteration + 1
     )
 
     # Update aux_state and related loggings.
     train_state = update_aux_state(
         train_state, updates, grads, batches, loss, config=config)
     log_data = train_state.aux_state.loggings
+
+    # log actual random_scaling:
+    log_data.update({
+        "update/interpolate_RS": random_scalar,
+    })
     return loss, accuracy, log_data, train_state
 
 
@@ -225,7 +246,9 @@ def train_loop(
 
 
 def train(config: DictConfig):
-    # Set random seed.
+    # Some san check of config.
+    
+    # TODO: this is temporary
     seed = config.random_seed
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -279,9 +302,18 @@ def train(config: DictConfig):
     )
 
 
+def init_experimental_config(config: DictConfig) -> DictConfig:
+    """Further pre-process config based on experimental.yaml."""
+    # Interpolate O2NC
+    if config.experimental.use_interpolate_o2nc:
+        config.train.random_scaling = None
+    return config
+
+
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(config: DictConfig) -> None:
     config = init_config(config)
+    config = init_experimental_config(config)   # further pre-processing
     train(config)
 
 

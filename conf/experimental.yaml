@@ -18,4 +18,4 @@ experimental:
     use: False
     threshold: 0.3
 
-  
+  use_interpolate_o2nc: False    # if true, uses interpolate o2nc

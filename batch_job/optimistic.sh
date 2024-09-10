@@ -152,3 +152,20 @@ python check_env.py
 # python train_jax.py logging.wandb_project=optimistic_o2nc train.max_steps=32000 dataset.total_batch_size=8 \
 #     optimizer.lr_config.warmup=3200 optimizer.lr_config.max_steps=32000 optimizer.lr_config.lr=3e-3 \
 #     train.random_scaling=uniform
+
+
+# 08/30: interpolate O2NC
+# simple test: B=2 Adam benchmark
+# python experimental.py experimental.use_interpolate_o2nc=True logging.wandb_project=optimistic_o2nc
+
+# B=128 Adam
+# python experimental.py experimental.use_interpolate_o2nc=True logging.wandb_project=optimistic_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.warmup=200 optimizer.lr_config.max_steps=2000 optimizer.lr_config.lr=3e-4
+# python experimental.py experimental.use_interpolate_o2nc=True logging.wandb_project=optimistic_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.warmup=200 optimizer.lr_config.max_steps=2000 optimizer.lr_config.lr=1e-3
+# python experimental.py experimental.use_interpolate_o2nc=True logging.wandb_project=optimistic_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.warmup=200 optimizer.lr_config.max_steps=2000 optimizer.lr_config.lr=3e-3
+
