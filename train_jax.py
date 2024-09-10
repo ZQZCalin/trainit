@@ -640,7 +640,6 @@ def train_loop(
     iteration_timing_events = ["iteration", "dataloader", "train_step"]
     time_keeper.mark(start_events=["dataloader", "iteration", "tokens", "samples"])
 
-    # for it, batch in pbar:    #NOTE
     for it, batch_idx in pbar:
         if it >= num_steps:
             break
