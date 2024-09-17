@@ -10,7 +10,8 @@ batch_size: 4
 total_batch_size: null
 
 # shuffle buffer for data loader. 0 means no shuffle.
-shuffle_buffer_size: 10000
+# shuffle_buffer_size: 10000
+shuffle_buffer_size: 200000   # NOTE: starting from 2024/09/13, the default value is change from 10k -> 200k
 
 # following settings chosen after
 # some experimentation with a tiny model.

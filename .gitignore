@@ -31,11 +31,16 @@ batch_job/optimistic.sh
 # checkpoint files
 checkpoint/
 
+# testing files
+test_logs/
+test.py
+new_test.py
+test_log.txt
+
 # other directories
 opt/
 mechanic.py
 trainer.py
-test.py
 # scc_setup.sh
 activate_env.sh
 # check_env.py

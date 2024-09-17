@@ -71,12 +71,24 @@ def train_step(
     key = train_state.train_key
     
     key, new_key = jr.split(key)
-    random_scalar = jr.uniform(key, minval=0, maxval=1)             # s_n  NOTE: this is not logged (will log later)
+    rs_warmup = config.experimental.rs_warmup
+    # if type(rs_warmup) == int and train_state.iteration < rs_warmup:
+    #     random_scalar = jnp.ones([])                                # set s_n = 1 during warmup
+    # else:
+    #     random_scalar = jr.uniform(key, minval=0, maxval=1)         # s_n
+    use_rs = config.experimental.use_interpolate_o2nc
+    use_rs = use_rs and (type(rs_warmup) == int and train_state.iteration >= rs_warmup)
+    random_scalar = jax.lax.cond(
+        use_rs,
+        lambda _: jr.uniform(key, minval=0, maxval=1),
+        lambda _: jnp.ones([]),
+        operand = None
+    )                                                               # s_n
     params_diff = aux_state.params_diff                             # Delta_n = x_n - x_(n-1)
     interpolate_diff = jtu.tree_map(
-        lambda delta: -random_scalar * delta, params_diff 
+        lambda delta: (random_scalar - 1) * delta, params_diff 
     )
-    interpolate_model = eqx.apply_updates(model, interpolate_diff)  # w_n = x_(n-1) + (1-s_n) * Delta_n
+    interpolate_model = eqx.apply_updates(model, interpolate_diff)  # w_n = x_n - (1-s_n) * Delta_n
     train_state = train_state._replace(
         train_key = new_key
     )

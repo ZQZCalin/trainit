@@ -1,3 +1,5 @@
+watchdog==4.0.2
+
 loadit
 wandb
 tqdm
