@@ -9,6 +9,13 @@ from pathlib import Path
 
 
 def shift_labels(batch):
+    new_batch = {k: v for (k,v) in batch.items()}
+    new_batch["labels"] = F.pad(batch["labels"][:, 1:], (0, 1), value=-100)
+    return new_batch
+
+    # Updated on 09/17: the current implementation modifies the original copy of batch.
+    # Instead, we want to keep it unchanged. The above implementation returns a new copy.
+    # However, we need to test whether the new implementation causes memory overflow.
     batch["labels"] = F.pad(batch["labels"][:, 1:], (0, 1), value=-100)
     return dict(batch)
 
