@@ -50,6 +50,129 @@ import serialize.serializer as serializer
 from train_jax import TrainState, \
     init_tokenizer, init_aux_state, load_lm_data, init_model, init_optimizer, init_config, \
     back_prop, update_aux_state
+from train_jax import loss_fn
+from utils import get_dtype, get_accuracy
+
+
+
+def forward_prop(
+    train_state: TrainState,
+    batches: List[Tuple[Array, Array]],
+    config: DictConfig,
+):
+    """Forward pass, computes (potentially multi-batch average) loss and accuracy.
+    
+    Returns:
+        train_state, loss, accuracy (averaged over batches)
+    """
+    model = train_state.model
+    num_batches = len(batches)
+    current_key, new_key = jr.split(train_state.train_key)
+    keys = jr.split(current_key, num_batches)
+
+    amp_loss_fn = amp(loss_fn, compute_dtype=get_dtype(config.train.precision))
+
+    # Compute f(x_n, z_n) for multi-batches.
+    batches = jnp.array(batches)
+    keys = jnp.array(keys)
+    def forward_prop_single_batch(i, val):
+        # Single batch forward pass: i, val => val=(loss, acc)
+        loss, accuracy = val
+        batch, key = batches[i], keys[i]
+        if config.train.use_amp:
+            loss_, logits_ = amp_loss_fn(model, batch, key=key)
+        else:
+            loss_, logits_ = loss_fn(model, batch, key=key)
+        loss += loss_
+        accuracy += get_accuracy(logits_, batch)
+        return (loss, accuracy)
+    
+    loss = 0
+    accuracy = 0
+    loss, accuracy = jax.lax.fori_loop(
+        0, num_batches, forward_prop_single_batch, (loss, accuracy)
+    )
+    loss /= num_batches
+    accuracy /= num_batches
+
+    train_state = train_state._replace(train_key=new_key)
+    return train_state, loss, accuracy
+
+
+# Implements pseudo-random RS scheme. 
+# TODO: merge back to main pipeline after it's stable.
+def back_prop_pseudo_rs(
+    train_state: TrainState,
+    batches: List[Tuple[Array, Array]],
+    config: DictConfig,
+    random_scalar: Array,
+    params_diff: Array,
+):
+    """Computes (potentially multi-batch average) loss, grads, accuracy.
+    
+    Returns:
+        train_state, loss, accuracy, grads (averaged over batches)
+    """
+    # Apply auto mixed precision.
+    if config.train.use_amp:
+        amp_loss_fn = amp(loss_fn, compute_dtype=get_dtype(config.train.precision))
+        value_and_grad_fn = dynamic_scale_value_and_grad(
+            amp_loss_fn, filter=True, has_aux=True, redo_on_nan=0
+        )
+    else:
+        value_and_grad_fn = eqx.filter_value_and_grad(loss_fn, has_aux=True)
+
+    # model = train_state.model                                       # x_n
+    num_batches = len(batches)
+    current_key, new_key = jr.split(train_state.train_key)
+    keys = jr.split(current_key, num_batches)
+
+    # Compute f(x_n, z_n) and g(x_n, z_n) for multi-batches.
+    batches = jnp.array(batches)
+    keys = jnp.array(keys)
+    def back_prop_single_batch(i, val):
+        loss, accuracy, grads, dynamic_scaler_state = val
+        batch, key = batches[i], keys[i]
+        if config.experimental.use_per_sample_rs:
+            shift = jr.uniform(key, minval=0, maxval=1) # EXPERIMENTAL: use truely random RS per sample
+        else:
+            shift = (random_scalar - 1 + i/num_batches) % 1
+        model = eqx.apply_updates(
+            train_state.model,  # x_n
+            jtu.tree_map(
+                lambda delta: shift * delta, params_diff
+            )                   # ((sn - 1 + i/B) % 1) * Delta
+        )
+        # Back prop with gradient.
+        if config.train.use_amp:
+            dynamic_scaler_state, ((loss_, logits_), grads_) = value_and_grad_fn(
+                model, batch, key=key, dynamic_scaler_state=dynamic_scaler_state
+            )
+        else:
+            (loss_, logits_), grads_ = value_and_grad_fn(model, batch, key=key)
+        loss += loss_
+        accuracy += get_accuracy(logits_, batch)
+        grads = utils.tree_add(grads, grads_)
+        return (loss, accuracy, grads, dynamic_scaler_state)
+    
+    loss = 0
+    accuracy = 0
+    grads = jtu.tree_map(jnp.zeros_like, eqx.filter(train_state.model, eqx.is_array))
+    dynamic_scaler_state = train_state.dynamic_scaler_state
+
+    loss, accuracy, grads, dynamic_scaler_state = jax.lax.fori_loop(
+        0, num_batches, back_prop_single_batch,
+        (loss, accuracy, grads, dynamic_scaler_state)
+    )
+    loss /= num_batches
+    accuracy /= num_batches
+    grads = utils.tree_scalar_multiply(grads, 1/num_batches)
+
+    train_state = train_state._replace(
+        dynamic_scaler_state = dynamic_scaler_state,
+        train_key = new_key,
+    )
+    return train_state, loss, accuracy, grads
 
 
 def train_step(
@@ -72,10 +195,6 @@ def train_step(
     
     key, new_key = jr.split(key)
     rs_warmup = config.experimental.rs_warmup
-    # if type(rs_warmup) == int and train_state.iteration < rs_warmup:
-    #     random_scalar = jnp.ones([])                                # set s_n = 1 during warmup
-    # else:
-    #     random_scalar = jr.uniform(key, minval=0, maxval=1)         # s_n
     use_rs = config.experimental.use_interpolate_o2nc
     use_rs = use_rs and (type(rs_warmup) == int and train_state.iteration >= rs_warmup)
     random_scalar = jax.lax.cond(
@@ -84,19 +203,24 @@ def train_step(
         lambda _: jnp.ones([]),
         operand = None
     )                                                               # s_n
+    if config.experimental.grad_at_last_params:
+        random_scalar = jnp.zeros([])                               # s_n = 0 and w_n = x_{n-1}
     params_diff = aux_state.params_diff                             # Delta_n = x_n - x_(n-1)
-    interpolate_diff = jtu.tree_map(
-        lambda delta: (random_scalar - 1) * delta, params_diff 
-    )
-    interpolate_model = eqx.apply_updates(model, interpolate_diff)  # w_n = x_n - (1-s_n) * Delta_n
     train_state = train_state._replace(
         train_key = new_key
     )
 
     # Compute f(x_n, z_n) and g(w_n, z_n). NOTE: we use the same batch for loss and gradient evaluations.
-    train_state, loss, accuracy, _ = back_prop(train_state, batches, config, no_grads=True) # f(x_n, z_n)
-    train_state = train_state._replace(model=interpolate_model)
-    train_state, _, _, grads = back_prop(train_state, batches, config)                      # g(w_n, z_n)
+    train_state, loss, accuracy = forward_prop(train_state, batches, config)        # f(x_n, z_n)
+    if config.experimental.use_pseudo_rs:
+        train_state, _, _, grads = back_prop_pseudo_rs(train_state, batches, config, random_scalar, params_diff)
+    else:
+        interpolate_diff = jtu.tree_map(
+            lambda delta: (random_scalar - 1) * delta, params_diff 
+        )
+        interpolate_model = eqx.apply_updates(model, interpolate_diff)              # w_n = x_n - (1-s_n) * Delta_n
+        train_state = train_state._replace(model=interpolate_model)
+        train_state, _, _, grads = back_prop(train_state, batches, config)          # g(w_n, z_n)
 
     # Apply one-step update.
     updates, opt_state = optimizer.update(

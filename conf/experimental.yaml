@@ -18,5 +18,8 @@ experimental:
     use: False
     threshold: 0.3
 
-  use_interpolate_o2nc: False    # if true, uses interpolate o2nc
-  rs_warmup: null                # if non-zero, starts RS after this number of iterations
+  use_interpolate_o2nc: False     # if true, uses interpolate o2nc
+  rs_warmup: null                 # if non-zero, starts RS after this number of iterations
+  use_pseudo_rs: False            # if true, computes gradient at w_n(i) = x_(n-1) + (s_n + i/B)%1 * Delta
+  grad_at_last_params: False      # if true, overwrites any interpolate_o2nc and set s_n to constantly 0
+  use_per_sample_rs: False        # if true, overwrites any interpolate_o2nc and sample a true RS per sample

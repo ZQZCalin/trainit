@@ -93,6 +93,7 @@ source activate_env.sh
 #     optimizer.lr_config.warmup=200 optimizer.lr_config.max_steps=2000 optimizer.lr_config.lr=1e-3 \
 #     random_seed=157
 
+
 # 09/16-01: warmup random scaling from the middle
 # python experimental.py experimental.use_interpolate_o2nc=True logging.wandb_project=optimistic_o2nc \
 #     train.max_steps=2000 dataset.total_batch_size=128 \
@@ -111,27 +112,81 @@ source activate_env.sh
 #     optimizer.lr_config.warmup=200 optimizer.lr_config.max_steps=2000 optimizer.lr_config.lr=1e-3 \
 #     experimental.rs_warmup=1000
 
-# 09/11-01: NOTE
+
+# 09/17-01: NOTE
 # - corrected a bug in the implementation of interpolate-RS:
 #   where it should be w_n = x_n - (1-s_n) * Delta_n instead of w_n = x_(n-1) + (1-s_n) * Delta_n in the previous code
 # - now we need to re-run all experiments with interpolate RS
-# python experimental.py logging.wandb_project=optimistic_o2nc \
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3
+# python experimental.py logging.wandb_project=large_batch_o2nc \
 #     train.max_steps=2000 dataset.total_batch_size=128 \
 #     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
 #     experimental.use_interpolate_o2nc=True experimental.rs_warmup=0
-# python experimental.py logging.wandb_project=optimistic_o2nc \
+# python experimental.py logging.wandb_project=large_batch_o2nc \
 #     train.max_steps=2000 dataset.total_batch_size=128 \
 #     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
 #     experimental.use_interpolate_o2nc=True experimental.rs_warmup=100
-# python experimental.py logging.wandb_project=optimistic_o2nc \
+# python experimental.py logging.wandb_project=large_batch_o2nc \
 #     train.max_steps=2000 dataset.total_batch_size=128 \
 #     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
 #     experimental.use_interpolate_o2nc=True experimental.rs_warmup=200
-# python experimental.py logging.wandb_project=optimistic_o2nc \
+# python experimental.py logging.wandb_project=large_batch_o2nc \
 #     train.max_steps=2000 dataset.total_batch_size=128 \
 #     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
 #     experimental.use_interpolate_o2nc=True experimental.rs_warmup=500
-# python experimental.py logging.wandb_project=optimistic_o2nc \
+# python experimental.py logging.wandb_project=large_batch_o2nc \
 #     train.max_steps=2000 dataset.total_batch_size=128 \
 #     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
 #     experimental.use_interpolate_o2nc=True experimental.rs_warmup=1000
+
+# 09/17-02: Pseudo-RS
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
+#     experimental.use_interpolate_o2nc=True experimental.use_pseudo_rs=True
+
+# 09/17-03: 01 but with lr=3e-4
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=3e-4
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=3e-4 \
+#     experimental.use_interpolate_o2nc=True experimental.rs_warmup=0
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=3e-4 \
+#     experimental.use_interpolate_o2nc=True experimental.rs_warmup=100
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=3e-4 \
+#     experimental.use_interpolate_o2nc=True experimental.rs_warmup=200
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=3e-4 \
+#     experimental.use_interpolate_o2nc=True experimental.rs_warmup=500
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=3e-4 \
+#     experimental.use_interpolate_o2nc=True experimental.rs_warmup=1000
+
+# 09/17-04: test s_n = 0 (wn = x(n-1))
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
+#     experimental.grad_at_last_params=True
+
+# 09/17-05: truely random RS per sample
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
+#     experimental.use_per_sample_rs=True
+
+
+# 09/18-01: save a checkpoint of Adam benchmark at 1000k iter
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
+#     checkpoint.save=True checkpoint.save_path=checkpoint/Adamw_B128_lr1e-3 checkpoint.save_steps=100
