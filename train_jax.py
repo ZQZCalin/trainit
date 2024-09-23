@@ -553,13 +553,17 @@ def back_prop(
     accuracy /= num_batches
     grads = utils.tree_scalar_multiply(grads, 1/num_batches)
 
-    train_state = TrainState(
-        model=model,
-        opt_state=train_state.opt_state,
+    # train_state = TrainState(
+    #     model=model,
+    #     opt_state=train_state.opt_state,
+    #     dynamic_scaler_state=dynamic_scaler_state,
+    #     iteration=train_state.iteration,
+    #     train_key=new_key,
+    #     aux_state=train_state.aux_state,
+    # )
+    train_state = train_state._replace(
         dynamic_scaler_state=dynamic_scaler_state,
-        iteration=train_state.iteration,
         train_key=new_key,
-        aux_state=train_state.aux_state,
     )
 
     return train_state, loss, accuracy, grads
@@ -774,7 +778,7 @@ def train(config: DictConfig):
     # [CHECKPOINT]: Load train state from checkpoint.
     if config.checkpoint.load:
         checkpoint_path = config.checkpoint.load_path
-        if not os.path.exists(checkpoint_path):
+        if not os.path.exists(checkpoint_path):     # TODO: move path check to init_config part
             raise ValueError(f"checkpoint path {checkpoint_path} does not exist.")
         train_state = serializer.load(checkpoint_path, train_state)
 
@@ -839,13 +843,14 @@ def init_config(config: DictConfig) -> DictConfig:
             OmegaConf.save(config, f)
         print(f"Config file {config_path} updated.")
 
-    logging.info(OmegaConf.to_yaml(config))
+    # logging.info(OmegaConf.to_yaml(config))
     return config
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(config: DictConfig) -> None:
     config = init_config(config)
+    logging.info(OmegaConf.to_yaml(config))
     train(config)
 
 
