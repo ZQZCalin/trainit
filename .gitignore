@@ -32,6 +32,7 @@ batch_job/optimistic.sh
 checkpoint/
 
 # testing files
+test/
 test_logs/
 test.py
 new_test.py

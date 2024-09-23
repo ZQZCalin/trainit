@@ -190,3 +190,13 @@ source activate_env.sh
 #     train.max_steps=2000 dataset.total_batch_size=128 \
 #     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
 #     checkpoint.save=True checkpoint.save_path=checkpoint/Adamw_B128_lr1e-3 checkpoint.save_steps=100
+
+
+# 09/19-01: checkpoint behavior
+# python test_checkpoint.py checkpoint.load=True checkpoint.load_path=checkpoint/Adamw_B128_lr1e-3 checkpoint.load_file=iter_1000.ckpt
+
+# 09/19-02: interpolate RS but with fixed RS=0.5
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
+#     experimental.grad_at_middle=True

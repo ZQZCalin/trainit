@@ -205,6 +205,9 @@ def train_step(
     )                                                               # s_n
     if config.experimental.grad_at_last_params:
         random_scalar = jnp.zeros([])                               # s_n = 0 and w_n = x_{n-1}
+    if config.experimental.grad_at_middle:
+        random_scalar = jnp.ones([]) * 0.5                          # s_n = 0.5
+
     params_diff = aux_state.params_diff                             # Delta_n = x_n - x_(n-1)
     train_state = train_state._replace(
         train_key = new_key
