@@ -1,12 +1,13 @@
 checkpoint:
   save: False
   load: False
-  # if save is true, save checkpoint to "{save_path}/iter_{it}.ckpt" when it % save_steps = 0
+  # if save is true, save checkpoint to "{save_path}/iter_{it}.ckpt" every `save_steps` iter,
+  # i.e., when it % save_steps = 0
   save_path: null
-  # save checkpoints every {save_steps} iterations
   save_steps: null
-  # if load is true, load checkpoint from "{load_path}"
+  # if load is true, load checkpoint from "{load_path}/{load_file}"
   load_path: null
+  load_file: null
   # if not None, specify total steps in one checkpoint training
   num_steps: null
   # USE WITH CAUTION: if true, overwrite the existing "{save_path}/config.yaml".
