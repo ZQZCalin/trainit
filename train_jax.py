@@ -730,9 +730,19 @@ def train_loop(
             )
 
         # ======================================================================
-        # [CHECKPOINT]: Saving checkpoint.
-        if do_save_checkpoint and train_state.iteration % config.checkpoint.save_steps == 0:
-            serializer.save(os.path.join(checkpoint_path, f"iter_{train_state.iteration}.ckpt"), train_state)
+        # [CHECKPOINT]: saves checkpoint either when iteration % save_steps == 0
+        # or when iteration in save_steps.
+        if config.checkpoint.save:
+            save_checkpoint = False
+            save_steps = config.checkpoint.save_steps
+            if isinstance(save_steps, int):
+                save_checkpoint = train_state.iteration % save_steps == 0
+            elif isinstance(save_steps, list):
+                save_checkpoint = train_state.iteration in save_steps
+            if save_checkpoint:
+                checkpoint_file = os.path.join(checkpoint_path, f"iter_{train_state.iteration}.ckpt")
+                serializer.save(checkpoint_file, train_state)
+                logging.info(f"Successfully saves checkpoint file to '{checkpoint_file}'.")
 
     return train_state
 
@@ -795,55 +805,89 @@ def train(config: DictConfig):
 
 
 def init_config(config: DictConfig) -> DictConfig:
-    """Pre-process config"""
-    # ======================================================================
-    # Pre-process pile dataset.
-    # If using loadit data, turn on shift_labels and fix batch_size=2.
-    if config.dataset.name == "pile":
-        if config.dataset.use_loadit:
-            config.dataset.batch_size = 2
-            config.dataset.shift_labels = True
-        else:
-            config.dataset.shift_labels = False
+    """Pre-process config files."""
 
-    # Pre-process total_batch_size.
-    if not config.dataset.total_batch_size:
-        config.dataset.total_batch_size = config.dataset.batch_size
-
-    # ======================================================================
-    # [CHECKPOINT]: Pre-process config for saving checkpoint.
-    # Upon loading config, if checkpoint.save is not None, will process the config in the following way:
-    # - A new checkpoint directory will be created if checkpoint.path doesn't exist.
-    # - If config.yaml already exists, it will be loaded and will overwrite the config template beside the checkpoint section.
-    # - If config.yaml already exists and you want to overwrite it, you can turn on checkpoint.overwrite=True. 
-    #   Use this with caution since this overwrites the existing config file.
-    # - The updated config will be saved to config.yaml.
-
-    # Save new config file if checkpoint.save is true (i.e., we need to save checkpoint).
-    if config.checkpoint.save:
-        checkpoint_path = config.checkpoint.save_path
-        if checkpoint_path is None:
-            raise ValueError("checkpoint.save_path cannot be empty.")
-        config_path = os.path.join(checkpoint_path, 'config.yaml')
-        if not os.path.exists(checkpoint_path):
-            # Create checkpoint directory.
-            os.makedirs(checkpoint_path)
-            print(f"Directory {checkpoint_path} created.")
-        elif os.path.exists(config_path):
-            if config.checkpoint.overwrite:
-                warnings.warn("checkpoint.overwrite is true. this will overwrite existing config.yaml.")
+    def init_config_dataset(config):
+        """Pre-process dataset configs."""
+        # If using loadit data, turn on shift_labels and fix batch_size=2.
+        if config.dataset.name == "pile":
+            if config.dataset.use_loadit:
+                config.dataset.batch_size = 2
+                config.dataset.shift_labels = True
             else:
-                # Load existing config file.
-                checkpoint_config = config.checkpoint
-                config = OmegaConf.load(config_path)
-                config.checkpoint = checkpoint_config
-        config.checkpoint.overwrite = False     # manually turn off checkpoint.overwrite
-        # Update config file.
-        with open(config_path, 'w') as f:
-            OmegaConf.save(config, f)
-        print(f"Config file {config_path} updated.")
+                config.dataset.shift_labels = False
+        # If total_batch_size is not specified, default to batch_size.
+        if not config.dataset.total_batch_size:
+            config.dataset.total_batch_size = config.dataset.batch_size
+        return config
 
-    # logging.info(OmegaConf.to_yaml(config))
+    def init_config_load_ckpt(config):
+        """Pre-process checkpoint loading configs.
+
+        Overwrites all config with loaded config, except for config.checkpoint.
+        """
+        if config.checkpoint.load:
+            # Check if path exists: load_path, load_file, config file in load_path.
+            checkpoint_path = config.checkpoint.load_path
+            checkpoint_file = os.path.join(checkpoint_path, config.checkpoint.load_file)
+            config_path = os.path.join(checkpoint_path, 'config.yaml')
+            if checkpoint_path is None:
+                raise ValueError("checkpoint.load_path cannot be empty.")
+            if not os.path.exists(checkpoint_path):
+                raise ValueError(f"loading checkpoint path '{checkpoint_path}' does not exist.")
+            if not os.path.exists(checkpoint_file):
+                raise ValueError(f"loading checkpoint file '{checkpoint_file}' does not exist.")
+            if not os.path.exists(config_path):
+                raise ValueError(f"loading checkpoint config '{config_path}' does not exist.")
+            # Load checkpoint config.
+            checkpoint_config = config.checkpoint
+            config = OmegaConf.load(config_path)            # loads config from loaded checkpoint
+            config.checkpoint = checkpoint_config           # overwrites config.checkpoint with the current config
+            logging.info(f"Successfully loaded checkpoint config from '{config_path}'.")
+            logging.info(f"Successfully loaded checkpoint file from '{checkpoint_file}'.")
+        return config
+
+    def init_config_save_ckpt(config):
+        """Pre-process checkpoint saving configs.
+        
+        Will raise an error if config.checkpoint.save_path already exists.
+        """
+        if config.checkpoint.save:
+            # Check if path exists.
+            checkpoint_path = config.checkpoint.save_path
+            config_path = os.path.join(checkpoint_path, 'config.yaml')
+            if checkpoint_path is None:
+                raise ValueError("checkpoint.save_path cannot be empty.")
+            if os.path.exists(checkpoint_path):
+                raise ValueError(f"saving checkpoint path '{checkpoint_path}' already exists.")
+            # Pre-process save iterations.
+            checkpoint_steps = config.checkpoint.save_steps
+            if checkpoint_steps is None:
+                raise ValueError("checkpoint.save_steps cannot be empty.")
+            invalid_checkpoint_steps_type = False
+            if not (isinstance(checkpoint_steps, int)):
+                if isinstance(checkpoint_steps, list):
+                    if not all(isinstance(item, int) for item in checkpoint_steps):
+                        invalid_checkpoint_steps_type = True
+                else:
+                    invalid_checkpoint_steps_type = True
+            if invalid_checkpoint_steps_type:
+                raise ValueError("checkpoint.save_steps must be either int or list of int.")
+            # Check num_steps.
+            num_steps = config.checkpoint.num_steps
+            if num_steps and not isinstance(num_steps, int):
+                raise ValueError("checkpoint.num_steps must be either null or int.")
+            # Create checkpoint file and save checkpoint config.
+            os.makedirs(checkpoint_path)
+            with open(config_path, "w") as f:
+                OmegaConf.save(config, f)
+            logging.info(f"Successfully created checkpoint path '{checkpoint_path}'.")
+            logging.info(f"Successfully saved checkpoint config to '{config_path}'.")
+        return config
+
+    config = init_config_dataset(config)
+    config = init_config_load_ckpt(config)
+    config = init_config_save_ckpt(config)
     return config
 
 

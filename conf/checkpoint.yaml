@@ -1,8 +1,9 @@
 checkpoint:
   save: False
   load: False
-  # if save is true, save checkpoint to "{save_path}/iter_{it}.ckpt" every `save_steps` iter,
-  # i.e., when it % save_steps = 0
+  # if save is true, save checkpoint to "{save_path}/iter_{it}.ckpt"
+  # if save_steps is int, save checkpoint when it % save_steps = 0,
+  # if save_steps is list[int], save checkpoint when it in save_steps.
   save_path: null
   save_steps: null
   # if load is true, load checkpoint from "{load_path}/{load_file}"
