@@ -201,6 +201,7 @@ source activate_env.sh
 #     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
 #     experimental.grad_at_middle=True
 
+
 # 09/23-01: benchmark with additional log: 3rd layer mask update
 # python experimental.py logging.wandb_project=large_batch_o2nc \
 #     train.max_steps=2000 dataset.total_batch_size=128 \
@@ -216,3 +217,7 @@ source activate_env.sh
 # python experimental.py logging.wandb_project=large_batch_o2nc \
 #     train.max_steps=2000 dataset.total_batch_size=128 \
 #     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3
+
+
+# 09/24-01
+# Run a new checkpoint of Adamw benchmark, B=128, lr=1e-3, no RS, ckpt iterations at [20,100,500,1000]
