@@ -27,7 +27,8 @@ class CausalSelfAttention(eqx.Module):
     linear: nn.Linear
     attn_dropout: nn.Dropout
     linear_dropout: nn.Dropout
-    mask: Array
+    # mask: Array
+    mask: Array = eqx.field(static=True)    # updated 09/23: declare the mask layer to be static to avoid getting updated
 
     def __init__(self, config, state_dict: Optional[StateDict] = None, *, key: Optional[PRNGKeyArray] = None):
         """Initializes a multi-head self-attention layer for GPT model.
