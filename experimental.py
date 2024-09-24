@@ -247,6 +247,16 @@ def train_step(
     log_data.update({
         "update/interpolate_RS": random_scalar,
     })
+    # monitors the 3rd attn block mask layer
+    mask_idx = 8 + 12 * 2
+    model_mask = jtu.tree_leaves(
+        eqx.filter(model, eqx.is_array)
+    )[mask_idx]
+    updates_mask = jtu.tree_leaves(updates)[mask_idx]
+    log_data.update({
+        "sancheck/model_mask": model_mask[0][0],
+        "sancheck/updates_mask": updates_mask[0][0],
+    })
     return loss, accuracy, log_data, train_state
 
 
