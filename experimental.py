@@ -49,7 +49,7 @@ import serialize.serializer as serializer
 
 from train_jax import TrainState, \
     init_tokenizer, init_aux_state, load_lm_data, init_model, init_optimizer, init_config, \
-    back_prop, update_aux_state
+    back_prop, update_aux_state, save_checkpoint
 from train_jax import loss_fn
 from utils import get_dtype, get_accuracy
 
@@ -388,8 +388,7 @@ def train_loop(
 
         # ======================================================================
         # [CHECKPOINT]: Saving checkpoint.
-        if do_save_checkpoint and train_state.iteration % config.checkpoint.save_steps == 0:
-            serializer.save(os.path.join(checkpoint_path, f"iter_{train_state.iteration}.ckpt"), train_state)
+        save_checkpoint(train_state, config)
 
     return train_state
 
@@ -463,6 +462,7 @@ def init_experimental_config(config: DictConfig) -> DictConfig:
 def main(config: DictConfig) -> None:
     config = init_config(config)
     config = init_experimental_config(config)   # further pre-processing
+    logging.info(OmegaConf.to_yaml(config))
     train(config)
 
 
