@@ -25,7 +25,7 @@ from jaxtyping import Array, PRNGKeyArray
 import tqdm
 import wandb
 import hydra
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import OmegaConf, DictConfig, ListConfig
 
 import utils
 from utils import softmax_cross_entropy, tree_norm, get_accuracy, get_dtype
@@ -604,6 +604,29 @@ def train_step(
     return loss, accuracy, log_data, train_state
 
 
+def save_checkpoint(
+    train_state: TrainState,
+    config: DictConfig,
+):
+    """Saves checkpoint.
+    
+    A checkpoint is saved either when it % save_steps == 0 or when it in save_steps.
+    """
+    if config.checkpoint.save:
+        save_steps = config.checkpoint.save_steps
+        it = int(train_state.iteration)
+        if isinstance(save_steps, int):
+            save_checkpoint = it % save_steps == 0
+        elif isinstance(save_steps, ListConfig):
+            save_checkpoint = it in save_steps
+        else:
+            raise TypeError(f"checkpoint.save_steps has invalid type '{type(save_steps)}'.")
+        if save_checkpoint:
+            checkpoint_file = os.path.join(config.checkpoint.save_path, f"iter_{it}.ckpt")
+            serializer.save(checkpoint_file, train_state)
+            logging.info(f"Successfully saves checkpoint file to '{checkpoint_file}'.")
+
+
 def train_loop(
     train_state: TrainState,
     optimizer: optax.GradientTransformation,
@@ -730,19 +753,8 @@ def train_loop(
             )
 
         # ======================================================================
-        # [CHECKPOINT]: saves checkpoint either when iteration % save_steps == 0
-        # or when iteration in save_steps.
-        if config.checkpoint.save:
-            save_checkpoint = False
-            save_steps = config.checkpoint.save_steps
-            if isinstance(save_steps, int):
-                save_checkpoint = train_state.iteration % save_steps == 0
-            elif isinstance(save_steps, list):
-                save_checkpoint = train_state.iteration in save_steps
-            if save_checkpoint:
-                checkpoint_file = os.path.join(checkpoint_path, f"iter_{train_state.iteration}.ckpt")
-                serializer.save(checkpoint_file, train_state)
-                logging.info(f"Successfully saves checkpoint file to '{checkpoint_file}'.")
+        # [CHECKPOINT]: saves checkpoint.
+        save_checkpoint(train_state, config)
 
     return train_state
 
@@ -759,7 +771,7 @@ def train(config: DictConfig):
     # Initialize Wandb logging.
     if config.logging.wandb_project is not None:
         limited_log = RateLimitedWandbLog(config.logging.wandb_logs_per_sec)
-        wandb.init(project=config.logging.wandb_project)
+        wandb.init(project=config.logging.wandb_project, name=config.logging.wandb_name)
         wandb.config.update(OmegaConf.to_container(config))
     else:
         limited_log = None
@@ -866,12 +878,15 @@ def init_config(config: DictConfig) -> DictConfig:
                 raise ValueError("checkpoint.save_steps cannot be empty.")
             invalid_checkpoint_steps_type = False
             if not (isinstance(checkpoint_steps, int)):
-                if isinstance(checkpoint_steps, list):
+                if isinstance(checkpoint_steps, ListConfig):
                     if not all(isinstance(item, int) for item in checkpoint_steps):
                         invalid_checkpoint_steps_type = True
                 else:
                     invalid_checkpoint_steps_type = True
             if invalid_checkpoint_steps_type:
+                print(checkpoint_steps)
+                print(type(checkpoint_steps))
+                print(20 in checkpoint_steps)
                 raise ValueError("checkpoint.save_steps must be either int or list of int.")
             # Check num_steps.
             num_steps = config.checkpoint.num_steps
