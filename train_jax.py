@@ -53,6 +53,9 @@ import torch
 import serialize.serializer as serializer
 
 
+MiniBatch = List[Tuple[Array, Array]]
+
+
 class AuxState(NamedTuple):
     """Auxiliary states stored for additional loggings."""
     params_diff: Optional[optax.Updates]        # x_n - x_{n-1} = s_n * Delta_n
@@ -379,7 +382,7 @@ def update_aux_state(
     train_state: TrainState,
     updates: optax.Updates,
     grads: optax.Updates,
-    batches: List[Tuple[Array, Array]],
+    batches: MiniBatch,
     loss: Array,
     config: DictConfig,
 ) -> TrainState:
@@ -491,7 +494,7 @@ def update_aux_state(
 
 def back_prop(
     train_state: TrainState,
-    batches: List[Tuple[Array, Array]],
+    batches: MiniBatch,
     config: DictConfig,
     no_grads: bool = False,
 ):
@@ -571,7 +574,7 @@ def back_prop(
 
 def train_step(
     train_state: TrainState,
-    batches: List[Tuple[Array, Array]],
+    batches: MiniBatch,
     optimizer: optax.GradientTransformation,
     config: DictConfig,
 ):
