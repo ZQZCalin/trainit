@@ -799,9 +799,7 @@ def train(config: DictConfig):
 
     # [CHECKPOINT]: Load train state from checkpoint.
     if config.checkpoint.load:
-        checkpoint_path = config.checkpoint.load_path
-        if not os.path.exists(checkpoint_path):     # TODO: move path check to init_config part
-            raise ValueError(f"checkpoint path {checkpoint_path} does not exist.")
+        checkpoint_path = os.path.join(config.checkpoint.load_path, config.checkpoint.load_file)
         train_state = serializer.load(checkpoint_path, train_state)
 
     time_keeper = TimeKeeper()
