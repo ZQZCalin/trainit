@@ -799,8 +799,9 @@ def train(config: DictConfig):
 
     # [CHECKPOINT]: Load train state from checkpoint.
     if config.checkpoint.load:
-        checkpoint_path = os.path.join(config.checkpoint.load_path, config.checkpoint.load_file)
-        train_state = serializer.load(checkpoint_path, train_state)
+        checkpoint_file = os.path.join(config.checkpoint.load_path, config.checkpoint.load_file)
+        train_state = serializer.load(checkpoint_file, train_state)
+        logging.info(f"Successfully loaded checkpoint file from '{checkpoint_file}'.")
 
     time_keeper = TimeKeeper()
 
@@ -850,11 +851,11 @@ def init_config(config: DictConfig) -> DictConfig:
             if not os.path.exists(config_path):
                 raise ValueError(f"loading checkpoint config '{config_path}' does not exist.")
             # Load checkpoint config.
-            checkpoint_config = config.checkpoint
-            config = OmegaConf.load(config_path)            # loads config from loaded checkpoint
-            config.checkpoint = checkpoint_config           # overwrites config.checkpoint with the current config
-            logging.info(f"Successfully loaded checkpoint config from '{config_path}'.")
-            logging.info(f"Successfully loaded checkpoint file from '{checkpoint_file}'.")
+            if not config.checkpoint.overwrite:
+                checkpoint_config = config.checkpoint
+                config = OmegaConf.load(config_path)            # loads config from loaded checkpoint
+                config.checkpoint = checkpoint_config           # overwrites config.checkpoint with the current config
+                logging.info(f"Successfully loaded checkpoint config from '{config_path}'.")
         return config
 
     def init_config_save_ckpt(config):

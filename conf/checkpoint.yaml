@@ -1,16 +1,21 @@
 checkpoint:
   save: False
   load: False
+
+  # Saving checkpoint
   # if save is true, save checkpoint to "{save_path}/iter_{it}.ckpt"
-  # if save_steps is int, save checkpoint when it % save_steps = 0,
-  # if save_steps is list[int], save checkpoint when it in save_steps.
+  # if save_steps has type == int, save checkpoint when it % save_steps = 0,
+  # if save_steps has type == list[int], save checkpoint when it in save_steps.
   save_path: null
   save_steps: null
+  # if not None, specify total steps in one checkpoint training
+  num_steps: null
+
+  # Loading checkpoint
   # if load is true, load checkpoint from "{load_path}/{load_file}"
   load_path: null
   load_file: null
-  # if not None, specify total steps in one checkpoint training
-  num_steps: null
-  # USE WITH CAUTION: if true, overwrite the existing "{save_path}/config.yaml".
-  # This could result in two chcekpoint runs having different configurations.
+  # defaults to false and loads existing config from "{load_path}/config.yaml".
+  # if true, will use the user-specific config instead of the loaded config.
+  # pls USE WITH CAUTION and make sure most configs remain the same as the saved configs.
   overwrite: False
