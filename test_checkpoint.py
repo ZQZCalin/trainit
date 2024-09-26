@@ -45,7 +45,7 @@ import torch
 
 import serialize.serializer as serializer
 
-from train_jax import TrainState, \
+from train_jax import TrainState, MiniBatch, \
     init_tokenizer, init_aux_state, load_lm_data, init_model, init_optimizer, init_config, \
     back_prop, update_aux_state
 from train_jax import loss_fn
@@ -576,7 +576,84 @@ def test_ckpt_rand_delta_fix_mask(
             )
 
 
-# TODO: merge changes in ckpt loading in train_jax.py
+def load_checkpoint(train_state: TrainState, config: DictConfig) -> TrainState:
+    checkpoint_file = os.path.join(config.checkpoint.load_path, config.checkpoint.load_file)
+    train_state = serializer.load(checkpoint_file, train_state)
+    logging.info(f"Successfully loaded checkpoint file from '{checkpoint_file}'.")
+    return train_state
+
+
+def get_batches(dataloader, idx: int, num_batches: int, use_shift_labels: bool):
+    batches = []
+    for batch in dataloader[idx: idx+num_batches]:
+        if use_shift_labels:
+            batch = shift_labels(batch)
+        input_ids = jnp.asarray(batch["input_ids"])
+        labels = jnp.asarray(batch["labels"])
+        batches.append((input_ids, labels))
+    return batches
+
+
+def test_1d_landscape(
+    train_state: TrainState,
+    updates: optax.Updates,
+    batches: MiniBatch,
+    config: DictConfig,
+    logger: RateLimitedWandbLog,
+):
+    """Given a checkpoint x (train_state), a fixed data batch z (batches), and an update vector \Delta,
+    examines the 1d loss landscape of the stochastic loss $f(x+t\Delta, z)$.
+    """
+    sep = config.test.local_landscape.increment
+    radius = config.test.local_landscape.radius
+    scales = [i * sep for i in range(int(-radius/sep), int(radius/sep+1))]
+
+    back_prop_jit = eqx.filter_jit(
+        jtu.Partial(back_prop, config=config, no_grads=False),
+    )
+    base_model = train_state.model
+
+    # Static statistics.
+    train_state, ckpt_loss, ckpt_acc, ckpt_grads = back_prop_jit(train_state, batches)
+    logging.info(f"checkpoint loss = {ckpt_loss}")
+    logging.info(f"checkpoint acc = {ckpt_acc}")
+    logging.info(f"checkpoint grads = {utils.tree_norm(ckpt_grads)}")
+    logging.info(f"update norm = {utils.tree_norm(updates)}")
+
+    # Dynamic statistics.
+    sum_reward = 0
+    pbar = tqdm.tqdm(enumerate(scales), total=len(scales))
+    for it, scale in pbar:
+        train_state = train_state._replace(
+            model=eqx.apply_updates(base_model, utils.tree_scalar_multiply(updates, scale))
+        )
+        while True:
+            train_state, loss, accuracy, grads = back_prop_jit(train_state, batches)
+            if utils.is_finite_tree(grads):
+                break
+
+        pbar.set_description(f"iteration {it} scale {scale}: loss = {loss}")
+
+        reward = utils.tree_inner_product(grads, updates)
+        sum_reward += reward
+        metrics = {
+            "scale": scale,
+            "loss_diff": loss - ckpt_loss,
+            "accuracy": accuracy,
+            "<g,Delta>": reward,
+            "reward": sum_reward * sep,
+            "grads": utils.tree_norm(grads),
+            "|g-g0|": utils.tree_norm(utils.tree_subtract(grads, ckpt_grads)),
+            "cos(g, g0)": utils.tree_cosine_similarity(grads, ckpt_grads),
+        }
+
+        if config.logging.wandb_project is not None:
+            logger(
+                metrics,
+                step=it,
+            )
+
+
 def train(config: DictConfig):
     # Fix random seed.
     seed = config.random_seed
@@ -616,9 +693,6 @@ def train(config: DictConfig):
     # [CHECKPOINT]: Load train state from checkpoint.
     if config.checkpoint.load:
         checkpoint_path = os.path.join(config.checkpoint.load_path, config.checkpoint.load_file)
-        # load_config should take care of this part.
-        # if not os.path.exists(checkpoint_path):
-        #     raise ValueError(f"checkpoint path {checkpoint_path} does not exist.")
         train_state = serializer.load(checkpoint_path, train_state)
 
     time_keeper = TimeKeeper()
@@ -653,56 +727,88 @@ def train(config: DictConfig):
     #     config,
     #     limited_log,
     # )
-    test_ckpt_rand_delta_fix_mask(
+    # test_ckpt_rand_delta_fix_mask(
+    #     train_state,
+    #     train_loader,
+    #     config,
+    #     limited_log,
+    # )
+
+
+@hydra.main(version_base=None, config_path="conf", config_name="config")
+def test(config: DictConfig) -> None:
+    """A systematic testing on stochastic loss local landscape."""
+    # config.checkpoint.load = True
+    # config.checkpoint.load_path = "checkpoint/new_Adamw_B128_lr1e-3"
+    # config.checkpoint.load_file = "iter_1000.ckpt"
+    test_config = config.test
+    config = init_config(config)
+    config.test = test_config
+    config.logging.wandb_project = "local_landscape"
+    # config.logging.wandb_project = None
+    logging.info(OmegaConf.to_yaml(config))
+
+    # Fix random seeds.
+    seed = config.random_seed
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+
+    # Initialize dataloader and train_state.
+    tokenizer = init_tokenizer(config)
+    train_loader = load_lm_data(config, tokenizer)
+    key = jr.PRNGKey(config.random_seed)
+    model_key, train_key = jr.split(key, 2)
+    model = init_model(len(tokenizer), config.model, key=model_key)
+    limited_log = RateLimitedWandbLog(config.logging.wandb_logs_per_sec)
+    optimizer, opt_state = init_optimizer(model, config, logger=limited_log)
+    train_state = TrainState(
+        model=model,
+        opt_state=opt_state,
+        dynamic_scaler_state=DynamicScalerState() if config.train.use_amp else None,
+        iteration=jnp.array(0),
+        train_key=train_key,
+        aux_state=init_aux_state(config.logging, model, opt_state)
+    )
+    train_state = load_checkpoint(train_state, config)
+
+    # Initialize Wandb logging.
+    wandb.init(project=config.logging.wandb_project)
+    wandb.config.update(OmegaConf.to_container(config))
+
+    # Testing variables.
+    num_batches = config.dataset.total_batch_size // config.dataset.batch_size
+    idx = train_state.iteration * num_batches
+    batches = get_batches(train_loader, idx, num_batches, config.dataset.shift_labels)
+
+    updates = train_state.aux_state.params_diff
+    if config.test.local_landscape.normalize_updates:
+        updates = utils.tree_normalize(updates)
+
+
+    test_1d_landscape(
         train_state,
-        train_loader,
+        updates,
+        batches,
         config,
         limited_log,
     )
 
 
-def init_config_load_ckpt(config: DictConfig) -> DictConfig:
-    # ======================================================================
-    # [CHECKPOINT]: check and load checkpoint config files.
-    if config.checkpoint.load:
-        # Check path existing: load_path, load_file, config file in load_path.
-        checkpoint_path = config.checkpoint.load_path
-        checkpoint_file = os.path.join(checkpoint_path, config.checkpoint.load_file)
-        config_path = os.path.join(checkpoint_path, 'config.yaml')
-        if checkpoint_path is None:
-            raise ValueError("checkpoint.load_path cannot be empty.")
-        if not os.path.exists(checkpoint_path):
-            raise ValueError(f"checkpoint path '{checkpoint_path}' does not exist.")
-        if not os.path.exists(checkpoint_file):
-            raise ValueError(f"checkpoint file '{checkpoint_file}' does not exist.")
-        if not os.path.exists(config_path):
-            raise ValueError(f"config file '{config_path}' does not exist.")
-        # Load checkpoint config.
-        checkpoint_config = config.checkpoint
-        config = OmegaConf.load(config_path)
-        config.checkpoint = checkpoint_config
-        print(f"Successfully loaded config file from '{config_path}'.")
-        print(f"Successfully loaded checkpoint file from '{checkpoint_file}'.")
-    return config
-
-
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(config: DictConfig) -> None:
     config = init_config(config)
-    # For this test purpose, we always specify config.load=True, so it's fine to just call `init_config_load_ckpt`.
-    config = init_config_load_ckpt(config)
 
-    config.logging.wandb_project = "o2nc_ckpt"
+    # Local changes to config.
+    config.logging.wandb_project = "local_landscape"
     # config.logging.wandb_project = None
-    # config.train.use_amp = False                    # manually turn off AMP
-    # config.checkpoint.use_last_batch = True         # use z_n if True, else use z_{n+i}
-    # config.checkpoint.use_last_params = False       # use x_n if True, else use w_i
-
-    # config.train.use_amp = False
+    config.checkpoint.load = True
+    config.checkpoint.load_path = "checkpoint/new_Adamw_B128_lr1e-3"
+    config.checkpoint.load_file = "iter_1000.ckpt"
 
     # logging.info(OmegaConf.to_yaml(config))
-
     train(config)
 
 if __name__ == "__main__":
-    main()
+    # main()
+    test()

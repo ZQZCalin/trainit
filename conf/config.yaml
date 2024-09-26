@@ -6,5 +6,6 @@ defaults:
   - logging
   - checkpoint
   - experimental
+  - test
 
 random_seed: 42   # this controls the entire randomness during training

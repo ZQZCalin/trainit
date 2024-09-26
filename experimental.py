@@ -196,7 +196,8 @@ def train_step(
     key, new_key = jr.split(key)
     rs_warmup = config.experimental.rs_warmup
     use_rs = config.experimental.use_interpolate_o2nc
-    use_rs = use_rs and (type(rs_warmup) == int and train_state.iteration >= rs_warmup)
+    if isinstance(rs_warmup, int) and train_state.iteration < rs_warmup:
+        use_rs = False                                              # set s_n = 1 during warmup
     random_scalar = jax.lax.cond(
         use_rs,
         lambda _: jr.uniform(key, minval=0, maxval=1),
@@ -405,7 +406,7 @@ def train(config: DictConfig):
     # Initialize Wandb logging.
     if config.logging.wandb_project is not None:
         limited_log = RateLimitedWandbLog(config.logging.wandb_logs_per_sec)
-        wandb.init(project=config.logging.wandb_project)
+        wandb.init(project=config.logging.wandb_project, name=config.logging.wandb_name)
         wandb.config.update(OmegaConf.to_container(config))
     else:
         limited_log = None

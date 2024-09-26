@@ -221,7 +221,31 @@ source activate_env.sh
 
 # 09/24-01
 # Run a new checkpoint of Adamw benchmark, B=128, lr=1e-3, no RS, ckpt iterations at [20,100,500,1000,2000]
-python experimental.py logging.wandb_project=large_batch_o2nc \
-    train.max_steps=2000 dataset.total_batch_size=128 \
-    optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
-    checkpoint.save=True checkpoint.save_path=checkpoint/new_Adamw_B128_lr1e-3 checkpoint.save_steps="[20,100,500,1000,2000]"
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
+#     checkpoint.save=True checkpoint.save_path=checkpoint/new_Adamw_B128_lr1e-3 checkpoint.save_steps="[20,100,500,1000,2000]"
+
+# 02: Adamw benchmark with b1=0 (weighted Adagrad)
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
+#     optimizer.beta1=0 \
+#     checkpoint.save=True checkpoint.save_path=checkpoint/Adagrad_B128_lr1e-3 checkpoint.save_steps="[20,100,500,1000,2000]"
+
+# 02-b: some other lr configs
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=3e-4 \
+#     optimizer.beta1=0
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=3e-3 \
+#     optimizer.beta1=0
+
+# 03: Adamw benchmark with RS
+# python experimental.py logging.wandb_project=large_batch_o2nc \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
+#     experimental.use_interpolate_o2nc=True \
+#     checkpoint.save=True checkpoint.save_path=checkpoint/Adamw_RS_B128_lr1e-3 checkpoint.save_steps="[20,100,500,1000,2000]"

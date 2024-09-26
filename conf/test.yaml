@@ -1,0 +1,17 @@
+# Configs related to tests.
+# does NOT affect the main training pipeline.
+
+test:
+  # Related to testing 1d loss landscape
+  local_landscape:
+    increment: 0.05
+    radius: 10
+    # updates: 
+    #   - current_updates
+    #   - next_updates
+    #   - current_grads
+    #   - noise
+    # if true, normalize the updates vector
+    normalize_updates: false
+    # batches:
+    #   - curent
