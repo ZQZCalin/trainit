@@ -95,7 +95,7 @@ def tree_normalize(tree):
     # Use jax.lax.cond to avoid trace issue.
     return jax.lax.cond(
         is_zero_tree(tree),
-        true_fun=lambda _: tree,
+        true_fun=lambda _: zero_tree(tree),
         false_fun=lambda _: tree_scalar_multiply(tree, 1/tree_norm(tree)),
         operand=None,
     )
@@ -134,22 +134,21 @@ def tree_norm_direction_decomposition(tree):
     # return norm, tree_scalar_multiply(tree, 1/norm)
 
 
-def random_unit_vector(key, tree):
+def random_unit_vector(tree, *, key):
     """Constructs a pytree of same structure as input whose leaves is a random unit vector.
 
     Returns:
-        New PRNGKey and a uniform random vector on the unit sphere.
+        A uniform random vector on the unit sphere.
     """
     # Construct a pytree of random keys.
-    key, new_key = jr.split(key)
     keys = jr.split(key, num=len(jtu.tree_leaves(tree)))
     keys_tree = jtu.tree_unflatten(jtu.tree_structure(tree), keys)
     # Sample Gaussian vector.
     normal_vector = jtu.tree_map(
-        lambda t, k: jr.normal(k, shape=t.shape, dtype=t.dtype), 
+        lambda t, k: jr.normal(k, shape=t.shape), 
         tree, keys_tree
     )
-    return new_key, tree_normalize(normal_vector)
+    return tree_normalize(normal_vector)
 
 
 def check_tree_structures_match(tree1, tree2):
