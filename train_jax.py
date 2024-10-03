@@ -556,6 +556,10 @@ def back_prop(
     accuracy /= num_batches
     grads = utils.tree_scalar_multiply(grads, 1/num_batches)
 
+    train_state = train_state._replace(
+        dynamic_scaler_state=dynamic_scaler_state,
+        train_key=new_key,
+    )
     # train_state = TrainState(
     #     model=model,
     #     opt_state=train_state.opt_state,
@@ -564,10 +568,6 @@ def back_prop(
     #     train_key=new_key,
     #     aux_state=train_state.aux_state,
     # )
-    train_state = train_state._replace(
-        dynamic_scaler_state=dynamic_scaler_state,
-        train_key=new_key,
-    )
 
     return train_state, loss, accuracy, grads
 
@@ -591,14 +591,19 @@ def train_step(
     new_model = eqx.apply_updates(model, updates)                   # x_(n+1)
 
     # Update new train_state.
-    train_state = TrainState(
+    train_state = train_state._replace(
         model=new_model,
         opt_state=opt_state,
-        dynamic_scaler_state=train_state.dynamic_scaler_state,
         iteration=train_state.iteration + 1,
-        train_key=train_state.train_key,
-        aux_state=train_state.aux_state,
     )
+    # train_state = TrainState(
+    #     model=new_model,
+    #     opt_state=opt_state,
+    #     dynamic_scaler_state=train_state.dynamic_scaler_state,
+    #     iteration=train_state.iteration + 1,
+    #     train_key=train_state.train_key,
+    #     aux_state=train_state.aux_state,
+    # )
 
     # Update aux_state and related loggings.
     train_state = update_aux_state(
