@@ -772,6 +772,9 @@ def test(config: DictConfig) -> None:
     )
     train_state = load_checkpoint(train_state, config)
 
+    # [Optional] uncomment to turn off AMP (this must be after loading the checkpoint)
+    config.train.use_amp = False
+
     # Initialize Wandb logging.
     wandb.init(project=config.logging.wandb_project)
     wandb.config.update(OmegaConf.to_container(config))
@@ -781,7 +784,18 @@ def test(config: DictConfig) -> None:
     idx = train_state.iteration * num_batches
     batches = get_batches(train_loader, idx, num_batches, config.dataset.shift_labels)
 
-    updates = train_state.aux_state.params_diff
+    updates_type = config.test.local_landscape.updates
+    updates = train_state.aux_state.params_diff             # default update
+    if updates_type == "current_update":
+        pass
+    elif updates_type == "noise":
+        key = jr.PRNGKey(config.random_seed)
+        norm = utils.tree_norm(updates)
+        updates = utils.random_unit_vector(updates, key=key)
+        updates = utils.tree_scalar_multiply(updates, norm / utils.tree_norm(updates))
+    else:
+        raise ValueError(f"updates '{updates_type}' is unknown.")
+
     if config.test.local_landscape.normalize_updates:
         updates = utils.tree_normalize(updates)
 
