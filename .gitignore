@@ -26,7 +26,6 @@ wandb/
 # batch job and output files
 batch_job/
 *.sh.*
-batch_job/optimistic.sh
 
 # checkpoint files
 checkpoint/
@@ -43,7 +42,7 @@ opt/
 mechanic.py
 trainer.py
 # scc_setup.sh
-activate_env.sh
+# activate_env.sh
 # check_env.py
 # requirements.txt
 test_data.jsonl
