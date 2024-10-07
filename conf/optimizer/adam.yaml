@@ -1,5 +1,5 @@
 name: adamw
-lr_config:
+lr_config:    # TODO: move that to a sub-directory called lr_config, and instance with difference scheduler
   lr: 3e-4
   schedule: linear
   warmup: 5000
