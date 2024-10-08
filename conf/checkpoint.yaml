@@ -4,11 +4,11 @@ checkpoint:
 
   # SAVING CHECKKPOINT
   # If save is true, save checkpoint to "{save_path}/iter_{it}.ckpt".
-  # If save_steps has type == int, save checkpoint when it % save_steps = 0,
-  # else if save_steps has type == list[int], save checkpoint when it in save_steps.
+  # If save_steps has type == int, save checkpoint when it % save_steps = 0. E.g. save_steps=100
+  # If save_steps has type == list[int], save checkpoint when it in save_steps. E.g. save_steps=[10,100,1000]
   save_path: null
   save_steps: null
-  # if not None, specify total steps in one checkpoint training
+  # If not None, determines the total steps in one checkpoint training. Otherwise, total steps=train.max_steps
   num_steps: null
 
   # LOADING CHECKPOINT
