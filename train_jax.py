@@ -482,11 +482,8 @@ def update_aux_state(
     aux_state, dynamic_scaler_state = jax.lax.cond(
         utils.is_finite_tree(grads), update_finite, update_nan, aux_state, base_loggings, dynamic_scaler_state)
     
-    return TrainState(
-        model = train_state.model,
-        opt_state = opt_state,
+    return train_state._replace(
         dynamic_scaler_state = dynamic_scaler_state,
-        iteration = train_state.iteration,
         train_key = new_key,
         aux_state = aux_state
     )
@@ -560,14 +557,6 @@ def back_prop(
         dynamic_scaler_state=dynamic_scaler_state,
         train_key=new_key,
     )
-    # train_state = TrainState(
-    #     model=model,
-    #     opt_state=train_state.opt_state,
-    #     dynamic_scaler_state=dynamic_scaler_state,
-    #     iteration=train_state.iteration,
-    #     train_key=new_key,
-    #     aux_state=train_state.aux_state,
-    # )
 
     return train_state, loss, accuracy, grads
 
@@ -594,16 +583,8 @@ def train_step(
     train_state = train_state._replace(
         model=new_model,
         opt_state=opt_state,
-        iteration=train_state.iteration + 1,
+        iteration=train_state.iteration+1,
     )
-    # train_state = TrainState(
-    #     model=new_model,
-    #     opt_state=opt_state,
-    #     dynamic_scaler_state=train_state.dynamic_scaler_state,
-    #     iteration=train_state.iteration + 1,
-    #     train_key=train_state.train_key,
-    #     aux_state=train_state.aux_state,
-    # )
 
     # Update aux_state and related loggings.
     train_state = update_aux_state(
