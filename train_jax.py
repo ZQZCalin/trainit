@@ -767,6 +767,90 @@ def train_loop(
     return train_state
 
 
+def init_train_state(
+    config: DictConfig
+) -> Tuple[TrainState, optax.GradientTransformation, Any, Any, RateLimitedWandbLog]:
+    """Initializes / loads train state.
+
+    If loading checkpoint train_state, it is assumed that 
+    
+    Returns:
+        A tuple of train state, optimizer, dataloader, tokenizer, wandb logger.
+    """
+    # Initialize random keys.
+    seed = config.random_seed
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    key = jr.PRNGKey(seed)
+    model_key, train_key = jr.split(key, 2)
+
+    # Initialize wandb logger.
+    if config.logging.wandb_project is not None:
+        limited_log = RateLimitedWandbLog(config.logging.wandb_logs_per_sec)
+    else:
+        limited_log = None
+
+    # Initialize model tokenizer.
+    tokenizer = init_tokenizer(config)
+
+    # Initialize dataloader.
+    train_loader = load_lm_data(config, tokenizer)
+
+    # Initialize model.
+    model = init_model(len(tokenizer), config.model, key=model_key)
+
+    # Initialize optimizer and opt_state.
+    optimizer, opt_state = init_optimizer(model, config, logger=limited_log)
+
+    # Initialize train state.
+    train_state = TrainState(
+        model=model,
+        opt_state=opt_state,
+        dynamic_scaler_state=DynamicScalerState() if config.train.use_amp else None,
+        iteration=jnp.array(0),
+        train_key=train_key,
+        aux_state=init_aux_state(config.logging, model, opt_state)
+    )
+
+    # If loading is true, loads train state from checkpoint.
+    if config.checkpoint.load:
+        checkpoint_file = os.path.join(config.checkpoint.load_path, config.checkpoint.load_file)
+        checkpoint_config = OmegaConf.load(
+            os.path.join(config.checkpoint.load_path, 'config.yaml'))
+        
+        # We need to make sure the current train_state has the same structure as the checkpoint.
+        if config.checkpoint.overwrite_optimizer:                           # opt_state
+            ckpt_optimizer, ckpt_opt_state = init_optimizer(model, checkpoint_config, logger=None)
+            train_state = train_state._replace(
+                opt_state=ckpt_opt_state
+            )
+        if config.train.use_amp != checkpoint_config.train.use_amp:         # dynamic_scaler_state
+            train_state = train_state._replace(
+                dynamic_scaler_state=DynamicScalerState() if checkpoint_config.train.use_amp else None
+            )
+        
+        # Load train_state from checkpoint.
+        train_state = serializer.load(checkpoint_file, train_state)
+
+        # Undo previous changes and replace with the current opt_state and dynamic_scaler_state.
+        if config.checkpoint.overwrite_optimizer:                           # initialize opt_state
+            train_state = train_state._replace(
+                opt_state=opt_state
+            )
+        if config.train.use_amp and not checkpoint_config.train.use_amp:    # turn on amp
+            train_state = train_state._replace(
+                dynamic_scaler_state=DynamicScalerState()
+            )
+        if not config.train.use_amp and checkpoint_config.train.use_amp:    # turn off amp
+            train_state = train_state._replace(
+                dynamic_scaler_state=DynamicScalerState()
+            )
+        logging.info(f"Successfully loaded checkpoint file from '{checkpoint_file}'.")
+
+    return train_state, optimizer, train_loader, tokenizer, limited_log
+
+
 def train(config: DictConfig):
     # Some san check of config.
     
@@ -859,7 +943,7 @@ def init_config(config: DictConfig) -> DictConfig:
             if not os.path.exists(config_path):
                 raise ValueError(f"loading checkpoint config '{config_path}' does not exist.")
             # Load checkpoint config.
-            if not config.checkpoint.overwrite:
+            if not config.checkpoint.overwrite_config:
                 checkpoint_config = config.checkpoint
                 config = OmegaConf.load(config_path)            # loads config from loaded checkpoint
                 config.checkpoint = checkpoint_config           # overwrites config.checkpoint with the current config

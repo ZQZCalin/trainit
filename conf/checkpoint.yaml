@@ -2,20 +2,27 @@ checkpoint:
   save: False
   load: False
 
-  # Saving checkpoint
-  # if save is true, save checkpoint to "{save_path}/iter_{it}.ckpt"
-  # if save_steps has type == int, save checkpoint when it % save_steps = 0,
-  # if save_steps has type == list[int], save checkpoint when it in save_steps.
+  # SAVING CHECKKPOINT
+  # If save is true, save checkpoint to "{save_path}/iter_{it}.ckpt".
+  # If save_steps has type == int, save checkpoint when it % save_steps = 0,
+  # else if save_steps has type == list[int], save checkpoint when it in save_steps.
   save_path: null
   save_steps: null
   # if not None, specify total steps in one checkpoint training
   num_steps: null
 
-  # Loading checkpoint
-  # if load is true, load checkpoint from "{load_path}/{load_file}"
+  # LOADING CHECKPOINT
+  # If load is true, load checkpoint from "{load_path}/{load_file}".
   load_path: null
   load_file: null
-  # defaults to false and loads existing config from "{load_path}/config.yaml".
-  # if true, will use the user-specific config instead of the loaded config.
-  # pls USE WITH CAUTION and make sure most configs remain the same as the saved configs.
-  overwrite: False
+  # Defaults to false and loads existing config from "{load_path}/config.yaml".
+  # If true, will use the user-specific config instead of the loaded config.
+  # USE WITH CAUTION and make sure most configs remain the same as the saved configs.
+  overwrite_config: False
+  # Defaults to false and loads `opt_state` from the saved train_state.
+  # If true, will reinitialize the optimizer and `opt_state`.
+  # This should only be used either if you want to restart your optimizer 
+  # or if you need to use a different optimizer (e.g. from Adam to SGDM).
+  # Keep it to false if you only need to change optimizer hyper-parameters such as learning rate or momentum.
+  # USE WITH CAUTION.
+  overwrite_optimizer: False
