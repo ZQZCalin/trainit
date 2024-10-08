@@ -616,9 +616,10 @@ def save_checkpoint(
     train_state: TrainState,
     config: DictConfig,
 ):
-    """Saves checkpoint.
+    """A wrapper of checkpoint saving in the train loop.
     
-    A checkpoint is saved either when it % save_steps == 0 or when it in save_steps.
+    Checks saving conditions and saves the checkpoint when the conditions are met.
+    A checkpoint is saved either when `it % save_steps == 0` or when `it in save_steps`.
     """
     if config.checkpoint.save:
         save_steps = config.checkpoint.save_steps
@@ -851,62 +852,6 @@ def init_train_state(
     return train_state, optimizer, train_loader, tokenizer, limited_log
 
 
-def train(config: DictConfig):
-    # Some san check of config.
-    
-    # TODO: this is temporary
-    seed = config.random_seed
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-    # Initialize Wandb logging.
-    if config.logging.wandb_project is not None:
-        limited_log = RateLimitedWandbLog(config.logging.wandb_logs_per_sec)
-        wandb.init(project=config.logging.wandb_project, name=config.logging.wandb_name)
-        wandb.config.update(OmegaConf.to_container(config))
-    else:
-        limited_log = None
-
-    # Initialize dataloader for gpt2.
-    tokenizer = init_tokenizer(config)
-
-    train_loader = load_lm_data(config, tokenizer)
-
-    # Initialize random keys
-    key = jr.PRNGKey(config.random_seed)
-    model_key, train_key = jr.split(key, 2)
-
-    # Initialize optimizer and train state.
-    model = init_model(len(tokenizer), config.model, key=model_key)
-    optimizer, opt_state = init_optimizer(model, config, logger=limited_log)
-    train_state = TrainState(
-        model=model,
-        opt_state=opt_state,
-        dynamic_scaler_state=DynamicScalerState() if config.train.use_amp else None,
-        iteration=jnp.array(0),
-        train_key=train_key,
-        aux_state=init_aux_state(config.logging, model, opt_state)
-    )
-
-    # [CHECKPOINT]: Load train state from checkpoint.
-    if config.checkpoint.load:
-        checkpoint_file = os.path.join(config.checkpoint.load_path, config.checkpoint.load_file)
-        train_state = serializer.load(checkpoint_file, train_state)
-        logging.info(f"Successfully loaded checkpoint file from '{checkpoint_file}'.")
-
-    time_keeper = TimeKeeper()
-
-    train_loop(
-        train_state,
-        optimizer,
-        train_loader,
-        config,
-        logger=limited_log,
-        time_keeper=time_keeper
-    )
-
-
 def init_config(config: DictConfig) -> DictConfig:
     """Pre-process config files."""
 
@@ -1001,7 +946,19 @@ def init_config(config: DictConfig) -> DictConfig:
 def main(config: DictConfig) -> None:
     config = init_config(config)
     logging.info(OmegaConf.to_yaml(config))
-    train(config)
+    
+    train_state, optimizer, train_loader, tokenizer, limited_log = init_train_state(config)
+
+    time_keeper = TimeKeeper()
+
+    train_loop(
+        train_state,
+        optimizer,
+        train_loader,
+        config,
+        logger=limited_log,
+        time_keeper=time_keeper
+    )
 
 
 if __name__ == "__main__":
