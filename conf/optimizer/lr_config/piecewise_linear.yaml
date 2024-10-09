@@ -1,0 +1,5 @@
+schedule: piecewise_linear
+lr1: 3e-4
+lr2: 0
+start_steps: 0
+max_steps: 50000

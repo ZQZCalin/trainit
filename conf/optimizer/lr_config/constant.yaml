@@ -1,0 +1,2 @@
+schedule: constant
+lr: 3e-4
