@@ -174,21 +174,12 @@ def init_scheduler(lr_config: DictConfig, **kwargs) -> optax.ScalarOrSchedule:
     Returns:
         A `optax.ScalarOrSchedule` object.
     """
-    # Overwrites default config.
-    config = {
-        'lr': 0,
-        'schedule': 'constant',
-        'warmup': 0,
-        'max_steps': 0
-    }
-    config.update(lr_config),
-    config.update(kwargs)
-    config = OmegaConf.create(config)
-
-    use_warmup = type(config.warmup)==int and (config.warmup > 0)
-    if config.schedule == "constant":
+    def init_constant_lr(config):
         learning_rate = config.lr
-    elif config.schedule == "cosine":
+        return learning_rate
+    
+    def init_cosine_lr(config):
+        use_warmup = isinstance(config.warmup, int) and (config.warmup > 0)
         if use_warmup:
             learning_rate = optax.warmup_cosine_decay_schedule(
                 init_value=0.0,
@@ -201,7 +192,10 @@ def init_scheduler(lr_config: DictConfig, **kwargs) -> optax.ScalarOrSchedule:
                 init_value=config.lr,
                 decay_steps=config.max_steps,
             )
-    elif config.schedule == "linear":
+        return learning_rate
+    
+    def init_linear_lr(config):
+        use_warmup = isinstance(config.warmup, int) and (config.warmup > 0)
         if use_warmup:
             learning_rate = scheduler.warmup_linear_decay_schedule(
                 init_value=0.0,
@@ -214,12 +208,30 @@ def init_scheduler(lr_config: DictConfig, **kwargs) -> optax.ScalarOrSchedule:
                 init_value=config.lr,
                 decay_steps=config.max_steps,
             )
+        return learning_rate
+
+    def init_piecewise_linear_lr(config):
+        learning_rate = optax.linear_schedule(
+            init_value=config.lr1,
+            end_value=config.lr2,
+            transition_steps=config.max_steps,
+            transition_begin=config.start_steps,    # NOTE: for now, we still need to specify the start iteration in config.
+        )
+        return learning_rate
+
+    if lr_config.schedule == "constant":
+        learning_rate = init_constant_lr(lr_config)
+    elif lr_config.schedule == "cosine":
+        learning_rate = init_cosine_lr(lr_config)
+    elif lr_config.schedule == "linear":
+        learning_rate = init_linear_lr(lr_config)
+    elif lr_config.schedule == "piecewise_linear":
+        learning_rate = init_piecewise_linear_lr(lr_config)
     else:
-        raise ValueError(f"schedule type {config.schedule} is not supported.")
+        raise ValueError(f"schedule type {lr_config.schedule} is not supported.")
     return learning_rate
 
 
-# TODO: deprecate logging wrapper. instead, we can log learning rate inside corresponding optimizer that calls it.
 def wrap_scheduler(
     learning_rate: optax.ScalarOrSchedule,
     logger: None,
@@ -234,8 +246,7 @@ def wrap_scheduler(
         if logger is not None:
             jax.experimental.io_callback(logger, None, {f"lr/{title}": lr}, commit=False)
         return lr
-    return jtu.Partial(
-        wrapper, learning_rate, logger=logger, title=schedule_title)
+    return jtu.Partial(wrapper, learning_rate, logger=logger, title=schedule_title)
 
 
 def init_optimizer(
