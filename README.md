@@ -69,12 +69,31 @@ See [later](#configurations) for details.
 
 We have implemented a checkpointing system for you. All you need is changing the checkpoint configuration:
 
+For saving checkpoint,
 ```bash
-python train_jax.py logging.wandb_project=PROJECT_NAME \
-    checkpoint.save=True checkpoint.save_path=CHECKPOINT_DIR checkpoint.save_steps=10000 \  # enable checkpoint saving
-    checkpoint.load=True checkpoint.load_path=CHECKPOINT_DIR/iter_10000.json \              # enable checkpoing loading
-    checkpoint.num_steps=null       # specify number of steps in one checkpoint (optional)
+python train_jax.py \
+    checkpoint.save=True \
+    checkpoint.save_path=CHECKPOINT \
+    checkpoint.save_steps=[100, 1000, 10000] \
+    checkpoint.num_steps=null
 ```
+- `save_path` specifies the directory to which the checkpoint is saved. It cannot be an existing directory.
+- `save_steps` can be either a positive integer or a list of positive integers. If it is an integer, a checkpoint will be saved every `save_steps` iterations; if it is a list, a checkpoint will be saved if the iteration number is in this list. The saved checkpoint will be named `{save_path}/iter_{iteration}.ckpt`.
+- `num_steps` specifies the total training steps. It defaults to `train.max_steps` if not specified.
+
+For loading checkpoint,
+```bash
+python train_jax.py \
+    checkpoint.load=True \
+    checkpoint.load_path=CHECKPOINT
+    checkpoint.load_file=iter_100.ckpt
+    checkpoint.overwrite_config: False
+    checkpoint.overwrite_optimizer: False
+```
+- `load_path` specifies the directory from which the checkpoint is loaded.
+- `load_file` specifies the checkpoint name, e.g. `"iter_100.ckpt"`.
+- `overwrite_config`: Defaults to `False` and loads existing config from `"{load_path}/config.yaml"`. If true, reads the new config instead of the loaded config. USE WITH CAUTION: This should only be turned on if you need to use different config than the loaded checkpoint.
+- `overwrite_optimizer`: Defaults to `False` and loads `opt_state` from the saved train_state (and thus continues training the existing optimizer). If true, reinitializes a new optimizer with a fresh `opt_state`.  USE WITH CAUTION: This should only be used if you need to either restart your optimizer or use a different optimizer family (e.g. from Adam to SGDM). If you only need to change optimizer hyper-parameters such as learning rate or momentum, keep `overwrite_optimizer=False` and just turn on `overwrite_config=True`.
 
 ## Advanced
 
@@ -106,6 +125,11 @@ conf/
     |-- gpt.yaml
     |-- OTHER MODELS
 |-- optimizer/
+    |-- lr_config/
+        |-- constant.yaml
+        |-- cosine.yaml
+        |-- linear.yaml
+        |-- OTHER SCHEDULERS
     |-- adam.yaml
     |-- sgdm.yaml
     |-- OTHER OPTIMIZERS
@@ -113,9 +137,11 @@ conf/
 |-- train.yaml
 |-- logging.yaml
 |-- checkpoint.yaml
-|-- experimental.yaml
 ```
-The current configuration is recorded from the optimal Adam benchmark. You can easily change configuration in command line as shown earlier.
+The current configuration is recorded from the optimal Adam benchmark. You can easily change configuration in command line as shown earlier. A caveat is overriding the config group `optimizer/lr_config`, in which case you need to use `/` for overriding config group and `.` for specifying config, e.g.
+```bash
+... optimizer/lr_config=linear optimizer.lr_config.lr=3e-4
+```
 
 ### Implement Your Own Optimizer
 
