@@ -47,7 +47,7 @@ import serialize.serializer as serializer
 
 from train_jax import TrainState, MiniBatch, \
     init_tokenizer, init_aux_state, load_lm_data, init_model, init_optimizer, init_config, \
-    back_prop, update_aux_state
+    back_prop, update_aux_state, init_train_state
 from train_jax import loss_fn
 from utils import get_dtype, get_accuracy
 
@@ -94,7 +94,9 @@ def power_iteration_back_prop(
     train_state: TrainState,
     batches: MiniBatch,
     config: DictConfig,
+    spectrum: int = 0,
     iter: int = 100,
+    logger: Optional[RateLimitedWandbLog] = None,
 ):
     """Power iteration modified for back_prop and train_state."""
     key, new_key = jr.split(train_state.train_key)
@@ -105,22 +107,39 @@ def power_iteration_back_prop(
         def grad_f(x):
             _train_state = train_state._replace(model=eqx.combine(x, train_state.model))
             _train_state, loss, acc, grads = back_prop(_train_state, batches, config)
+            # Minimum eigen-pair.
+            if spectrum == -1:
+                max_eigenvalue = 6  # TODO: specify in argument
+                grads = jtu.tree_map(
+                    lambda g, _x: max_eigenvalue * _x - g, grads, x
+                )
             return grads, _train_state
         return grad_f
-
-    def _one_step(i, val):
-        train_state, v = val
-        _, v, train_state = jax.jvp(get_grad_f(train_state), (x,), (v,), has_aux=True)
-        v = utils.tree_normalize(v)
-        return (train_state, v)
     
-    train_state, eigenvector = jax.lax.fori_loop(
-        lower=0, upper=iter, 
-        body_fun=_one_step,
-        init_val=(train_state, v)
-    )
-    eigenvalue = utils.tree_norm(jax.jvp(get_grad_f(train_state), (x,), (eigenvector,))[1])
-    return eigenvalue, eigenvector
+    def hessian(train_state, x, v):
+        return jax.jvp(get_grad_f(train_state), (x,), (v,), has_aux=True)
+    jit_hessian = eqx.filter_jit(hessian)
+
+    pbar = tqdm.tqdm(range(iter), total=iter)
+    last_v = v
+    for it in pbar:
+        _, v, train_state = jit_hessian(train_state, x, v)
+        eigenvalue = utils.tree_norm(v)
+        v = utils.tree_normalize(v)
+        pbar.set_description(f"iter {it+1}/{iter}: eigen-value={eigenvalue}")
+        # Log to wandb.
+        metrics = {
+            "eigenvalue": eigenvalue,
+            "cos(vn,vn-1)": utils.tree_cosine_similarity(v, last_v)
+        }
+        last_v = v
+        if logger is not None:
+            logger(
+                metrics,
+                step=it,
+            )
+
+    return eigenvalue, v
 
 
 def get_batches(dataloader, idx: int, num_batches: int, use_shift_labels: bool):
@@ -134,61 +153,6 @@ def get_batches(dataloader, idx: int, num_batches: int, use_shift_labels: bool):
     return batches
 
 
-# TODO: merge into train_jax.py
-def init_train_state(
-    config: DictConfig
-) -> Tuple[TrainState, optax.GradientTransformation, Any, Any, RateLimitedWandbLog]:
-    """Initializes / loads train state.
-    
-    Returns:
-        A tuple of train state, optimizer, dataloader, tokenizer, wandb logger.
-    """
-    # Initialize wandb logger.
-    if config.logging.wandb_project is not None:
-        limited_log = RateLimitedWandbLog(config.logging.wandb_logs_per_sec)
-    else:
-        limited_log = None
-
-    # Initialize model tokenizer.
-    tokenizer = init_tokenizer(config)
-
-    # Initialize dataloader.
-    train_loader = load_lm_data(config, tokenizer)
-
-    # Initialize random keys
-    seed = config.random_seed
-    key = jr.PRNGKey(seed)
-    model_key, train_key = jr.split(key, 2)
-    # Also fix random seed for other random libraries.
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-    # Initialize model.
-    model = init_model(len(tokenizer), config.model, key=model_key)
-
-    # Initialize optimizer and opt_state.
-    optimizer, opt_state = init_optimizer(model, config, logger=limited_log)
-
-    # Initialize train state.
-    train_state = TrainState(
-        model=model,
-        opt_state=opt_state,
-        dynamic_scaler_state=DynamicScalerState() if config.train.use_amp else None,
-        iteration=jnp.array(0),
-        train_key=train_key,
-        aux_state=init_aux_state(config.logging, model, opt_state)
-    )
-
-    # If loading is true, loads train state from checkpoint.
-    if config.checkpoint.load:
-        checkpoint_file = os.path.join(config.checkpoint.load_path, config.checkpoint.load_file)
-        train_state = serializer.load(checkpoint_file, train_state)
-        logging.info(f"Successfully loaded checkpoint file from '{checkpoint_file}'.")
-
-    return train_state, optimizer, train_loader, tokenizer, limited_log
-
-
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(config: DictConfig) -> None:
     """A systematic testing on stochastic loss local landscape."""
@@ -196,8 +160,8 @@ def main(config: DictConfig) -> None:
     test_config = config.test
     config = init_config(config)
     config.test = test_config
-    config.logging.wandb_project = "local_landscape"
-    config.logging.wandb_project = None
+    config.logging.wandb_project = "hessian_spectrum"
+    # config.logging.wandb_project = None
     # logging.info(OmegaConf.to_yaml(config))
 
     train_state, optimizer, train_loader, tokenizer, limited_log = init_train_state(config)
@@ -215,11 +179,10 @@ def main(config: DictConfig) -> None:
     idx = train_state.iteration * num_batches
     batches = get_batches(train_loader, idx, num_batches, config.dataset.shift_labels)
 
-    jit_power_iteration = eqx.filter_jit(
-        jtu.Partial(power_iteration_back_prop, batches=batches, config=config, iter=3)
-    )
-    eigenvalue, eigenvector = jit_power_iteration(train_state)
-    print(f"eigen-value: {eigenvalue}, eigen-vector: ", eigenvector)
+    spectrum = -1
+    func = jtu.Partial(power_iteration_back_prop, batches=batches, config=config, iter=100, logger=limited_log, spectrum=spectrum)
+    eigenvalue, eigenvector = func(train_state)
+    # print(f"eigen-value: {eigenvalue}, eigen-vector: ", eigenvector)
     
 
 if __name__ == "__main__":
