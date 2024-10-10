@@ -22,7 +22,7 @@ from jaxtyping import Array, PRNGKeyArray
 import tqdm
 import wandb
 import hydra
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import OmegaConf, DictConfig, ListConfig
 
 import utils
 import logstate
@@ -47,9 +47,10 @@ import serialize.serializer as serializer
 
 from train_jax import TrainState, MiniBatch, \
     init_tokenizer, init_aux_state, load_lm_data, init_model, init_optimizer, init_config, \
-    back_prop, update_aux_state
+    back_prop, update_aux_state, init_train_state
 from train_jax import loss_fn
 from utils import get_dtype, get_accuracy
+from test_hessian import SpectrumState
 
 
 def test_ckpt(
@@ -738,46 +739,18 @@ def train(config: DictConfig):
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def test(config: DictConfig) -> None:
     """A systematic testing on stochastic loss local landscape."""
-    # config.checkpoint.load = True
-    # config.checkpoint.load_path = "checkpoint/new_Adamw_B128_lr1e-3"
-    # config.checkpoint.load_file = "iter_1000.ckpt"
+    # For test purpose only, fix some configurations.
+    # Pre-loading presets.
     test_config = config.test
+    config.checkpoint.overwrite_config = False
     config = init_config(config)
+    # Post-loading changes.
     config.test = test_config
     config.logging.wandb_project = "local_landscape"
-    # config.logging.wandb_project = None
+    config.train.use_amp = False
     logging.info(OmegaConf.to_yaml(config))
 
-    # Fix random seeds.
-    seed = config.random_seed
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-    # Initialize dataloader and train_state.
-    tokenizer = init_tokenizer(config)
-    train_loader = load_lm_data(config, tokenizer)
-    key = jr.PRNGKey(config.random_seed)
-    model_key, train_key = jr.split(key, 2)
-    model = init_model(len(tokenizer), config.model, key=model_key)
-    limited_log = RateLimitedWandbLog(config.logging.wandb_logs_per_sec)
-    optimizer, opt_state = init_optimizer(model, config, logger=limited_log)
-    train_state = TrainState(
-        model=model,
-        opt_state=opt_state,
-        dynamic_scaler_state=DynamicScalerState() if config.train.use_amp else None,
-        iteration=jnp.array(0),
-        train_key=train_key,
-        aux_state=init_aux_state(config.logging, model, opt_state)
-    )
-    train_state = load_checkpoint(train_state, config)
-
-    # [Optional] uncomment to turn off AMP (this must be after loading the checkpoint)
-    config.train.use_amp = False
-
-    # Initialize Wandb logging.
-    wandb.init(project=config.logging.wandb_project)
-    wandb.config.update(OmegaConf.to_container(config))
+    train_state, optimizer, train_loader, tokenizer, limited_log = init_train_state(config)
 
     # Testing variables.
     num_batches = config.dataset.total_batch_size // config.dataset.batch_size
@@ -786,19 +759,38 @@ def test(config: DictConfig) -> None:
 
     updates_type = config.test.local_landscape.updates
     updates = train_state.aux_state.params_diff             # default update
-    if updates_type == "current_update":
+    if updates_type == "current_update":                    # optimizer update
         pass
-    elif updates_type == "noise":
+    elif updates_type == "noise":                           # random noise
         key = jr.PRNGKey(config.random_seed)
         norm = utils.tree_norm(updates)
         updates = utils.random_unit_vector(updates, key=key)
         updates = utils.tree_scalar_multiply(updates, norm / utils.tree_norm(updates))
+    elif isinstance(updates_type, ListConfig):              # eigenvector
+        updates_type, path = updates_type
+        if not os.path.exists(path):
+            raise ValueError(f"updates '{path}' does not exist.")
+        spectrum_state = SpectrumState(
+            max_eigenvalue=jnp.zeros([]), 
+            max_eigenvector=updates,
+            min_eigenvalue=jnp.zeros([]),
+            min_eigenvector=updates,
+        )
+        spectrum_state = serializer.load(path, spectrum_state)
+        if updates_type == "max_eigenvector":
+            updates = spectrum_state.max_eigenvector
+        elif updates_type == "min_eigenvector":
+            updates = spectrum_state.min_eigenvector
     else:
         raise ValueError(f"updates '{updates_type}' is unknown.")
 
     if config.test.local_landscape.normalize_updates:
         updates = utils.tree_normalize(updates)
 
+    # Initialize Wandb logging.
+    if config.logging.wandb_project:
+        wandb.init(project=config.logging.wandb_project)
+        wandb.config.update(OmegaConf.to_container(config))
 
     test_1d_landscape(
         train_state,
