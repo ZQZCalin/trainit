@@ -91,6 +91,8 @@ def load_lm_data(config: DictConfig, tokenizer: Any, split: str = "train"):
         if loadit_path is None:
             loadit_path = "/projectnb/aclab/tranhp/trainDataloader_pile/"
         loader = LoadIt(loadit_path)
+        # TODO: either specify max_samples in config, or set length to full dataset length.
+        # current implementation is vulnerable to batch size change 
         if config.shuffle_buffer_size > 0:
             length = max_steps * config.total_batch_size
             loader = chunk_shuffle(loader, chunk_size=config.shuffle_buffer_size, length=length, seed=seed)
@@ -637,23 +639,25 @@ def train_loop(
     logger: RateLimitedWandbLog,
 ) -> TrainState:
     # [CHECKPOINT]: Handling restarting from checkpoints.
-    do_save_checkpoint = config.checkpoint.save
-    checkpoint_path = config.checkpoint.save_path
+    # do_save_checkpoint = config.checkpoint.save
+    # checkpoint_path = config.checkpoint.save_path
+    # num_steps = config.train.max_steps
+    # if do_save_checkpoint:
+    #     if checkpoint_path is None:
+    #         raise ValueError("checkpoint.save_path cannot be empty.")
+    #     # checkpoint_path = os.path.join(os.getcwd(), "saved_checkpoints", checkpoint_path)
+    #     if not os.path.exists(checkpoint_path):
+    #         raise ValueError(f"checkpoint path {checkpoint_path} does not exist.")
+    #     if config.checkpoint.num_steps is not None:
+    #         num_steps = config.checkpoint.num_steps
     num_steps = config.train.max_steps
-    if do_save_checkpoint:
-        if checkpoint_path is None:
-            raise ValueError("checkpoint.save_path cannot be empty.")
-        # checkpoint_path = os.path.join(os.getcwd(), "saved_checkpoints", checkpoint_path)
-        if not os.path.exists(checkpoint_path):
-            raise ValueError(f"checkpoint path {checkpoint_path} does not exist.")
-        if config.checkpoint.num_steps is not None:
-            num_steps = config.checkpoint.num_steps
+    if config.checkpoint.save and config.checkpoint.num_steps:
+        num_steps = config.checkpoint.num_steps
 
+    # TODO: consider adding a batch index in train_state, instead of hardcoding batch index like this
     num_batches = config.dataset.total_batch_size // config.dataset.batch_size   # number of mini-batches per iter
     start_steps = train_state.iteration                 # 0 if not loading from checkpoint
     end_steps = start_steps + num_steps
-    # dataloader = dataloader[start_steps:end_steps]      # get the subset for this checkpoint
-    # pbar = tqdm.tqdm(enumerate(dataloader), total=num_steps)  #NOTE
     dataloader_idx = range(start_steps*num_batches, end_steps*num_batches, num_batches)
     pbar = tqdm.tqdm(enumerate(dataloader_idx), total=num_steps)
 
@@ -885,6 +889,8 @@ def init_config(config: DictConfig) -> DictConfig:
                 config = OmegaConf.load(config_path)            # loads config from loaded checkpoint
                 config.checkpoint = checkpoint_config           # overwrites config.checkpoint with the current config
                 logging.info(f"Successfully loaded checkpoint config from '{config_path}'.")
+            else:
+                warnings.warn("Please be aware that current config overwrites loaded config.")
         return config
 
     def init_config_save_ckpt(config):
