@@ -943,6 +943,10 @@ def main(config: DictConfig) -> None:
 
     time_keeper = TimeKeeper()
 
+    if config.logging.wandb_project is not None:
+        wandb.init(project=config.logging.wandb_project, name=config.logging.wandb_name)
+        wandb.config.update(OmegaConf.to_container(config))
+
     train_loop(
         train_state,
         optimizer,
