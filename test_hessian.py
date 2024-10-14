@@ -159,7 +159,8 @@ def coupled_power_iteration(
                 metrics,
                 step=it,
             )
-    if similarity > 0:                              # positive max-eigenvalue
+    is_max_eigen = similarity > 0
+    if is_max_eigen:                                # positive max-eigenvalue
         spectrum_state = spectrum_state._replace(
             max_eigenvalue=lam,
             max_eigenvector=v,
@@ -201,15 +202,15 @@ def coupled_power_iteration(
                 metrics,
                 step=it,
             )
-    if similarity > 0:                              # positive max-eigen
-        spectrum_state = spectrum_state._replace(
-            max_eigenvalue=lam,
-            max_eigenvector=v,
-        )
-    else:
+    if is_max_eigen:
         spectrum_state = spectrum_state._replace(
             min_eigenvalue=lam,
             min_eigenvector=v,
+        )
+    else:
+        spectrum_state = spectrum_state._replace(
+            max_eigenvalue=lam,
+            max_eigenvector=v,
         )
     wandb.finish()
 
@@ -251,43 +252,44 @@ def main(config: DictConfig) -> None:
     batches = get_batches(train_loader, idx, num_batches, config.dataset.shift_labels)
 
     # Temporary tests
-    updates = train_state.aux_state.params_diff
-    spectrum_state = SpectrumState(
-        max_eigenvalue=jnp.zeros([]), 
-        max_eigenvector=updates,
-        min_eigenvalue=jnp.zeros([]),
-        min_eigenvector=updates,
-    )
-    path = "checkpoint/hessian_spectrum/adam_benchmark/iter_100.ckpt"
-    spectrum_state = serializer.load(path, spectrum_state)
+    test_mode = False
+    if test_mode:
+        updates = train_state.aux_state.params_diff
+        spectrum_state = SpectrumState(
+            max_eigenvalue=jnp.zeros([]), 
+            max_eigenvector=updates,
+            min_eigenvalue=jnp.zeros([]),
+            min_eigenvector=updates,
+        )
+        path = "checkpoint/hessian_spectrum/adam_benchmark/iter_0.ckpt"
+        spectrum_state = serializer.load(path, spectrum_state)
 
-    def hessian(train_state, x, v, a, b):
-        """Computes Jacobian vector product of (bI+aH)*v where H is hessian at x.
-        Defaults to a=1 and b=0 (i.e., the actual hessian). Set a=-1 and b=lambda_max for the other eigen-pair.
-        """
-        def grad_f(x):
-            _train_state = train_state._replace(model=eqx.combine(x, train_state.model))
-            _train_state, _, _, grads = back_prop(_train_state, batches, config)
-            res = jtu.tree_map(
-                lambda g, _x: a*g + b*_x, grads, x
-            )
-            return res, _train_state
-        _, v, train_state = jax.jvp(grad_f, (x,), (v,), has_aux=True)
-        return train_state, v
+        def hessian(train_state, x, v, a, b):
+            """Computes Jacobian vector product of (bI+aH)*v where H is hessian at x.
+            Defaults to a=1 and b=0 (i.e., the actual hessian). Set a=-1 and b=lambda_max for the other eigen-pair.
+            """
+            def grad_f(x):
+                _train_state = train_state._replace(model=eqx.combine(x, train_state.model))
+                _train_state, _, _, grads = back_prop(_train_state, batches, config)
+                res = jtu.tree_map(
+                    lambda g, _x: a*g + b*_x, grads, x
+                )
+                return res, _train_state
+            _, v, train_state = jax.jvp(grad_f, (x,), (v,), has_aux=True)
+            return train_state, v
 
-    x = eqx.filter(train_state.model, eqx.is_array)
-    v = spectrum_state.min_eigenvector
-    _, v_next = hessian(train_state, x, v, a=1, b=0)
-    print(f"max eigenvalue: {spectrum_state.max_eigenvalue}; min: {spectrum_state.min_eigenvalue}")
-    print(f"max norm: {utils.tree_norm(spectrum_state.max_eigenvector)}; min norm: {utils.tree_norm(spectrum_state.min_eigenvector)}")
-    print(utils.tree_norm(v_next), utils.tree_cosine_similarity(v, v_next))
+        x = eqx.filter(train_state.model, eqx.is_array)
+        v = spectrum_state.max_eigenvector
+        _, v_next = hessian(train_state, x, v, a=1, b=0)
+        print(f"max eigenvalue: {spectrum_state.max_eigenvalue}; min: {spectrum_state.min_eigenvalue}")
+        print(f"max norm: {utils.tree_norm(spectrum_state.max_eigenvector)}; min norm: {utils.tree_norm(spectrum_state.min_eigenvector)}")
+        print(utils.tree_norm(v_next), utils.tree_cosine_similarity(v, v_next))
 
-
-    raise KeyboardInterrupt()
+        raise KeyboardInterrupt()
 
     # Spectrum power iteration.
     spectrum_state = coupled_power_iteration(
-        train_state, batches=batches, config=config, logger=limited_log, iter=20
+        train_state, batches=batches, config=config, logger=limited_log, iter=50
     )
     path = config.test.hessian.save_path
     if not path:
