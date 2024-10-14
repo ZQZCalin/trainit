@@ -11,3 +11,6 @@ test:
     normalize_updates: false
     # batches:
     #   - curent
+
+  hessian:
+    save_path: null
