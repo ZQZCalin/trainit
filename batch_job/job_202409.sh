@@ -249,3 +249,8 @@ source activate_env.sh
 #     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200 optimizer.lr_config.lr=1e-3 \
 #     experimental.use_interpolate_o2nc=True \
 #     checkpoint.save=True checkpoint.save_path=checkpoint/Adamw_RS_B128_lr1e-3 checkpoint.save_steps="[20,100,500,1000,2000]"
+
+# python train_jax.py logging.wandb_project=greedy_lr_tuning logging.wandb_name=baseline \
+#     train.max_steps=2000 dataset.total_batch_size=128 \
+#     optimizer/lr_config=linear optimizer.lr_config.lr=1e-3 \
+#     optimizer.lr_config.max_steps=2000 optimizer.lr_config.warmup=200
