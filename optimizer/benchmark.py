@@ -36,6 +36,7 @@ def adamw(
     weight_decay: ScalarOrPytree = 0.0,
     debias_beta1: bool = True,
     debias_beta2: bool = True,
+    use_preconditioning: bool = True,
 ) -> GradientTransformation:
     """AdamW for benchmark.
 
@@ -47,6 +48,8 @@ def adamw(
         weight_decay (float): _description_. Defaults to 0.0.
         debias_beta1 (bool): Defaults to True.
         debias_beta2 (bool): Defaults to True.
+        use_preconditioning (bool): Defaults to True. If false, use \hat m_t as the update (without dividing by v_t).
+            However, v_t will still be computed based on beta2 and stored in the opt_state.
 
     Returns:
         A `GradientTransformation` object.
@@ -70,6 +73,7 @@ def adamw(
             lambda m, g: beta1*m + (1-beta1)*g, state.mu, updates)
         nu = jtu.tree_map(
             lambda v, g: beta2*v + (1-beta2)*g**2, state.nu, updates)
+        
         # Debias to get the true weighted average.
         if debias_beta1:
             mu_hat = utils.tree_scalar_multiply(mu, 1/(1-beta1**count_inc))
@@ -79,19 +83,33 @@ def adamw(
             nu_hat = utils.tree_scalar_multiply(nu, 1/(1-beta2**count_inc))
         else:
             nu_hat = nu
+
         # Unpack learning rate schedule.
         eta = scheduler.get_current_lr(learning_rate, state.count)
+
         # Compute one-step update: -eta * [mu / (eps+sqrt(nu)) + lam * params]
         if not use_pytree_wd:
-            new_updates = jtu.tree_map(
-                lambda m, v, p: -eta * (m/(eps+jnp.sqrt(v)) + weight_decay*p),
-                mu_hat, nu_hat, params
-            )
+            if use_preconditioning:
+                new_updates = jtu.tree_map(
+                    lambda m, v, p: -eta * (m/(eps+jnp.sqrt(v)) + weight_decay*p),
+                    mu_hat, nu_hat, params
+                )
+            else:
+                new_updates = jtu.tree_map(
+                    lambda m, v, p: -eta * (m + weight_decay*p),
+                    mu_hat, nu_hat, params
+                )
         else:
-            new_updates = jtu.tree_map(
-                lambda m, v, p, wd: -eta * (m/(eps+jnp.sqrt(v)) + wd*p),
-                mu_hat, nu_hat, params, weight_decay
-            )
+            if use_preconditioning:
+                new_updates = jtu.tree_map(
+                    lambda m, v, p, wd: -eta * (m/(eps+jnp.sqrt(v)) + wd*p),
+                    mu_hat, nu_hat, params, weight_decay
+                )
+            else:
+                new_updates = jtu.tree_map(
+                    lambda m, v, p, wd: -eta * (m + wd*p),
+                    mu_hat, nu_hat, params, weight_decay
+                )
         return new_updates, AdamWState(
             count=count_inc, mu=mu, nu=nu)
     
