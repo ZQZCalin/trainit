@@ -1,8 +1,7 @@
 name: sgdm
+defaults: 
+  - lr_config: linear
 lr_config:
   lr: 1.0
-  schedule: linear
-  warmup: 5000
-  max_steps: 50000
 beta: 0.9
 weight_decay: 1e-6

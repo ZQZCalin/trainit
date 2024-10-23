@@ -276,6 +276,7 @@ def init_optimizer(
             weight_decay=config.weight_decay,
             debias_beta1=config.debias_beta1,
             debias_beta2=config.debias_beta2,
+            use_momentum=config.use_momentum,
             use_preconditioning=config.use_preconditioning,
         )
 
@@ -368,6 +369,9 @@ def init_aux_state(config: DictConfig, model: eqx.Module, opt_state: optax.OptSt
         "grads/l1-norm": jnp.zeros([]),
         "update/<gn, Delta(n)>": jnp.zeros([]),
         "update/<gn, Delta(n)>_sum": jnp.zeros([]),
+        "update/<g(n-1), Delta(n)>": jnp.zeros([]),
+        "update/<g(n-1), Delta(n)>_sum": jnp.zeros([]),
+        "update/cos(g(n-1), Delta(n))": jnp.zeros([]),
         "update/wn*<gn, Delta(n)>": jnp.zeros([]),
         "update/wn*<gn, Delta(n)>_sum": jnp.zeros([]),
         "update/fn-f(n-1)": jnp.zeros([]),
@@ -444,6 +448,13 @@ def update_aux_state(
                 "update/<gn, Delta(n)>_sum": loggings["update/<gn, Delta(n)>_sum"]+inner_g_Delta,
                 "update/wn*<gn, Delta(n)>": inner_g_wDelta,
                 "update/wn*<gn, Delta(n)>_sum": loggings["update/wn*<gn, Delta(n)>_sum"]+inner_g_wDelta,
+            })
+        if config.store_last_params and config.store_last_grads:
+            inner_g_last_Delta = utils.tree_inner_product(state.last_grads, state.params_diff)
+            loggings.update({
+                "update/<g(n-1), Delta(n)>": inner_g_last_Delta,
+                "update/<g(n-1), Delta(n)>_sum": loggings["update/<g(n-1), Delta(n)>_sum"]+inner_g_last_Delta,
+                "update/cos(g(n-1), Delta(n))": utils.tree_cosine_similarity(state.last_grads, state.params_diff),
             })
         if config.store_last_params and config.compute_last_loss:
             last_model = eqx.apply_updates(

@@ -6,7 +6,7 @@ test:
   local_landscape:
     increment: 0.05
     radius: 10
-    updates: noise
+    updates: current_update
     # if true, normalize the updates vector
     normalize_updates: false
     # batches:

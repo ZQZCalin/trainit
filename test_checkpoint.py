@@ -808,9 +808,9 @@ def main(config: DictConfig) -> None:
     # Local changes to config.
     config.logging.wandb_project = "local_landscape"
     # config.logging.wandb_project = None
-    config.checkpoint.load = True
-    config.checkpoint.load_path = "checkpoint/new_Adamw_B128_lr1e-3"
-    config.checkpoint.load_file = "iter_1000.ckpt"
+    # config.checkpoint.load = True
+    # config.checkpoint.load_path = "checkpoint/new_Adamw_B128_lr1e-3"
+    # config.checkpoint.load_file = "iter_1000.ckpt"
 
     # logging.info(OmegaConf.to_yaml(config))
     train(config)
