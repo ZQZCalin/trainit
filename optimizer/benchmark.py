@@ -26,6 +26,7 @@ class AdamWState(NamedTuple):
     count: chex.Array
     mu: Updates
     nu: Updates
+    logging: logstate.Log
 
 
 def adamw(
@@ -66,10 +67,16 @@ def adamw(
         # Checks weight_decay structure during initialization.
         if use_pytree_wd and jtu.tree_structure(weight_decay)!=jtu.tree_structure(params):
             raise ValueError("structure of weight_decay must match model structure.")
+        logging = {
+            "optimizer/cos(g,m)": jnp.zeros([]),
+            "optimizer/cos(g,m/sqrt(v))": jnp.zeros([]),
+            "optimizer/cos(g,g/sqrt(v))": jnp.zeros([]),
+        }
         return AdamWState(
             count=jnp.zeros([], jnp.int32),
             mu=jtu.tree_map(jnp.zeros_like, params),
-            nu=jtu.tree_map(jnp.zeros_like, params)
+            nu=jtu.tree_map(jnp.zeros_like, params),
+            logging=logstate.Log(logging),
         )
     
     def update_fn(updates, state, params):
@@ -111,8 +118,19 @@ def adamw(
             lambda m, v, r: -(eta * m / (eps+jnp.sqrt(v)) + r),
             mu_hat, nu_hat, regularization 
         )
+
+        # Additional logs.
+        mu_hat = utils.tree_scalar_multiply(mu, 1/(1-beta1**count_inc))
+        nu_hat = utils.tree_scalar_multiply(nu, 1/(1-beta2**count_inc))
+        precond_mu = jtu.tree_map(lambda m, v: m / (eps+jnp.sqrt(v)), mu_hat, nu_hat)
+        precond_g = jtu.tree_map(lambda g, v: g / (eps+jnp.sqrt(v)), updates, nu_hat)
+        logging = {
+            "optimizer/cos(g,m)": utils.tree_cosine_similarity(updates, mu),
+            "optimizer/cos(g,m/sqrt(v))": utils.tree_cosine_similarity(updates, precond_mu),
+            "optimizer/cos(g,g/sqrt(v))": utils.tree_cosine_similarity(updates, precond_g),
+        }
         return new_updates, AdamWState(
-            count=count_inc, mu=mu, nu=nu)
+            count=count_inc, mu=mu, nu=nu, logging=logstate.Log(logging))
     
     return GradientTransformation(init_fn, update_fn)
 

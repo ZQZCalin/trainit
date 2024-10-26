@@ -278,6 +278,7 @@ def init_optimizer(
             debias_beta2=config.debias_beta2,
             use_momentum=config.use_momentum,
             use_preconditioning=config.use_preconditioning,
+            decouple_weight_decay=config.decouple_weight_decay,
         )
 
     def init_sgdm(config: DictConfig, **kwargs):

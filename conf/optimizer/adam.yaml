@@ -8,3 +8,4 @@ debias_beta1: True
 debias_beta2: True
 use_momentum: True
 use_preconditioning: True
+decouple_weight_decay: False
