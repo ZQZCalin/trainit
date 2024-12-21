@@ -5,7 +5,6 @@ from jax import numpy as jnp
 from jax import random as jr
 from jax import tree_util as jtu
 import optax
-from optax import Updates, Params, OptState, ScalarOrSchedule, GradientTransformation
 import chex
 import jaxtyping
 from typing import Any, Tuple, NamedTuple, Optional, Callable
@@ -148,13 +147,13 @@ SampleFunction = Callable[[chex.Array], chex.Numeric]
 
 class DeterministicOnlineNonconvexState(NamedTuple):
     """deterministic_online_nonconvex state."""
-    params: Updates 
-    state:  OptState
+    params: optax.Updates 
+    state:  optax.OptState
 
 
 def deterministic_online_nonconvex(
     online_learner: OnlineLearner
-) -> GradientTransformation:
+) -> optax.GradientTransformation:
     """Wraps an OnlineLearner object into a GradientTransformation object.
 
     Stores the online learner parameters, which is different from the model parameter. 
@@ -179,7 +178,7 @@ def deterministic_online_nonconvex(
         new_params, state = online_learner.update(updates, state.state, state.params)
         return new_params, DeterministicOnlineNonconvexState(params=new_params, state=state)
 
-    return GradientTransformation(init_fn, update_fn)
+    return optax.GradientTransformation(init_fn, update_fn)
 
 
 RandomScalingFn = Callable[[jaxtyping.PRNGKeyArray], chex.Numeric]
@@ -209,18 +208,18 @@ def get_random_scaling(
 
 class WrapRandomScalingState(NamedTuple):
     """wrap_random_scaling state."""
-    opt_state:  OptState
+    opt_state:  optax.OptState
     weight:     jax.Array
     key:        jax.Array
     logging:    logstate.Log
 
 
 def wrap_random_scaling(
-    gradient_transformation:    GradientTransformation,
+    gradient_transformation:    optax.GradientTransformation,
     random_scaling:             Optional[str] = None,
     use_importance_sampling:    bool = True,
     seed:                       int = 0,
-) -> GradientTransformation:
+) -> optax.GradientTransformation:
     
     random_scaling_fn, importance_sampling_fn = get_random_scaling(random_scaling)
     if not use_importance_sampling:
@@ -263,4 +262,4 @@ def wrap_random_scaling(
             logging=logstate.Log(logging),
         )
     
-    return GradientTransformation(init_fn, update_fn)
+    return optax.GradientTransformation(init_fn, update_fn)

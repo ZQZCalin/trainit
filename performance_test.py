@@ -8,10 +8,10 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import equinox as eqx
-from model.mingpt import GPT
-from model.extend_nn import Linear, LayerNorm
+from models.mingpt import GPT
+from models.extend_nn import Linear, LayerNorm
 from types import SimpleNamespace
-from model.utils import parse_state_dict
+from models.utils import parse_state_dict
 import re
 from typing import Any, Tuple
 from jaxtyping import Array

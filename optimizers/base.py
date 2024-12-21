@@ -1,4 +1,4 @@
-"""Benchmark optimizers."""
+"""Base optimizers."""
 
 import jax
 from jax import numpy as jnp
@@ -9,8 +9,6 @@ import optax
 from optax import Updates, Params, OptState, ScalarOrSchedule, GradientTransformation
 from typing import Any, Tuple, NamedTuple, Optional, Callable, Union
 from online_learners import OnlineLearner, unconstrained_ogd
-import sys
-sys.path.append('../trainit')
 import utils
 from logger import RateLimitedWandbLog
 import logstate

@@ -13,7 +13,7 @@ sys.path.append('../trainit')
 import utils
 import scheduler
 import logstate
-import benchmark
+import optimizers.base as base
 
 
 class PolarDescentState(NamedTuple):

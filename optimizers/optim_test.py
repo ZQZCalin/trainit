@@ -10,11 +10,11 @@ import sys
 sys.path.append('../trainit')
 import utils
 import online_learners as ol
-from o2nc import online_nonconvex
-import benchmark
+from optimizers.online_nonconvex import online_nonconvex
+import optimizers.base as base
 import scheduler
 import optim
-from model.mingpt import GPT
+from models.mingpt import GPT
 
 
 def test_optimizer(
@@ -42,7 +42,7 @@ def test_optimizer(
 def test_sgdm():
     learning_rate = optax.linear_schedule(0.1, 0.01, 10000)
 
-    optimizer = benchmark.sgdm(learning_rate, beta=1.0, weight_decay=0.0)
+    optimizer = base.sgdm(learning_rate, beta=1.0, weight_decay=0.0)
     
     grad_clip = optax.clip_by_global_norm(10.0)
     optimizer = optax.chain(
@@ -55,11 +55,11 @@ def test_sgdm():
 
 def test_jump():
     normal_lr = scheduler.warmup_linear_decay_schedule(0.0, 3e-4, 450, 4500)
-    normal_optim = benchmark.adamw(
+    normal_optim = base.adamw(
         normal_lr, 0.9, 0.999, 1e-8, 0.0
     )
     jump_lr = scheduler.warmup_linear_decay_schedule(0.0, 1e-6, 50, 500)
-    jump_optim = benchmark.adamw(
+    jump_optim = base.adamw(
         jump_lr, 0.9, 0.999, 1e-8, 0.0
     )
     optimizer = optim.jump_trajectory(
@@ -75,11 +75,11 @@ def test_jump():
 
 def test_jump():
     normal_lr = scheduler.warmup_linear_decay_schedule(0.0, 3e-4, 450, 4500)
-    normal_optim = benchmark.adamw(
+    normal_optim = base.adamw(
         normal_lr, 0.9, 0.999, 1e-8, 0.0
     )
     jump_lr = scheduler.warmup_linear_decay_schedule(0.0, 1e-6, 50, 500)
-    jump_optim = benchmark.adamw(
+    jump_optim = base.adamw(
         jump_lr, 0.9, 0.999, 1e-8, 0.0
     )
     optimizer = optim.jump_trajectory(
@@ -100,7 +100,7 @@ def test_adam_wd():
         'c': {'d': jnp.array(5.)}  # Nested dictionary with an array
     }
     grads = jtu.tree_map(jnp.ones_like, params)
-    adam = benchmark.adamw(
+    adam = base.adamw(
         learning_rate=0.01, weight_decay=params
     )
     opt_state = adam.init(params)
@@ -114,7 +114,7 @@ def test_sgdm_wd():
         'c': {'d': jnp.array(5.)}  # Nested dictionary with an array
     }
     grads = jtu.tree_map(jnp.ones_like, params)
-    sgdm = benchmark.sgdm(
+    sgdm = base.sgdm(
         learning_rate=0.01, weight_decay=params
     )
     opt_state = sgdm.init(params)

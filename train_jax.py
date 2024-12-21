@@ -31,17 +31,17 @@ import utils
 from utils import softmax_cross_entropy, tree_norm, get_accuracy, get_dtype
 import logstate
 from logger import TimeKeeper, RateLimitedWandbLog
-from model.mingpt import GPT
+from models.mingpt import GPT
 from loader.lm_loader import get_lm_loader_next_token, shift_labels
 from loadit import LoadIt, chunk_shuffle
 
 import os, sys
 sys.path.append('./optimizer')
-from optimizer.o2nc import deterministic_online_nonconvex, wrap_random_scaling
-import optimizer.online_learners as ol
-import optimizer.benchmark as benchmark
-import optimizer.scheduler as scheduler
-import optimizer.optim as optim
+from optimizers.online_nonconvex import deterministic_online_nonconvex, wrap_random_scaling
+import optimizers.online_learners as ol
+import optimizers.base as base
+import optimizers.scheduler as scheduler
+import optimizers.optim as optim
 
 sys.path.append('./minGPT')
 from mingpt.model import GPT as torch_GPT
@@ -269,7 +269,7 @@ def init_optimizer(
         """use kwargs to pass down optional arguments (e.g., schedule_title)"""
         learning_rate = wrap_scheduler(
             init_scheduler(config.lr_config), logger=logger, **kwargs)
-        return benchmark.adamw(
+        return base.adamw(
             learning_rate=learning_rate,
             beta1=config.beta1,
             beta2=config.beta2,
@@ -284,7 +284,7 @@ def init_optimizer(
     def init_sgdm(config: DictConfig, **kwargs):
         learning_rate = wrap_scheduler(
             init_scheduler(config.lr_config), logger=logger, **kwargs)
-        return benchmark.sgdm(
+        return base.sgdm(
             learning_rate=learning_rate,
             beta=config.beta,
             weight_decay=config.weight_decay

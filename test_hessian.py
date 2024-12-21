@@ -27,17 +27,17 @@ from omegaconf import OmegaConf, DictConfig
 import utils
 import logstate
 from logger import TimeKeeper, RateLimitedWandbLog
-from model.mingpt import GPT
+from models.mingpt import GPT
 from loader.lm_loader import get_lm_loader_next_token, shift_labels
 from loadit import LoadIt, chunk_shuffle
 
 import os, sys
 sys.path.append('./optimizer')
-from optimizer.o2nc import deterministic_online_nonconvex, wrap_random_scaling
-import optimizer.online_learners as ol
-import optimizer.benchmark as benchmark
-import optimizer.scheduler as scheduler
-import optimizer.optim as optim
+from optimizers.online_nonconvex import deterministic_online_nonconvex, wrap_random_scaling
+import optimizers.online_learners as ol
+import optimizers.base as base
+import optimizers.scheduler as scheduler
+import optimizers.optim as optim
 
 import random
 import numpy as np
