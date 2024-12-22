@@ -36,7 +36,7 @@ from typing import NamedTuple
 import sys
 sys.path.append('./minGPT')
 from mingpt.model import GPT as minGPT
-from loader.lm_loader import get_lm_loader_next_token
+from datasets.lm_loader import get_lm_loader_next_token
 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.

@@ -6,36 +6,54 @@ import equinox as eqx
 from omegaconf import DictConfig
 from typing import Any, Tuple
 from jaxtyping import PRNGKeyArray
+import jax.random as jr
 
 
-def init_tokenizer(config: DictConfig, pad_token: bool = True):
-    """Initializes tokenizer. If `pad_token` is true, adds pad_token as a special token. Defaults to true."""
-    model_name = config.model.name
-    if model_name == "gpt":
+def init_tokenizer(config: DictConfig):
+    """Initializes tokenizer. 
+    
+    Args:
+        config: global_config.model. 
+            if config.pad_token is true, adds pad_token as a special token.
+    """
+    if config.name == "gpt":
         tokenizer = transformers.GPT2TokenizerFast.from_pretrained("gpt2")
-        if pad_token:
+        if config.pad_token:
             tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
     else:
-        raise ValueError(f"model {model_name} is not supported.")
+        raise ValueError(f"invalid config: model.name '{config.name}' is not supported.")
     return tokenizer
 
 
 def init_model(vocab_size: int, config: DictConfig, *, key: PRNGKeyArray) -> eqx.Module:
-    """Initializes model. config: global_config.model"""
-    if not config.load_pytorch:
+    """Initializes model. 
+    
+    Args:
+        config: global_config.model.
+    """
+    # NOTE: we disable loading torch gpt for simplicity.
+    if config.name == "gpt":
         model = models.GPT(vocab_size, config, key=key)
     else:
-        model_config = torch_GPT.get_default_config()
-        model_config.model_type = 'gpt2'
-        model_config.vocab_size = vocab_size                    # openai's model vocabulary
-        model_config.block_size = config.context_length         # openai's model block_size (i.e. input context length)
-        model_config.embd_pdrop = config.transformer_dropout
-        model_config.resid_pdrop = config.attn_linear_dropout
-        model_config.attn_pdrop = config.attn_dropout
-        torch_model = torch_GPT(model_config)
-        model = models.GPT(vocab_size, config, state_dict=torch_model.state_dict())
+        raise ValueError(f"invalid config: model.name '{config.name}' is not supported.")
     return model
 
 
-def init_tokenizer_and_model(config: DictConfig) -> Tuple[Any, eqx.Module]:
-    return 
+def init_model_and_tokenizer(config: DictConfig) -> Tuple[eqx.Module, Any]:
+    """Wraps init_tokenizer and init_model for language models.
+    
+    Args:
+        config: global_config.
+    """
+    if config.name == "gpt":
+        tokenizer = init_tokenizer(config.model)
+        vocab_size = len(tokenizer)
+        seed = config.model.seed
+        model = init_model(
+            vocab_size=vocab_size,
+            config=config.model,
+            key=jr.PRNGKey(seed),
+        )
+        return model, tokenizer
+    else:
+        raise ValueError(f"invalid config: model.name '{config.name}' is not supported.")

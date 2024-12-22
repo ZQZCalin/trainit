@@ -1,4 +1,7 @@
-"""Extends optax optimizers."""
+"""The optimizer subfolder.
+
+Extends/re-implements existing algorithms in optax.
+"""
 
 from optimizers.base import sgdm
 from optimizers.base import adamw

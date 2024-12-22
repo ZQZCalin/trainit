@@ -1,11 +1,8 @@
-# Train gpt2 model on c4 dataset.
+# The main training file.  
 # 
-# We will fix our model and dataset and test the 
-# performance of different optimizers on this task.
-# 
-# Updated v2.0: train_jax.py will be deprecated and no longer updated.
-# Please use main.py instead.
-# ===========================================================================
+# This file provides an example of integrating 
+# all components into a complete training pipeline.
+# ===================================================================
 
 
 import logging
@@ -45,9 +42,6 @@ import optimizers.online_learners as ol
 import optimizers.base as base
 import optimizers.schedule as schedule
 import optimizers.optim as optim
-
-sys.path.append('./minGPT')
-from mingpt.model import GPT as torch_GPT
 
 import random
 import numpy as np

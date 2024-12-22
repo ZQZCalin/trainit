@@ -22,9 +22,12 @@ dataloader_workers: 2
 
 # if true, will use the loadit dataset in {loadit_path}
 use_loadit: true
-loadit_path: null
+loadit_path: "/projectnb/aclab/tranhp/trainDataloader_pile/"
 
 # if true, will manually shift labels to the left by one 
 # and pad the last label by -100 during the training step.
 # this is needed when using loadit dataset
 shift_labels: false
+
+# random seed for loadit.chunck_shuffle
+seed: 42

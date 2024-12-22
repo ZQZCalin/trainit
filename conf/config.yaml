@@ -8,4 +8,6 @@ defaults:
   - experimental
   - test
 
+# NOTE: since v2.0, the global random_seed is deprecated 
+# and is replaced by specific seeds in each section.
 random_seed: 42   # this controls the entire randomness during training

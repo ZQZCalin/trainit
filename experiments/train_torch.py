@@ -35,7 +35,7 @@ from omegaconf import OmegaConf, DictConfig
 from argparse import Namespace
 from typing import Any, NamedTuple
 
-from loader.lm_loader import get_lm_loader_next_token
+from datasets.lm_loader import get_lm_loader_next_token
 
 import os, sys
 sys.path.append('./minGPT')

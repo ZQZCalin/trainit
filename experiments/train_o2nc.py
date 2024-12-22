@@ -30,7 +30,7 @@ import utils
 import logstate
 from logger import TimeKeeper, RateLimitedWandbLog
 from models.mingpt import GPT
-from loader.lm_loader import get_lm_loader_next_token, shift_labels
+from datasets.lm_loader import get_lm_loader_next_token, shift_labels
 from loadit import LoadIt, chunk_shuffle
 
 import os, sys

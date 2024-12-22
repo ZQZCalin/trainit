@@ -1,3 +1,10 @@
+"""Dataloader of LLM datasets.
+
+Currently includes
+    - the c4 dataset
+    - the pile dataset
+"""
+
 from datasets import load_dataset, disable_caching
 from transformers import DataCollatorForLanguageModeling
 from torch.utils.data import DataLoader

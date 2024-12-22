@@ -9,7 +9,7 @@ from omegaconf import DictConfig
 from typing import Tuple
 
 
-def init_scheduler(lr_config: DictConfig, **kwargs) -> optax.ScalarOrSchedule:
+def init_schedule(lr_config: DictConfig, **kwargs) -> optax.ScalarOrSchedule:
     """Parses the config and initializes a learning rate scheduler.
 
     Args:
@@ -110,7 +110,7 @@ def init_optimizer(
     """
     def init_adamw(config: DictConfig):
         learning_rate = wrap_scheduler(
-            init_scheduler(config.lr_config), logger=logger)
+            init_schedule(config.lr_config), logger=logger)
         return optimizers.adamw(
             learning_rate=learning_rate,
             beta1=config.beta1,
@@ -125,7 +125,7 @@ def init_optimizer(
 
     def init_sgdm(config: DictConfig):
         learning_rate = wrap_scheduler(
-            init_scheduler(config.lr_config), logger=logger)
+            init_schedule(config.lr_config), logger=logger)
         return optimizers.sgdm(
             learning_rate=learning_rate,
             beta=config.beta,
