@@ -12,7 +12,7 @@ import sys
 sys.path.append('../jaxoptimizers')
 import utils
 import logstate
-import scheduler
+import optimizers.schedule as schedule
 
 
 def test_scheduler():

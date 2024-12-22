@@ -14,7 +14,7 @@ import utils
 from utils import tree_add, tree_subtract, tree_multiply, tree_scalar_multiply, tree_dot, tree_norm, tree_normalize, check_tree_structures_match
 from logger import RateLimitedWandbLog
 import logstate
-import scheduler
+import optimizers.schedule as schedule
 
 
 class OnlineLearnerInitFn(Protocol):
@@ -234,7 +234,7 @@ def ogd(
             lambda g, w: g + weight_decay*w, updates, params)
         # gradient descent
         count_inc = optax.safe_int32_increment(state.count)
-        eta = scheduler.get_current_lr(learning_rate, state.count)
+        eta = schedule.get_current_lr(learning_rate, state.count)
         new_params = jtu.tree_map(
             lambda w, g: w - eta*g, params, grads)
         return new_params, OGDState(count=count_inc)
@@ -271,7 +271,7 @@ def ogd_mirror_descent(
     
     def update_fn(updates, state, params):
         count_inc = optax.safe_int32_increment(state.count)
-        eta = scheduler.get_current_lr(learning_rate, state.count)
+        eta = schedule.get_current_lr(learning_rate, state.count)
         new_params = jtu.tree_map(
             lambda w, g: (w - eta*g) * beta/(1+eta*mu), params, updates)
         return new_params, OGDMirrorDescentState(count=count_inc)

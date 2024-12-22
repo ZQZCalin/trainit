@@ -1,5 +1,7 @@
 """Optimizer algorithms."""
 
+import jax
+import jax.tree_util as jtu
 import optax
 import optimizers
 import equinox as eqx
@@ -7,7 +9,93 @@ from omegaconf import DictConfig
 from typing import Tuple
 
 
+def init_scheduler(lr_config: DictConfig, **kwargs) -> optax.ScalarOrSchedule:
+    """Parses the config and initializes a learning rate scheduler.
 
+    Args:
+        lr_config: The learning rate config.
+        kargs: Additional arguments to overwrite learning rate config.
+
+    Returns:
+        A `optax.ScalarOrSchedule` object.
+    """
+    def init_constant_lr(config):
+        learning_rate = config.lr
+        return learning_rate
+    
+    def init_cosine_lr(config):
+        use_warmup = isinstance(config.warmup, int) and (config.warmup > 0)
+        if use_warmup:
+            learning_rate = optax.warmup_cosine_decay_schedule(
+                init_value=0.0,
+                peak_value=config.lr,
+                warmup_steps=config.warmup,
+                decay_steps=config.max_steps,
+            )
+        else:
+            learning_rate = optax.cosine_decay_schedule(
+                init_value=config.lr,
+                decay_steps=config.max_steps,
+            )
+        return learning_rate
+    
+    def init_linear_lr(config):
+        use_warmup = isinstance(config.warmup, int) and (config.warmup > 0)
+        if use_warmup:
+            learning_rate = optimizers.warmup_linear_decay_schedule(
+                init_value=0.0,
+                peak_value=config.lr,
+                warmup_steps=config.warmup,
+                decay_steps=config.max_steps,
+            )
+        else:
+            learning_rate = optax.linear_schedule(
+                init_value=config.lr,
+                end_value=0.0,
+                transition_steps=config.max_steps,
+            )
+        return learning_rate
+
+    def init_piecewise_linear_lr(config):
+        learning_rate = optax.linear_schedule(
+            init_value=config.lr1,
+            end_value=config.lr2,
+            transition_steps=config.max_steps,
+            transition_begin=config.start_steps,    # NOTE: for now, we still need to specify the start iteration in config.
+        )
+        return learning_rate
+
+    if lr_config.schedule == "constant":
+        learning_rate = init_constant_lr(lr_config)
+    elif lr_config.schedule == "cosine":
+        learning_rate = init_cosine_lr(lr_config)
+    elif lr_config.schedule == "linear":
+        learning_rate = init_linear_lr(lr_config)
+    elif lr_config.schedule == "piecewise_linear":
+        learning_rate = init_piecewise_linear_lr(lr_config)
+    else:
+        raise ValueError(f"schedule type {lr_config.schedule} is not supported.")
+    return learning_rate
+
+
+def wrap_scheduler(
+    learning_rate: optax.ScalarOrSchedule,
+    logger: None,
+    schedule_title: str="schedule",
+):
+    """Returns a wrapped scheduler that logs current learning rate.
+    
+    The wrapped schedule takes in `learning_rate` as argument and returns a scalar lr.
+    """
+    def wrapper(schedule, count, logger, title):
+        if callable(schedule):
+            lr = schedule(count)
+        else:
+            lr = schedule
+        if logger is not None:
+            jax.experimental.io_callback(logger, None, {f"lr/{title}": lr}, commit=False)
+        return lr
+    return jtu.Partial(wrapper, learning_rate, logger=logger, title=schedule_title)
 
 
 def init_optimizer(
@@ -20,14 +108,9 @@ def init_optimizer(
     Returns:
         Initial optimizer and opt_state.
     """
-    # Initialize base optimizer / online learner.
-    name = config.optimizer.name
-    max_steps = config.train.max_steps
-
-    def init_adamw(config: DictConfig, **kwargs):
-        """use kwargs to pass down optional arguments (e.g., schedule_title)"""
+    def init_adamw(config: DictConfig):
         learning_rate = wrap_scheduler(
-            init_scheduler(config.lr_config), logger=logger, **kwargs)
+            init_scheduler(config.lr_config), logger=logger)
         return optimizers.adamw(
             learning_rate=learning_rate,
             beta1=config.beta1,
@@ -40,22 +123,24 @@ def init_optimizer(
             decouple_weight_decay=config.decouple_weight_decay,
         )
 
-    def init_sgdm(config: DictConfig, **kwargs):
+    def init_sgdm(config: DictConfig):
         learning_rate = wrap_scheduler(
-            init_scheduler(config.lr_config), logger=logger, **kwargs)
+            init_scheduler(config.lr_config), logger=logger)
         return optimizers.sgdm(
             learning_rate=learning_rate,
             beta=config.beta,
             weight_decay=config.weight_decay
         )
 
+    # Initialize base optimizer.
+    name = config.optimizer.name
     opt_config = config.optimizer
     if name == "adamw":
         optimizer = init_adamw(config=opt_config)
     elif name == "sgdm":
         optimizer = init_sgdm(config=opt_config)
 
-    # Wrap online to non-convex.
+    # Wrap online-to-nonconvex.
     if name in ["ogd_md"]:
         wrap_o2nc = True
     elif name in ["adamw", "sgdm", "polar", "jump"]:

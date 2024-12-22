@@ -2,6 +2,9 @@
 # 
 # We will fix our model and dataset and test the 
 # performance of different optimizers on this task.
+# 
+# Updated v2.0: train_jax.py will be deprecated and no longer updated.
+# Please use main.py instead.
 # ===========================================================================
 
 
@@ -40,7 +43,7 @@ sys.path.append('./optimizer')
 from optimizers.online_nonconvex import deterministic_online_nonconvex, wrap_random_scaling
 import optimizers.online_learners as ol
 import optimizers.base as base
-import optimizers.scheduler as scheduler
+import optimizers.schedule as schedule
 import optimizers.optim as optim
 
 sys.path.append('./minGPT')
@@ -199,14 +202,14 @@ def init_scheduler(lr_config: DictConfig, **kwargs) -> optax.ScalarOrSchedule:
     def init_linear_lr(config):
         use_warmup = isinstance(config.warmup, int) and (config.warmup > 0)
         if use_warmup:
-            learning_rate = scheduler.warmup_linear_decay_schedule(
+            learning_rate = schedule.warmup_linear_decay_schedule(
                 init_value=0.0,
                 peak_value=config.lr,
                 warmup_steps=config.warmup,
                 decay_steps=config.max_steps,
             )
         else:
-            learning_rate = scheduler.linear_decay_schedule(
+            learning_rate = schedule.linear_decay_schedule(
                 init_value=config.lr,
                 decay_steps=config.max_steps,
             )

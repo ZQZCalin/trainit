@@ -12,7 +12,7 @@ import utils
 import online_learners as ol
 from optimizers.online_nonconvex import online_nonconvex
 import optimizers.base as base
-import scheduler
+import optimizers.schedule as schedule
 import optim
 from models.mingpt import GPT
 
@@ -54,11 +54,11 @@ def test_sgdm():
     
 
 def test_jump():
-    normal_lr = scheduler.warmup_linear_decay_schedule(0.0, 3e-4, 450, 4500)
+    normal_lr = schedule.warmup_linear_decay_schedule(0.0, 3e-4, 450, 4500)
     normal_optim = base.adamw(
         normal_lr, 0.9, 0.999, 1e-8, 0.0
     )
-    jump_lr = scheduler.warmup_linear_decay_schedule(0.0, 1e-6, 50, 500)
+    jump_lr = schedule.warmup_linear_decay_schedule(0.0, 1e-6, 50, 500)
     jump_optim = base.adamw(
         jump_lr, 0.9, 0.999, 1e-8, 0.0
     )
@@ -74,11 +74,11 @@ def test_jump():
 
 
 def test_jump():
-    normal_lr = scheduler.warmup_linear_decay_schedule(0.0, 3e-4, 450, 4500)
+    normal_lr = schedule.warmup_linear_decay_schedule(0.0, 3e-4, 450, 4500)
     normal_optim = base.adamw(
         normal_lr, 0.9, 0.999, 1e-8, 0.0
     )
-    jump_lr = scheduler.warmup_linear_decay_schedule(0.0, 1e-6, 50, 500)
+    jump_lr = schedule.warmup_linear_decay_schedule(0.0, 1e-6, 50, 500)
     jump_optim = base.adamw(
         jump_lr, 0.9, 0.999, 1e-8, 0.0
     )

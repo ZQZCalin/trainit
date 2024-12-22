@@ -1,5 +1,7 @@
 """
 Equinox implementation of GPT2 model based on the [mingpt repo](https://github.com/karpathy/minGPT/blob/master/mingpt/model.py).
+
+Note: this implementation supports loading parameters from pytorch models.
 """
 import jax
 from jax import named_scope

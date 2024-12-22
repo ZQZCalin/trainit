@@ -13,7 +13,7 @@ import utils
 from logger import RateLimitedWandbLog
 import logstate
 import online_learners as ol
-import scheduler
+import optimizers.schedule as schedule
 
 
 ScalarOrPytree = Union[float, Any]
@@ -101,7 +101,7 @@ def adamw(
             nu_hat = jtu.tree_map(jnp.ones_like, nu_hat)
 
         # Unpack learning rate schedule.
-        eta = scheduler.get_current_lr(learning_rate, state.count)
+        eta = schedule.get_current_lr(learning_rate, state.count)
 
         # Weight decay regularization.
         if not use_pytree_wd:
@@ -172,7 +172,7 @@ def sgdm(
         # TODO: which one to implement weight decay?
         # grads = jtu.tree_map(
         #     lambda g, x: g + mu*x, updates, params)
-        eta = scheduler.get_current_lr(learning_rate, state.count)
+        eta = schedule.get_current_lr(learning_rate, state.count)
         new_momentum = jtu.tree_map(
             lambda m, g: beta*m + (1-beta)*g, state.momentum, updates)
         if not use_pytree_wd:

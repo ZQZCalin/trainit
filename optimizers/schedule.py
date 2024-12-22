@@ -1,4 +1,4 @@
-"""Learning rate schedulers."""
+"""Learning rate schedulers that complements optax.schedule."""
 
 import jax
 from jax import numpy as jnp
@@ -75,10 +75,10 @@ def warmup_linear_decay_schedule(
             end_value=peak_value,
             transition_steps=warmup_steps,
         ),
-        linear_decay_schedule(
+        optax.linear_schedule(
             init_value=peak_value,
-            decay_steps=decay_steps-warmup_steps,
             end_value=end_value,
-        ),
+            transition_steps=decay_steps-warmup_steps,
+        )
     ]
     return optax.join_schedules(schedules, [warmup_steps])

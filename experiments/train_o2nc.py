@@ -38,7 +38,7 @@ sys.path.append('./optimizer')
 from optimizers.online_nonconvex import deterministic_online_nonconvex, wrap_random_scaling
 import optimizers.online_learners as ol
 import optimizers.base as base
-import optimizers.scheduler as scheduler
+import optimizers.schedule as schedule
 import optimizers.optim as optim
 
 import random

@@ -11,7 +11,7 @@ from typing import Any, Tuple, NamedTuple, Optional, Callable
 import sys
 sys.path.append('../trainit')
 import utils
-import scheduler
+import optimizers.schedule as schedule
 import logstate
 import optimizers.base as base
 
