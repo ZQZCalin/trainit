@@ -7,6 +7,7 @@ from jax import tree_util as jtu
 import optax
 import chex
 import jaxtyping
+from jaxtyping import PRNGKeyArray
 from typing import Any, Tuple, NamedTuple, Optional, Callable
 from online_learners import OnlineLearner
 import sys
@@ -218,7 +219,8 @@ def wrap_random_scaling(
     gradient_transformation:    optax.GradientTransformation,
     random_scaling:             Optional[str] = None,
     use_importance_sampling:    bool = True,
-    seed:                       int = 0,
+    *,
+    key: PRNGKeyArray,
 ) -> optax.GradientTransformation:
     
     random_scaling_fn, importance_sampling_fn = get_random_scaling(random_scaling)
@@ -236,7 +238,7 @@ def wrap_random_scaling(
         return WrapRandomScalingState(
             opt_state=gradient_transformation.init(params),
             weight=jnp.ones([]),
-            key=jr.PRNGKey(seed),
+            key=key,
             logging=logstate.Log(logging),
         )
     

@@ -63,7 +63,6 @@ def init_dataloader(config: DictConfig) -> base.DataLoader:
     Returns:
         A `base.DataLoader` object.
     """
-
     name = config.dataset.name
     if name == "c4" or name == "pile":
         loader = load_lm_data(
@@ -73,5 +72,4 @@ def init_dataloader(config: DictConfig) -> base.DataLoader:
         )
     else:
         raise ValueError(f"invalid config: dataset.name cannot be '{name}'")
-    
     return loader

@@ -6,10 +6,11 @@ import optax
 import optimizers
 import equinox as eqx
 from omegaconf import DictConfig
-from typing import Tuple
+from typing import Any, Tuple
+from jaxtyping import PRNGKeyArray
 
 
-def init_schedule(lr_config: DictConfig, **kwargs) -> optax.ScalarOrSchedule:
+def init_schedule(lr_config: DictConfig) -> optax.ScalarOrSchedule:
     """Parses the config and initializes a learning rate scheduler.
 
     Args:
@@ -19,13 +20,15 @@ def init_schedule(lr_config: DictConfig, **kwargs) -> optax.ScalarOrSchedule:
     Returns:
         A `optax.ScalarOrSchedule` object.
     """
+    def use_warmup(warmup: Any) -> bool:
+        return isinstance(warmup, int) and (warmup > 0)
+
     def init_constant_lr(config):
         learning_rate = config.lr
         return learning_rate
     
     def init_cosine_lr(config):
-        use_warmup = isinstance(config.warmup, int) and (config.warmup > 0)
-        if use_warmup:
+        if use_warmup(config.warmup):
             learning_rate = optax.warmup_cosine_decay_schedule(
                 init_value=0.0,
                 peak_value=config.lr,
@@ -40,8 +43,7 @@ def init_schedule(lr_config: DictConfig, **kwargs) -> optax.ScalarOrSchedule:
         return learning_rate
     
     def init_linear_lr(config):
-        use_warmup = isinstance(config.warmup, int) and (config.warmup > 0)
-        if use_warmup:
+        if use_warmup(config.warmup):
             learning_rate = optimizers.warmup_linear_decay_schedule(
                 init_value=0.0,
                 peak_value=config.lr,
@@ -102,6 +104,8 @@ def init_optimizer(
     model: eqx.Module,
     config: DictConfig,
     logger: None,
+    *,
+    key: PRNGKeyArray,
 ) -> Tuple[optax.GradientTransformation, optax.OptState]:
     """Construct optimizer from model and training config.
 
@@ -155,7 +159,8 @@ def init_optimizer(
         gradient_transformation=optimizer,
         random_scaling=config.train.random_scaling,
         use_importance_sampling=config.train.use_importance_sampling,
-        seed=config.train.random_scaling_seed   # TODO: deprecate. use PRNGKey passed from argument instead of random seed.
+        key=key,
+        # seed=config.train.random_scaling_seed   # TODO: deprecate. use PRNGKey passed from argument instead of random seed.
     )
     
     # Gradient clipping and finite gradient wrapper.
