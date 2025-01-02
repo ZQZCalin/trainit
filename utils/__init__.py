@@ -1,3 +1,3 @@
 """The util subfolder"""
 
-from utils import tree_utils
+import utils._tree as tree_utils

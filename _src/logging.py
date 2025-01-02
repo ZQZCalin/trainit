@@ -57,14 +57,14 @@ def standard_log() -> LogFn:
         cumulatives = state.cumulatives
 
         cumulatives["loss_min"] = jnp.minimum(cumulatives["loss_min"], loss_val)
-        cumulatives["grad/inner_sum"] += tree_utils.inner(grad, grad_prev)
-        cumulatives["grad/cosine_sum"] += tree_utils.cosine(grad, grad_prev)
+        cumulatives["grad/inner_sum"] += _tree.inner(grad, grad_prev)
+        cumulatives["grad/cosine_sum"] += _tree.cosine(grad, grad_prev)
 
         metric = {
             "loss": loss_val,
-            "grad/norm": tree_utils.norm(grad),
-            "grad/inner": tree_utils.inner(grad, grad_prev),
-            "grad/cosine": tree_utils.cosine(grad, grad_prev),
+            "grad/norm": _tree.norm(grad),
+            "grad/inner": _tree.inner(grad, grad_prev),
+            "grad/cosine": _tree.cosine(grad, grad_prev),
         }
         metric.update(cumulatives)
 
