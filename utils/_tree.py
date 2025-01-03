@@ -5,10 +5,10 @@ from jax import numpy as jnp
 from jax import random as jr
 from jax import tree_util as jtu
 from typing import Union
+from jaxtyping import PyTree
 import chex
 
 
-PyTree = chex.ArrayTree
 Scalar = chex.Array
 
 
@@ -35,6 +35,11 @@ def scalar_dot(tree: PyTree, scalar: Union[float, Scalar]) -> PyTree:
 def zeros_like(tree: PyTree) -> PyTree:
     """Returns an all-zero PyTree."""
     return jtu.tree_map(jnp.zeros_like, tree)
+
+
+def negative(tree: PyTree) -> PyTree:
+    """Negates a PyTree."""
+    return scalar_dot(tree, scalar=-1.0)
 
 
 def norm(tree: PyTree, p: float=2) -> Scalar:
