@@ -1,4 +1,4 @@
-"""Learning rate schedulers."""
+"""Tests learning rate schedules."""
 
 import jax
 from jax import numpy as jnp
@@ -8,10 +8,7 @@ import chex
 import optax
 from optax import Updates, Params, OptState, ScalarOrSchedule, GradientTransformation
 from typing import Any, Tuple, NamedTuple, Optional, Union, Callable, Protocol
-import sys
-sys.path.append('../jaxoptimizers')
-import utils
-import logstate
+from utils import tree_utils, log_utils
 import optimizers.schedule as schedule
 
 
@@ -19,4 +16,4 @@ def test_scheduler():
     return
 
 if __name__ == "__main__":
-    test_scheduler
+    test_scheduler()

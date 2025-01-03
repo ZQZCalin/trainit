@@ -1,22 +1,12 @@
-"""Learning rate schedulers that complements optax.schedule."""
+"""Learning rate schedules that complements optax.schedule."""
 
-import jax
-from jax import numpy as jnp
-from jax import random as jr
-from jax import tree_util as jtu
-import chex
 import optax
-from optax import Updates, Params, OptState, ScalarOrSchedule, GradientTransformation
-from typing import Any, Tuple, NamedTuple, Optional, Union, Callable, Protocol
-import sys
-sys.path.append('../trainit')
-import utils
-import logstate
+from jaxtyping import Array
 
 
 def get_current_lr(
-    learning_rate: ScalarOrSchedule,
-    count: chex.Array,
+    learning_rate: optax.ScalarOrSchedule,
+    count: Array,
 ):
     """Returns the current learning rate."""    
     if callable(learning_rate):
