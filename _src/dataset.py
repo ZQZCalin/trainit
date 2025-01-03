@@ -1,11 +1,24 @@
 """Dataset loaders."""
 
 from omegaconf import DictConfig
-from typing import Any
+from typing import Any, List
 from loadit import LoadIt, chunk_shuffle
 from datasets import get_lm_loader_next_token
 from model import init_tokenizer
 import base
+
+
+
+lm_datasets = [
+    "pile",
+    "c4",
+]
+
+cv_datasets = [
+    "cifar10",
+    "cifar100",
+    "imagenet",
+]
 
 
 def load_lm_data(
@@ -38,8 +51,8 @@ def load_lm_data(
             length = None
             loader = chunk_shuffle(loader, chunk_size=config.shuffle_buffer_size, length=length, seed=seed)
     else:
-        if config.name not in ["c4", "pile"]:
-            raise ValueError(f"invalid config: dataset.name '{config.name}' is not 'c4' or 'pile'.")
+        if config.name not in lm_datasets:
+            raise ValueError(f"invalid config: dataset.name '{config.name}' is not included in {lm_datasets}")
         tokenizer = init_tokenizer(model_config)
         loader = get_lm_loader_next_token(
             tokenizer,
@@ -54,22 +67,38 @@ def load_lm_data(
     return loader
 
 
-def init_dataloader(config: DictConfig) -> base.DataLoader:
-    """Initializes a dataloader.
-    
-    Args:
-        config: global_config.
+def load_cv_data(
+          
+) -> base.DataLoader:
+    """Loads CV datasets."""
+    raise NotImplementedError
 
-    Returns:
-        A `base.DataLoader` object.
-    """
-    name = config.dataset.name
-    if name == "c4" or name == "pile":
-        loader = load_lm_data(
+
+# TODO: maybe at a later stage, we need to include other tasks 
+# such as basic regression/classification, and synthetic problems.
+def load_other_data():
+	"""..."""
+	raise NotImplementedError
+
+
+def init_dataloader(
+		config: DictConfig,
+) -> base.DataLoader:
+	"""Initializes dataloader.
+	
+	Args:
+		config: global_config.
+	
+	Returns:
+		A `DataLoader` object.
+	"""
+	name = config.dataset.name
+	if name in lm_datasets:
+		return load_lm_data(
             config=config.dataset,
             model_config=config.model,
             seed=config.dataset.seed,
         )
-    else:
-        raise ValueError(f"invalid config: dataset.name cannot be '{name}'")
-    return loader
+	if name in cv_datasets:
+		return load_cv_data()
+	raise ValueError(f"invalid config: dataset.name == '{name}' is not supported.")
