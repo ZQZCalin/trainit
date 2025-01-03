@@ -4,31 +4,26 @@ import jax
 from jax import numpy as jnp
 from jax import random as jr
 from jax import tree_util as jtu
-import chex
 import optax
-from optax import Updates, Params, OptState, ScalarOrSchedule, GradientTransformation
 from typing import Any, Tuple, NamedTuple, Optional, Callable, Union
-from online_learners import OnlineLearner, unconstrained_ogd
-import utils
-from logger import RateLimitedWandbLog
-import logstate
-import online_learners as ol
+from jaxtyping import Array, PyTree
+from utils import tree_utils, log_utils
 import optimizers.schedule as schedule
 
 
-ScalarOrPytree = Union[float, Any]
+ScalarOrPytree = Union[float, PyTree]
 
 
 class AdamWState(NamedTuple):
     """AdamW State."""
-    count: chex.Array
-    mu: Updates
-    nu: Updates
-    logging: logstate.Log
+    count: Array
+    mu: optax.Updates
+    nu: optax.Updates
+    logging: log_utils.Log
 
 
 def adamw(
-    learning_rate: ScalarOrSchedule = 1e-4,
+    learning_rate: optax.ScalarOrSchedule = 1e-4,
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
@@ -38,7 +33,7 @@ def adamw(
     use_momentum: bool = True,
     use_preconditioning: bool = True,
     decouple_weight_decay: bool = False,
-) -> GradientTransformation:
+) -> optax.GradientTransformation:
     """AdamW for benchmark.
 
     Args:
@@ -74,7 +69,7 @@ def adamw(
             count=jnp.zeros([], jnp.int32),
             mu=jtu.tree_map(jnp.zeros_like, params),
             nu=jtu.tree_map(jnp.zeros_like, params),
-            logging=logstate.Log(logging),
+            logging=log_utils.Log(logging),
         )
     
     def update_fn(updates, state, params):
@@ -86,11 +81,11 @@ def adamw(
         
         # Debias to get the true weighted average.
         if debias_beta1:
-            mu_hat = utils.tree_scalar_multiply(mu, 1/(1-beta1**count_inc))
+            mu_hat = tree_utils.scalar_dot(mu, 1/(1-beta1**count_inc))
         else:
             mu_hat = mu
         if debias_beta2:
-            nu_hat = utils.tree_scalar_multiply(nu, 1/(1-beta2**count_inc))
+            nu_hat = tree_utils.scalar_dot(nu, 1/(1-beta2**count_inc))
         else:
             nu_hat = nu
 
@@ -105,11 +100,11 @@ def adamw(
 
         # Weight decay regularization.
         if not use_pytree_wd:
-            regularization = utils.tree_scalar_multiply(params, weight_decay)
+            regularization = tree_utils.scalar_dot(params, weight_decay)
         else:
-            regularization = utils.tree_multiply(params, weight_decay)
+            regularization = tree_utils.multiply(params, weight_decay)
         if not decouple_weight_decay:
-            regularization = utils.tree_scalar_multiply(regularization, eta)
+            regularization = tree_utils.scalar_dot(regularization, eta)
 
         # Compute one-step update: -eta * [mu / (eps+sqrt(nu)) + lam * params]
         new_updates = jtu.tree_map(
@@ -118,31 +113,31 @@ def adamw(
         )
 
         # Additional logs.
-        mu_hat = utils.tree_scalar_multiply(mu, 1/(1-beta1**count_inc))
-        nu_hat = utils.tree_scalar_multiply(nu, 1/(1-beta2**count_inc))
+        mu_hat = tree_utils.scalar_dot(mu, 1/(1-beta1**count_inc))
+        nu_hat = tree_utils.scalar_dot(nu, 1/(1-beta2**count_inc))
         precond_mu = jtu.tree_map(lambda m, v: m / (eps+jnp.sqrt(v)), mu_hat, nu_hat)
         precond_g = jtu.tree_map(lambda g, v: g / (eps+jnp.sqrt(v)), updates, nu_hat)
         logging = {
-            "optimizer/cos(g,m)": utils.tree_cosine_similarity(updates, mu),
-            "optimizer/cos(g,m/sqrt(v))": utils.tree_cosine_similarity(updates, precond_mu),
-            "optimizer/cos(g,g/sqrt(v))": utils.tree_cosine_similarity(updates, precond_g),
+            "optimizer/cos(g,m)": tree_utils.cosine(updates, mu),
+            "optimizer/cos(g,m/sqrt(v))": tree_utils.cosine(updates, precond_mu),
+            "optimizer/cos(g,g/sqrt(v))": tree_utils.cosine(updates, precond_g),
         }
         return new_updates, AdamWState(
-            count=count_inc, mu=mu, nu=nu, logging=logstate.Log(logging))
+            count=count_inc, mu=mu, nu=nu, logging=log_utils.Log(logging))
     
-    return GradientTransformation(init_fn, update_fn)
+    return optax.GradientTransformation(init_fn, update_fn)
 
 
 class SgdmState(NamedTuple):
-    count: chex.Array
+    count: Array
     momentum: optax.Updates
 
 
 def sgdm(
-    learning_rate: ScalarOrSchedule,
+    learning_rate: optax.ScalarOrSchedule,
     beta: float=0.0,
     weight_decay: ScalarOrPytree=0.0,
-) -> GradientTransformation:
+) -> optax.GradientTransformation:
     """SGD with momentum.
     
     Updates m_{t+1} = beta * m_t - (1-beta) * (g_t + mu*x_t)
@@ -158,7 +153,8 @@ def sgdm(
         A `GradientTransformation` object.
     """
     
-    use_pytree_wd = type(weight_decay) != float
+    # use_pytree_wd = type(weight_decay) != float
+    use_pytree_wd = not isinstance(weight_decay, float)
 
     def init_fn(params):
         if use_pytree_wd and jtu.tree_structure(weight_decay)!=jtu.tree_structure(params):
@@ -169,9 +165,6 @@ def sgdm(
         )
     
     def update_fn(updates, state, params):
-        # TODO: which one to implement weight decay?
-        # grads = jtu.tree_map(
-        #     lambda g, x: g + mu*x, updates, params)
         eta = schedule.get_current_lr(learning_rate, state.count)
         new_momentum = jtu.tree_map(
             lambda m, g: beta*m + (1-beta)*g, state.momentum, updates)
@@ -186,4 +179,4 @@ def sgdm(
             momentum = new_momentum
         )
     
-    return GradientTransformation(init_fn, update_fn)
+    return optax.GradientTransformation(init_fn, update_fn)
