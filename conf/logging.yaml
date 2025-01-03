@@ -2,18 +2,24 @@ logging:
   wandb_project: null
   wandb_name: null
 
-  # controls number of logs per sec.
-  # set to inf for unlimited wandb logs.
-  wandb_logs_per_sec: 10.0
-
   # this will slow down computation a bit (I believe due to extra GPU/CPU communication),
   # but will log more stuff (like learning rates).
   # Still working on nice way to do this logging - we really should only incur one communication
   # round per iteration and I don't think the logging data should significantly impact it.
   log_callback_data: True
 
-  # logging these additional stats requires another forward pass and additional memory.
-  # you can save memory/computation by turning off each of the following configurations.
+  # controls number of logs per sec.
+  # set to inf for unlimited wandb logs.
+  wandb_logs_per_sec: 10.0
+  
+  running_stats_window: 1000
+
+  log_fn: full_log
+  # ===============================================================================================
+  # NOTE: starting from here only matters if you use the default `full_log` LogFn.
+  # tracking additional metrics could incur additional computation and memory cost, and
+  # configs below allow you to save some costs by disabling certain metrics.
+  
   # *In terms of memory cost:
   # stores the last gradient g(n-1)
   store_last_grads: True
@@ -26,5 +32,3 @@ logging:
   compute_last_loss: True
   # computes g(x(n-1), zn), which costs an additional forward and backward pass
   compute_last_grads: False
-
-  running_stats_window: 1000
