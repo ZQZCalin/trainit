@@ -135,6 +135,7 @@ def set_all_logs(tree: PyTree, value=None):
     return map_logs(lambda x: value, tree)
 
 
+# NOTE: this class is no longer used anymore and thus deprecated.
 class SafeDict(dict):
     """Extends dict.update: adds a jax.lax.cond-proof checker."""
     def update(self, *args, **kwargs):
