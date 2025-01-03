@@ -16,10 +16,8 @@ from jax import tree_util as jtu
 import optax
 import equinox as eqx
 
-import transformers
-
 from jaxamp import amp, DynamicScalerState, dynamic_scale_value_and_grad
-from typing import List, Tuple, Any, Optional, Sequence, Union, NamedTuple, Callable
+from typing import List, Tuple, Any, Optional, NamedTuple
 from jaxtyping import Array, PRNGKeyArray
 
 import tqdm
@@ -27,25 +25,16 @@ import wandb
 import hydra
 from omegaconf import OmegaConf, DictConfig, ListConfig
 
-import utils
-from utils import softmax_cross_entropy, tree_norm, get_accuracy, get_dtype
-import logstate
-from logger import TimeKeeper, RateLimitedWandbLog
+# import utils
+# from utils import softmax_cross_entropy, tree_norm, get_accuracy, get_dtype
+from utils import tree_utils, wandb_utils, log_utils
 from models.mingpt import GPT
-from datasets.lm_loader import get_lm_loader_next_token, shift_labels
-from loadit import LoadIt, chunk_shuffle
-
-import os, sys
-sys.path.append('./optimizer')
-from optimizers.online_nonconvex import deterministic_online_nonconvex, wrap_random_scaling
-import optimizers.online_learners as ol
-import optimizers.base as base
-import optimizers.schedule as schedule
-import optimizers.optim as optim
+from datasets import shift_labels
 
 import random
 import numpy as np
 import torch
+import os
 
 import serialize.serializer as serializer
 
@@ -53,6 +42,8 @@ import serialize.serializer as serializer
 MiniBatch = List[Tuple[Array, Array]]
 
 
+
+# TODO: move all AuxState-related components to `loggings/`
 class AuxState(NamedTuple):
     """Auxiliary states stored for additional loggings."""
     params_diff: Optional[optax.Updates]        # x_n - x_{n-1} = s_n * Delta_n
@@ -72,43 +63,9 @@ class TrainState(NamedTuple):
     aux_state: Optional[AuxState]
 
 
-def load_lm_data(config: DictConfig, tokenizer: Any, split: str = "train"):
-    """Wrapper for Pile dataset. 
-    config: global config.
-
-    Returns:
-        torch.utils.data.DataLoader.
-    """
-    context_length = config.model.context_length
-    max_steps = config.train.max_steps
-    seed = config.random_seed
-    config = config.dataset
-    if config.use_loadit:
-        loadit_path = config.loadit_path
-        if loadit_path is None:
-            loadit_path = "/projectnb/aclab/tranhp/trainDataloader_pile/"
-        loader = LoadIt(loadit_path)
-        # TODO: either specify max_samples in config, or set length to full dataset length.
-        # current implementation is vulnerable to batch size change 
-        if config.shuffle_buffer_size > 0:
-            length = max_steps * config.total_batch_size
-            loader = chunk_shuffle(loader, chunk_size=config.shuffle_buffer_size, length=length, seed=seed)
-    else:
-        if config.name not in ["c4", "pile"]:
-            raise ValueError("dataset name must be c4 or pile.")
-        loader = get_lm_loader_next_token(
-            tokenizer,
-            split=split,
-            batch_size=config.batch_size,
-            max_length=context_length,
-            shuffle_buffer_size=config.shuffle_buffer_size,
-            pad_to_multiple_of=context_length,
-            num_workers=config.dataloader_workers,
-            dataset=config.name,
-        )
-    return loader
 
 
+# TODO: to be moved to `loss.py` and contained by a wrapper.
 def loss_fn(model: eqx.Module, batch: Tuple[Array, Array], key: PRNGKeyArray):
     """Wrapper for cross entropy loss.
     Applies jax.vmap to all data in a data batch.
@@ -132,384 +89,6 @@ def loss_fn(model: eqx.Module, batch: Tuple[Array, Array], key: PRNGKeyArray):
     loss, logits = vmapped_loss_fn(input, target)
 
     return jnp.mean(loss), logits
-
-
-def init_tokenizer(config: DictConfig, pad_token: bool = True):
-    """Initializes tokenizer. If `pad_token` is true, adds pad_token as a special token. Defaults to true."""
-    model_name = config.model.name
-    if model_name == "gpt":
-        tokenizer = transformers.GPT2TokenizerFast.from_pretrained("gpt2")
-        if pad_token:
-            tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
-    else:
-        raise ValueError(f"model {model_name} is not supported.")
-    return tokenizer
-
-
-def init_model(vocab_size: int, config: DictConfig, *, key: PRNGKeyArray) -> eqx.Module:
-    """Initializes model. config: global_config.model"""
-    if not config.load_pytorch:
-        model = GPT(vocab_size, config, key=key)
-    else:
-        model_config = torch_GPT.get_default_config()
-        model_config.model_type = 'gpt2'
-        model_config.vocab_size = vocab_size                    # openai's model vocabulary
-        model_config.block_size = config.context_length         # openai's model block_size (i.e. input context length)
-        model_config.embd_pdrop = config.transformer_dropout
-        model_config.resid_pdrop = config.attn_linear_dropout
-        model_config.attn_pdrop = config.attn_dropout
-        torch_model = torch_GPT(model_config)
-        model = GPT(vocab_size, config, state_dict=torch_model.state_dict())
-    return model
-
-
-def init_scheduler(lr_config: DictConfig, **kwargs) -> optax.ScalarOrSchedule:
-    """Parses the config and initializes a learning rate scheduler.
-
-    Args:
-        lr_config: The learning rate config.
-        kargs: Additional arguments to overwrite learning rate config.
-
-    Returns:
-        A `optax.ScalarOrSchedule` object.
-    """
-    def init_constant_lr(config):
-        learning_rate = config.lr
-        return learning_rate
-    
-    def init_cosine_lr(config):
-        use_warmup = isinstance(config.warmup, int) and (config.warmup > 0)
-        if use_warmup:
-            learning_rate = optax.warmup_cosine_decay_schedule(
-                init_value=0.0,
-                peak_value=config.lr,
-                warmup_steps=config.warmup,
-                decay_steps=config.max_steps,
-            )
-        else:
-            learning_rate = optax.cosine_decay_schedule(
-                init_value=config.lr,
-                decay_steps=config.max_steps,
-            )
-        return learning_rate
-    
-    def init_linear_lr(config):
-        use_warmup = isinstance(config.warmup, int) and (config.warmup > 0)
-        if use_warmup:
-            learning_rate = schedule.warmup_linear_decay_schedule(
-                init_value=0.0,
-                peak_value=config.lr,
-                warmup_steps=config.warmup,
-                decay_steps=config.max_steps,
-            )
-        else:
-            learning_rate = schedule.linear_decay_schedule(
-                init_value=config.lr,
-                decay_steps=config.max_steps,
-            )
-        return learning_rate
-
-    def init_piecewise_linear_lr(config):
-        learning_rate = optax.linear_schedule(
-            init_value=config.lr1,
-            end_value=config.lr2,
-            transition_steps=config.max_steps,
-            transition_begin=config.start_steps,    # NOTE: for now, we still need to specify the start iteration in config.
-        )
-        return learning_rate
-
-    if lr_config.schedule == "constant":
-        learning_rate = init_constant_lr(lr_config)
-    elif lr_config.schedule == "cosine":
-        learning_rate = init_cosine_lr(lr_config)
-    elif lr_config.schedule == "linear":
-        learning_rate = init_linear_lr(lr_config)
-    elif lr_config.schedule == "piecewise_linear":
-        learning_rate = init_piecewise_linear_lr(lr_config)
-    else:
-        raise ValueError(f"schedule type {lr_config.schedule} is not supported.")
-    return learning_rate
-
-
-def wrap_scheduler(
-    learning_rate: optax.ScalarOrSchedule,
-    logger: None,
-    schedule_title: str="schedule",
-):
-    """Returns a wrapped scheduler that logs current learning rate."""
-    def wrapper(schedule, count, logger, title):
-        if callable(schedule):
-            lr = schedule(count)
-        else:
-            lr = schedule
-        if logger is not None:
-            jax.experimental.io_callback(logger, None, {f"lr/{title}": lr}, commit=False)
-        return lr
-    return jtu.Partial(wrapper, learning_rate, logger=logger, title=schedule_title)
-
-
-def init_optimizer(
-    model: eqx.Module,
-    config: DictConfig,
-    logger: None,
-):
-    """Construct optimizer from model and training config.
-
-    Returns:
-        Initial optimizer and opt_state.
-    """
-    # Initialize base optimizer / online learner.
-    name = config.optimizer.name
-    max_steps = config.train.max_steps
-
-    def init_adamw(config: DictConfig, **kwargs):
-        """use kwargs to pass down optional arguments (e.g., schedule_title)"""
-        learning_rate = wrap_scheduler(
-            init_scheduler(config.lr_config), logger=logger, **kwargs)
-        return base.adamw(
-            learning_rate=learning_rate,
-            beta1=config.beta1,
-            beta2=config.beta2,
-            weight_decay=config.weight_decay,
-            debias_beta1=config.debias_beta1,
-            debias_beta2=config.debias_beta2,
-            use_momentum=config.use_momentum,
-            use_preconditioning=config.use_preconditioning,
-            decouple_weight_decay=config.decouple_weight_decay,
-        )
-
-    def init_sgdm(config: DictConfig, **kwargs):
-        learning_rate = wrap_scheduler(
-            init_scheduler(config.lr_config), logger=logger, **kwargs)
-        return base.sgdm(
-            learning_rate=learning_rate,
-            beta=config.beta,
-            weight_decay=config.weight_decay
-        )
-
-    opt_config = config.optimizer
-    if name == "adamw":
-        optimizer = init_adamw(config=opt_config)
-    elif name == "sgdm":
-        optimizer = init_sgdm(config=opt_config)
-    elif name == "polar":
-        optimizer = optim.polar_descent(
-            direction_optim=init_adamw(config=opt_config.direction),
-            magnitude_optim=init_adamw(config=opt_config.magnitude, schedule_title="schedule_2"),
-        )
-    elif name == "jump":
-        optimizer = optim.jump_trajectory(
-            normal_optim=init_adamw(config=opt_config.normal),
-            jump_optim=init_adamw(config=opt_config.jump, schedule_title="schedule_2"),
-            normal_steps=opt_config.normal_steps,
-            jump_steps=opt_config.jump_steps,
-        )
-    elif name == "ogd_md":
-        learning_rate = wrap_scheduler(
-            init_scheduler(opt_config.lr_config, max_steps=max_steps), logger=logger)
-        optimizer = ol.ogd_mirror_descent(
-            learning_rate=learning_rate,
-            beta=opt_config.beta,
-            mu=opt_config.mu,
-        )
-
-    # Wrap online to non-convex.
-    if name in ["ogd_md"]:
-        wrap_o2nc = True
-    elif name in ["adamw", "sgdm", "polar", "jump"]:
-        wrap_o2nc = False
-    else:
-        wrap_o2nc = config.train.wrap_o2nc
-    if wrap_o2nc:
-        optimizer = deterministic_online_nonconvex(optimizer)
-
-    # Wrap random scaling.
-    optimizer = wrap_random_scaling(
-        gradient_transformation=optimizer,
-        random_scaling=config.train.random_scaling,
-        use_importance_sampling=config.train.use_importance_sampling,
-        seed=config.train.random_scaling_seed   # TODO: deprecate. use PRNGKey passed from argument instead of random seed.
-    )
-    
-    # Gradient clipping and finite gradient wrapper.
-    grad_clip = optax.clip_by_global_norm(config.train.gradient_clip_val)
-    optimizer = optax.chain(
-        grad_clip,
-        optax.apply_if_finite(optimizer, 15)
-    )
-
-    # Initialize opt_state
-    opt_state = optimizer.init(eqx.filter(model, eqx.is_array))
-    return optimizer, opt_state
-
-
-def init_aux_state(config: DictConfig, model: eqx.Module, opt_state: optax.OptState) -> AuxState:
-    """Initializes aux_state from confg."""
-    if not config.log_callback_data:
-        return None
-    opt_loggings = utils.merge_dicts(*logstate.list_of_logs(opt_state))
-    if "update/random_scaling" not in opt_loggings:
-        warnings.warn("Optimizer has no key named 'update/random_scaling,",
-                      "and random scaling is default to one.",
-                      "Wrap your optimizer with o2nc.wrap_random_scaling for correct logging.")
-        random_scalar = jnp.ones([])
-    else:
-        random_scalar = opt_loggings["update/random_scaling"]
-    if "update/importance_sampling" not in opt_loggings:
-        warnings.warn("Optimizer has no key named 'update/importance_sampling,",
-                      "and importance sampling is default to one.",
-                      "Wrap your optimizer with o2nc.wrap_random_scaling for correct logging.")
-        importance_sampling = jnp.ones([])
-    else:
-        importance_sampling = opt_loggings["update/importance_sampling"]
-    loggings = {
-        "grads/norm": jnp.zeros([]),
-        "grads/l1-norm": jnp.zeros([]),
-        "update/<gn, Delta(n)>": jnp.zeros([]),
-        "update/<gn, Delta(n)>_sum": jnp.zeros([]),
-        "update/<g(n-1), Delta(n)>": jnp.zeros([]),
-        "update/<g(n-1), Delta(n)>_sum": jnp.zeros([]),
-        "update/cos(g(n-1), Delta(n))": jnp.zeros([]),
-        "update/wn*<gn, Delta(n)>": jnp.zeros([]),
-        "update/wn*<gn, Delta(n)>_sum": jnp.zeros([]),
-        "update/fn-f(n-1)": jnp.zeros([]),
-        "update/fn-f(n-1)_sum": jnp.zeros([]),
-        "update/<gn, xn-x(n-1)>": jnp.zeros([]),
-        "update/<gn, xn-x(n-1)>_sum": jnp.zeros([]),
-        "grads/<gn, g(n-1)>": jnp.zeros([]),
-        "grads/<gn, g(1:n-1)>": jnp.zeros([]),
-        "grads/cos(gn, g(n-1))": jnp.zeros([]),
-        "grads/cos(gn, g(1:n-1))": jnp.zeros([]),
-        "grads/inf_grads": jnp.zeros([], jnp.int32),
-    }
-    loggings.update(opt_loggings)
-    zeros = utils.zero_tree(eqx.filter(model, eqx.is_array))
-    return AuxState(
-        params_diff = zeros if config.store_last_params else None,
-        last_grads = zeros if config.store_last_grads else None,
-        past_grads = zeros if config.store_past_grads else None,
-        random_scalar = random_scalar,
-        importance_sampling = importance_sampling,
-        loggings = loggings,
-    )
-
-
-def update_aux_state(
-    train_state: TrainState,
-    updates: optax.Updates,
-    grads: optax.Updates,
-    batches: MiniBatch,
-    loss: Array,
-    config: DictConfig,
-) -> TrainState:
-    """Updates aux_state. config: global config.
-    Note: train_state.model uses new_model, i.e., x_(n+1).
-    """
-    global_config = config
-    config = config.logging
-    if not config.log_callback_data:
-        return None
-    
-    model = eqx.apply_updates(
-        train_state.model, utils.negative_tree(updates))    # x_n
-    opt_state = train_state.opt_state
-    aux_state = train_state.aux_state
-    dynamic_scaler_state = train_state.dynamic_scaler_state
-    key, new_key = jr.split(train_state.train_key)
-    batches = jnp.array(batches)
-    
-    base_loggings = {
-        "grads/norm": utils.tree_l2_norm(grads),
-        "grads/l1-norm": utils.tree_l1_norm(grads),
-    }
-    opt_loggings = utils.merge_dicts(*logstate.list_of_logs(opt_state))
-    base_loggings.update(opt_loggings)
-
-    def update_nan(state, base_loggings, dynamic_scaler_state):
-        loggings = state.loggings
-        loggings.update({
-            "grads/inf_grads": optax.safe_int32_increment(loggings["grads/inf_grads"])
-        })
-        loggings.update(base_loggings)
-        return state._replace(loggings=loggings), dynamic_scaler_state
-    
-    def update_finite(state, base_loggings, dynamic_scaler_state):
-        loggings = state.loggings
-        if config.store_last_params:
-            inner_g_dx = utils.tree_inner_product(grads, state.params_diff)
-            inner_g_Delta = inner_g_dx / state.random_scalar
-            inner_g_wDelta = inner_g_Delta * state.importance_sampling
-            loggings.update({
-                "update/<gn, xn-x(n-1)>": inner_g_dx,
-                "update/<gn, xn-x(n-1)>_sum": loggings["update/<gn, xn-x(n-1)>_sum"]+inner_g_dx,
-                "update/<gn, Delta(n)>": inner_g_Delta,
-                "update/<gn, Delta(n)>_sum": loggings["update/<gn, Delta(n)>_sum"]+inner_g_Delta,
-                "update/wn*<gn, Delta(n)>": inner_g_wDelta,
-                "update/wn*<gn, Delta(n)>_sum": loggings["update/wn*<gn, Delta(n)>_sum"]+inner_g_wDelta,
-            })
-        if config.store_last_params and config.store_last_grads:
-            inner_g_last_Delta = utils.tree_inner_product(state.last_grads, state.params_diff)
-            loggings.update({
-                "update/<g(n-1), Delta(n)>": inner_g_last_Delta,
-                "update/<g(n-1), Delta(n)>_sum": loggings["update/<g(n-1), Delta(n)>_sum"]+inner_g_last_Delta,
-                "update/cos(g(n-1), Delta(n))": utils.tree_cosine_similarity(state.last_grads, state.params_diff),
-            })
-        if config.store_last_params and config.compute_last_loss:
-            last_model = eqx.apply_updates(
-                model, utils.negative_tree(state.params_diff))
-            def compute_last_loss(i, val):
-                batch = batches[i]
-                if global_config.train.use_amp:
-                    amp_loss_fn = amp(loss_fn, compute_dtype=get_dtype(global_config.train.precision))
-                    last_loss_, _ = amp_loss_fn(last_model, batch, key=key)
-                else:
-                    last_loss_, _ = loss_fn(last_model, batch, key=key)
-                return val + last_loss_
-            last_loss = jax.lax.fori_loop(
-                0, len(batches), compute_last_loss, init_val=0
-            )
-            last_loss /= len(batches)   # average last loss over all batches
-            df = loss - last_loss
-            loggings.update({
-                "update/fn-f(n-1)": df,
-                "update/fn-f(n-1)_sum": loggings["update/fn-f(n-1)_sum"]+df,
-            })
-        if config.store_last_grads:
-            loggings.update({
-                "grads/<gn, g(n-1)>": utils.tree_inner_product(grads, state.last_grads),
-                "grads/cos(gn, g(n-1))": utils.tree_cosine_similarity(grads, state.last_grads),
-            })
-        if config.store_past_grads:
-            loggings.update({
-                "grads/<gn, g(1:n-1)>": utils.tree_inner_product(grads, state.past_grads),
-                "grads/cos(gn, g(1:n-1))": utils.tree_cosine_similarity(grads, state.past_grads),
-            })
-        loggings.update(base_loggings)
-        if "update/random_scaling" in opt_loggings:
-            random_scalar = opt_loggings["update/random_scaling"]
-        else:
-            random_scalar = state.random_scalar
-        if "update/importance_sampling" in opt_loggings:
-            importance_sampling = opt_loggings["update/importance_sampling"]
-        else:
-            importance_sampling = state.importance_sampling
-        return state._replace(
-            params_diff = updates if config.store_last_params else None,
-            last_grads = grads if config.store_last_grads else None,
-            past_grads = utils.tree_add(state.past_grads, grads) if config.store_past_grads else None,
-            random_scalar = random_scalar,
-            importance_sampling = importance_sampling,
-            loggings = loggings,
-        ), dynamic_scaler_state
-    
-    aux_state, dynamic_scaler_state = jax.lax.cond(
-        utils.is_finite_tree(grads), update_finite, update_nan, aux_state, base_loggings, dynamic_scaler_state)
-    
-    return train_state._replace(
-        dynamic_scaler_state = dynamic_scaler_state,
-        train_key = new_key,
-        aux_state = aux_state
-    )
 
 
 def back_prop(
@@ -574,7 +153,7 @@ def back_prop(
     )
     loss /= num_batches
     accuracy /= num_batches
-    grads = utils.tree_scalar_multiply(grads, 1/num_batches)
+    grads = tree_utils.scalar_dot(grads, 1/num_batches)
 
     train_state = train_state._replace(
         dynamic_scaler_state=dynamic_scaler_state,
