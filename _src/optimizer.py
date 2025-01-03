@@ -109,8 +109,14 @@ def init_optimizer(
 ) -> Tuple[optax.GradientTransformation, optax.OptState]:
     """Construct optimizer from model and training config.
 
+    Args:
+        model: an equinox.Module object.
+        config: global_config.
+        logger: optional logger to handle backend wandb logging while training.
+        key: PRNGKey for optimizer.
+
     Returns:
-        Initial optimizer and opt_state.
+        A tuple of optax.GradientTransofrmation and optax.OptState.
     """
     def init_adamw(config: DictConfig):
         learning_rate = wrap_scheduler(

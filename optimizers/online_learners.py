@@ -8,12 +8,7 @@ import chex
 import optax
 from optax import Updates, Params, OptState, ScalarOrSchedule, GradientTransformation
 from typing import Any, Tuple, NamedTuple, Optional, Union, Callable, Protocol
-import sys
-sys.path.append('../trainit')
-import utils
-from utils import tree_add, tree_subtract, tree_multiply, tree_scalar_multiply, tree_dot, tree_norm, tree_normalize, check_tree_structures_match
-from logger import RateLimitedWandbLog
-import logstate
+from utils import tree_utils, log_utils
 import optimizers.schedule as schedule
 
 
@@ -101,6 +96,17 @@ class OnlineLearnerExtraArgs(OnlineLearner):
     update: OnlineLearnerUpdateExtraArgsFn
 
 
+
+
+"""NOTE: 
+- Updated on 2025/01/02:
+    Everything below this line is still under dev.
+    I still need to adapt everything to the new framework, fix some import issues, 
+    and correct some implementation errors. 
+    For now, I put a NotImplementedError on all algorithms.
+"""
+
+
 class ScaleByOnlineLearnerState(NamedTuple):
     """Scale by Online Learner State"""
     Delta: Updates
@@ -125,6 +131,7 @@ def scale_by_online_learner(
     Returns:
         A `GradientTransformation` object.
     """
+    raise NotImplementedError
     
     def init_fn(params):
         Delta = jtu.tree_map(jnp.zeros_like, params)
@@ -154,7 +161,7 @@ def scale_by_online_learner(
         # Optional: project Delta into a constrained domain.
         if projection_norm:
             clip_norm = jnp.minimum(1, projection_norm/optax.global_norm(Delta))
-            Delta = tree_scalar_multiply(Delta, clip_norm)
+            Delta = tree_utils.scalar_dot(Delta, clip_norm)
         # TODO: return state.Delta or new Delta?
         # need to check which one adheres to the notion in the references.
         return Delta, ScaleByOnlineLearnerState(
@@ -187,6 +194,7 @@ def wrap_online_learner(
     Returns:
         A wrapped `OnlineLearner` object.
     """
+    raise NotImplementedError
 
     def init_fn(params):
         state = online_learner.init(params)
@@ -223,6 +231,7 @@ def ogd(
         learning_rate: OGD learning rate.
         weight_decay: l2 regularization constant. Defaults to 0.0 (no regularization).
     """
+    raise NotImplementedError
 
     def init_fn(params=None):
         del params
@@ -264,6 +273,7 @@ def ogd_mirror_descent(
     Returns:
         OnlineLearner: _description_
     """
+    raise NotImplementedError
 
     def init_fn(params=None):
         del params
@@ -318,6 +328,7 @@ def unconstrained_ogd(
     Returns:
         A `GradientTransformation` object.
     """
+    raise NotImplementedError
     
     def init_fn(params):
         return UnconstrainedOGDState(
@@ -352,6 +363,7 @@ def ftrl() -> OnlineLearnerExtraArgs:
     Updates w_{t+1} = argmin_w psi_t(w) + sum_{i=1}^t ell_i(w),
         where psi_t is a linearized regularizer of form <r_t, w> and ell_t is a linearized loss of form <g_t, w>.
     """
+    raise NotImplementedError
 
     def init_fn(params):
         return FTRLState()
@@ -399,6 +411,7 @@ def ada_ftrl(
     Returns:
         A `GradientTransformation` object.
     """
+    raise NotImplementedError
 
     if scale_lr:
         scale_lr_const = (1-beta2)**.5 / (1-beta1)
@@ -445,7 +458,7 @@ class KTBettorState(NamedTuple):
     sum_grad: Updates
     wealth: Updates
     count: chex.Array
-    logging: Optional[logstate.Log]
+    logging: Optional[log_utils.Log]
 
 
 # TODO: support Pytree argument for eps
@@ -471,6 +484,7 @@ def kt_bettor(
     Returns:
         A `GradientTransformation` object.
     """
+    raise NotImplementedError
 
     class KTBettorLog():
         def __call__(self, params, wealth) -> Optional[logstate.Log]:
@@ -524,6 +538,7 @@ def blackbox_ftrl(
     Args:
         beta: Exponentiation constant between 0 and 1. Defaults to 1.0 (no exponentiation).
     """
+    raise NotImplementedError
     
     assert beta >= 0 and beta <= 1, "beta must be between 0 and 1."
 
@@ -576,6 +591,7 @@ def blackbox_reduction(
         direction_learner: Online learner for direction; learns xt/|xt|.
         weight_decay: Regularization constant. Defaults to 0.0 (no regularization).
     """
+    raise NotImplementedError
     
     def init_fn(params):
         zt, xt = utils.tree_norm_direction_decomposition(params)
@@ -636,6 +652,7 @@ def normalized_blackbox(
         seed: PRNGKey seed. Defaults to 0.
         per_layer: If true, updates each node of the Pytree using coordinate-wise base learner.
     """
+    raise NotImplementedError
 
     def init_fn(params):
         # For now, always initialize the 1d learner with zt=0.
@@ -706,6 +723,7 @@ def parameter_free_mirror_descent(
     eps: float,
     num_grids: int=1,
 ) -> OnlineLearner:
+    raise NotImplementedError
     
     # TODO: add an option for a list of customized schedules.
     etas = [2**-k / G for k in range(num_grids)]
@@ -765,6 +783,7 @@ def imperfect_hints(
     online_learner: OnlineLearner,
     mu: float = 1.0,
 ) -> OnlineLearner:
+    raise NotImplementedError
     
     def init_fn(params):
         return ImperfectHintsState(
