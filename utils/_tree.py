@@ -95,3 +95,11 @@ def cosine(tree1: PyTree, tree2: PyTree) -> Scalar:
 def outer(tree1: PyTree, tree2: PyTree) -> PyTree:
     """Broadcast jax.numpy.outer to two PyTrees."""
     return jtu.tree_map(lambda x, y: jnp.outer(x, y), tree1, tree2)
+
+
+def isfinite(tree: PyTree) -> bool:
+    """Broadcast jax.numpy.isfinite to a PyTree."""
+    leaves = jtu.tree_flatten(tree)[0]
+    return jnp.all(jnp.array(
+        [jnp.all(jnp.isfinite(node)) for node in leaves]
+    ))
