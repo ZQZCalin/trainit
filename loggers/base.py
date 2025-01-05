@@ -10,17 +10,17 @@ LogState = PyTree
 LogMetrics = PyTree
 
 
-class LogInitFn(Protocol):
+class LoggerInitFn(Protocol):
     def __call__(self, **extra_args: Any) -> LogState:
         """The `init` function."""
 
 
-class LogUpdateFn(Protocol):
+class LoggerUpdateFn(Protocol):
     def __call__(self, state: LogState, **extra_args: Any) -> Tuple[LogState, LogMetrics]:
         """The `update` function."""
 
 
-class LogFn(NamedTuple):
+class Logger(NamedTuple):
     """A stateless log function implemented by a tuple of `init_fn` and `update_fn`.
     
     Log functions should only compute metrics based on input arguments and
@@ -33,17 +33,17 @@ class LogFn(NamedTuple):
 
     Examples:
         >>> from loggings import base
-        >>> def example_log() -> base.LogFn:
+        >>> def example_log() -> base.Logger:
         ...  '''An example log function.'''
-        ...  # log_fn = example_log()
-        ...  # log_state = log_fn.init(params=...)
-        ...  # log_state, log_metrics = log_fn.update(log_state, params=..., grads=...)
+        ...  # logger = example_log()
+        ...  # log_state = logger.init(params=...)
+        ...  # log_state, log_metrics = logger.update(log_state, params=..., grads=...)
     """
     # TODO: this is the only part I don't like about LogFn: users need to write different lines
     # in the train() function to update different log functions. Ideally, we'd want one uniform
     # line to achieve this.
-    init: LogInitFn
-    update: LogUpdateFn
+    init: LoggerInitFn
+    update: LoggerUpdateFn
 
 
 def get_internal_logs(opt_state: optax.OptState) -> Dict[Array]:

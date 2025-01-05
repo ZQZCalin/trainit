@@ -2,6 +2,7 @@
 
 import jax
 import jax.tree_util as jtu
+import jax.random as jr
 import optax
 import optimizers
 import equinox as eqx
@@ -82,28 +83,28 @@ def init_schedule(lr_config: DictConfig) -> optax.ScalarOrSchedule:
 
 def wrap_scheduler(
     learning_rate: optax.ScalarOrSchedule,
-    logger: None,
+    wandb_log: None,
     schedule_title: str="schedule",
 ):
     """Returns a wrapped scheduler that logs current learning rate.
     
     The wrapped schedule takes in `learning_rate` as argument and returns a scalar lr.
     """
-    def wrapper(schedule, count, logger, title):
+    def wrapper(schedule, count, wandb_log, title):
         if callable(schedule):
             lr = schedule(count)
         else:
             lr = schedule
-        if logger is not None:
-            jax.experimental.io_callback(logger, None, {f"lr/{title}": lr}, commit=False)
+        if wandb_log is not None:
+            jax.experimental.io_callback(wandb_log, None, {f"lr/{title}": lr}, commit=False)
         return lr
-    return jtu.Partial(wrapper, learning_rate, logger=logger, title=schedule_title)
+    return jtu.Partial(wrapper, learning_rate, wandb_log=wandb_log, title=schedule_title)
 
 
 def init_optimizer(
     model: eqx.Module,
     config: DictConfig,
-    logger: None,
+    wandb_log: None,
     *,
     key: PRNGKeyArray,
 ) -> Tuple[optax.GradientTransformation, optax.OptState]:
@@ -112,15 +113,15 @@ def init_optimizer(
     Args:
         model: an equinox.Module object.
         config: global_config.
-        logger: optional logger to handle backend wandb logging while training.
-        key: PRNGKey for optimizer.
+        wandb_log: optional logger to handle backend wandb logging while training.
+        key: random key for optimizer.
 
     Returns:
         A tuple of optax.GradientTransofrmation and optax.OptState.
     """
     def init_adamw(config: DictConfig):
         learning_rate = wrap_scheduler(
-            init_schedule(config.lr_config), logger=logger)
+            init_schedule(config.lr_config), wandb_log=wandb_log)
         return optimizers.adamw(
             learning_rate=learning_rate,
             beta1=config.beta1,
@@ -135,7 +136,7 @@ def init_optimizer(
 
     def init_sgdm(config: DictConfig):
         learning_rate = wrap_scheduler(
-            init_schedule(config.lr_config), logger=logger)
+            init_schedule(config.lr_config), wandb_log=wandb_log)
         return optimizers.sgdm(
             learning_rate=learning_rate,
             beta=config.beta,
@@ -158,15 +159,15 @@ def init_optimizer(
     else:
         wrap_o2nc = config.train.wrap_o2nc
     if wrap_o2nc:
-        optimizer = optimizers.deterministic_online_nonconvex(optimizer)
+        optimizer = optimizers.online_to_gradient_transformation(optimizer)
 
     # Wrap random scaling.
+    random_scaling_key, key = jr.split(key)
     optimizer = optimizers.wrap_random_scaling(
         gradient_transformation=optimizer,
         random_scaling=config.train.random_scaling,
         use_importance_sampling=config.train.use_importance_sampling,
-        key=key,
-        # seed=config.train.random_scaling_seed   # TODO: deprecate. use PRNGKey passed from argument instead of random seed.
+        key=random_scaling_key,
     )
     
     # Gradient clipping and finite gradient wrapper.

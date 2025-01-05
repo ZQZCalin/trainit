@@ -3,22 +3,11 @@
 from omegaconf import DictConfig
 from typing import Any, List
 from loadit import LoadIt, chunk_shuffle
+
 from datasets import get_lm_loader_next_token
-from model import init_tokenizer
-import base
-
-
-
-lm_datasets = [
-    "pile",
-    "c4",
-]
-
-cv_datasets = [
-    "cifar10",
-    "cifar100",
-    "imagenet",
-]
+from _src.base import lm_datasets, cv_datasets
+from _src.base import DataLoader
+from _src.model import init_tokenizer
 
 
 def load_lm_data(
@@ -26,7 +15,7 @@ def load_lm_data(
         model_config: DictConfig,
         seed: int = 42,
         split: str = "train",
-    ) -> base.DataLoader:
+    ) -> DataLoader:
     """Loads LLM datasets (c4 or pile).
 
     Args:
@@ -69,7 +58,7 @@ def load_lm_data(
 
 def load_cv_data(
           
-) -> base.DataLoader:
+) -> DataLoader:
     """Loads CV datasets."""
     raise NotImplementedError
 
@@ -83,7 +72,7 @@ def load_other_data():
 
 def init_dataloader(
 		config: DictConfig,
-) -> base.DataLoader:
+) -> DataLoader:
 	"""Initializes dataloader.
 	
 	Args:

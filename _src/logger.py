@@ -1,11 +1,11 @@
-"""A stateless log function"""
+"""A stateless logger function."""
 
 from omegaconf import DictConfig
-import loggings
+import loggers
 
 
-def init_log(config: DictConfig) -> loggings.LogFn:
-    """Initializes the log function.
+def init_logger(config: DictConfig) -> loggers.Logger:
+    """Initializes the logger function.
     
     Args:
         config: global_config.logging
@@ -14,7 +14,7 @@ def init_log(config: DictConfig) -> loggings.LogFn:
     name = config.logging.log_fn
 
     if name == "simple_log":
-        return loggings.simple_log()
+        return loggers.simple_log()
     if name == "full_log":
-        return loggings.full_log(logging_config)
+        return loggers.full_log(logging_config)
     raise ValueError(f"invalid config: logging.log_fn '{name}' is not supported.")

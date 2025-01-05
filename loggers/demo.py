@@ -9,7 +9,7 @@ from typing import Optional, NamedTuple
 from jaxtyping import Array, PyTree
 from omegaconf import DictConfig
 from utils import tree_utils
-from loggings import base
+from loggers import base
 
 
 class SimpleLogState(NamedTuple):
@@ -18,14 +18,14 @@ class SimpleLogState(NamedTuple):
     cumulatives: PyTree
 
 
-def simple_log() -> base.LogFn:
+def simple_log() -> base.Logger:
     """A very minimal log function.
     
     Examples:
         >>> from loggings import simple_log
-        >>> log_fn = simple_log()
-        >>> log_state = log_fn.init(params=...)
-        >>> log_state, log_metrics = log_fn.update(log_state, loss_val=..., params=..., grads=...)
+        >>> logger = simple_log()
+        >>> log_state = logger.init(params=...)
+        >>> log_state, log_metrics = logger.update(log_state, loss_val=..., params=..., grads=...)
     """
     def init_fn(params: optax.Params):
         state = SimpleLogState(
@@ -68,7 +68,7 @@ def simple_log() -> base.LogFn:
         )
         return state, metric
     
-    return base.LogFn(init_fn, update_fn)
+    return base.Logger(init_fn, update_fn)
 
 
 class FullLogState(NamedTuple):
@@ -82,7 +82,7 @@ class FullLogState(NamedTuple):
 
 def full_log(
         config: DictConfig,
-) -> base.LogFn:
+) -> base.Logger:
     """A more comprehensive log function that tracks advanced statistics
     related to gradients and parameters.
 
@@ -94,9 +94,9 @@ def full_log(
 
     Examples:
         >>> from loggings import full_log
-        >>> log_fn = full_log(config.logging)
-        >>> log_state = log_fn.init(params=...)
-        >>> log_state, log_metrics = log_fn.update(log_state, ...)
+        >>> logger = full_log(config.logging)
+        >>> log_state = logger.init(params=...)
+        >>> log_state, log_metrics = logger.update(log_state, ...)
     """
 
     has_params_prev = config.store_last_params  # stores x(n-1)
@@ -275,4 +275,4 @@ def full_log(
             train_key = new_key,
             aux_state = aux_state
         )
-    return base.LogFn(init_fn, update_fn)
+    return base.Logger(init_fn, update_fn)

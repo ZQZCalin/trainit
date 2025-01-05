@@ -6,23 +6,7 @@ import equinox as eqx
 from omegaconf import DictConfig
 from typing import Any, Tuple, List
 from jaxtyping import PRNGKeyArray
-
-
-
-language_models = [
-    "gpt",
-    "bert",
-    "llama",
-]
-
-vision_models = [
-    "vgg",
-    "resnet",
-]
-
-basic_models = [
-    "linear",
-]
+from _src.base import language_models, vision_models, basic_models
 
 
 def init_tokenizer(config: DictConfig):
@@ -45,20 +29,21 @@ def init_language_model(
         config: DictConfig, 
         *, 
         key: PRNGKeyArray
-    ) -> Tuple[eqx.Module, Any]:
+    ) -> eqx.Module:
     """Initializes language models.
     
     Args:
         config: global_config.model.
+        key: random key in model construction.
 
     Returns:
-        A tuple of model and tokenizer.
+        An `eqx.Module` object.
     """
     tokenizer = init_tokenizer(config)
     if config.name == "gpt":
         vocab_size = len(tokenizer)
         model = models.GPT(vocab_size, config, key=key)
-        return model, tokenizer
+        return model
     else:
         raise ValueError(f"invalid config: model.name '{config.name}' is not supported.")
     
