@@ -1,16 +1,5 @@
 """Base functions and data types."""
 
-import equinox as eqx
-import optax
-import torch
-
-from typing import List, Tuple, Optional, NamedTuple, Union, Iterable, Callable
-from jaxtyping import Array, PRNGKeyArray
-from jaxamp import DynamicScalerState
-
-import loggers
-
-
 language_models = [
     "gpt",
     "bert",

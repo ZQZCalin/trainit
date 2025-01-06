@@ -4,7 +4,7 @@ import transformers
 import models
 import equinox as eqx
 from omegaconf import DictConfig
-from typing import Any, Tuple, List
+from typing import List
 from jaxtyping import PRNGKeyArray
 from _src.base import language_models, vision_models, basic_models
 

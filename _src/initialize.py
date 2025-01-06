@@ -6,7 +6,7 @@ import jax.random as jr
 import jax.numpy as jnp
 
 import equinox as eqx
-import optax
+from optax import GradientTransformation
 
 from typing import Any, List, Tuple, Optional, NamedTuple, Union, Iterable
 from jaxtyping import Array
@@ -23,10 +23,11 @@ import random
 
 from serialize import serializer
 
+from datasets import DataLoader
 from losses import LossFn
 from loggers import Logger
 from utils import RateLimitedWandbLog
-from _src.base import TrainState, DataLoader
+from _src.train.base import TrainState
 from _src.model import init_model
 from _src.dataset import init_dataloader
 from _src.optimizer import init_optimizer
@@ -38,15 +39,15 @@ def init_pipeline(
         config: DictConfig
 ) -> Tuple[
         TrainState, 
-        optax.GradientTransformation, 
+        GradientTransformation, 
         DataLoader,
         LossFn,
         Logger,
         RateLimitedWandbLog,
     ]:
-    """Initializes / loads train state.
+    """Initialize all components of the training pipeline.
 
-    If loading checkpoint train_state, it is assumed that 
+    If loading checkpoint is true, loads train_state from the checkpoint.
 
     Args:
         config: global_config; usually pre-processed by `init_config`.

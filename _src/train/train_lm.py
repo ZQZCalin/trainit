@@ -6,7 +6,7 @@ import jax.random as jr
 import jax.numpy as jnp
 
 import equinox as eqx
-import optax
+from optax import GradientTransformation
 
 from typing import Any, Tuple, Optional, NamedTuple
 from jaxtyping import Array, PRNGKeyArray, PyTree
@@ -25,20 +25,55 @@ from serialize import serializer
 import utils
 from utils import tree_utils
 from utils import TimeKeeper, RateLimitedWandbLog
-from loggers import LogMetrics
+from datasets import DataBatch, DataLoader
+from loggers import Logger, LogState, LogMetrics
 from losses import LossFn
-from _src.base import MiniBatch, TrainState
+from _src.train.base import TrainState
+
+
+def train_step(
+        train_state: TrainState,
+        batches: List[DataBatch],
+        optimizer: optax.GradientTransformation,
+        config: DictConfig,
+) -> Tuple[Array, Array, LogMetrics, TrainState]:
+    """Wraps one training step, including back-prop, optimizer update, log update, etc."""
+    model = train_state.model                                       # x_n
+    opt_state = train_state.opt_state                               # opt_state of x_n
+
+    # Compute f(x_n, z_n) and g(x_n, z_n).
+    loss, accuracy, grads, train_state = back_prop(train_state, batches, config)
+
+    # Apply one-step update.
+    updates, opt_state = optimizer.update(
+        grads, opt_state, eqx.filter(model, eqx.is_array)
+    )                                                               # s_(n+1) * Delta_(n+1) = x_(n+1) - x_n
+    new_model = eqx.apply_updates(model, updates)                   # x_(n+1)
+
+    # Update new train_state.
+    train_state = train_state._replace(
+        model=new_model,
+        opt_state=opt_state,
+        iteration=train_state.iteration+1,
+    )
+
+    # Update aux_state and related loggings.
+    train_state = update_aux_state(
+        train_state, updates, grads, batches, loss, config=config)
+    log_data = train_state.aux_state.loggings
+    return loss, accuracy, log_data, train_state
 
 
 # TODO: this train loop specifies many details targeting to LMs only.
 # so maybe it's a good idea to call it `lm_train_loop` and distinguish it with other possible train loops like `cv_train_loop`
 def train_loop(
-    train_state: TrainState,
-    optimizer: optax.GradientTransformation,
-    dataloader: Any,
-    config: DictConfig,
-    time_keeper: TimeKeeper,
-    logger: RateLimitedWandbLog,
+        config: DictConfig,
+        train_state: TrainState,
+        optimizer: GradientTransformation,
+        dataloader: DataLoader,
+
+        time_keeper: TimeKeeper,
+        logger: RateLimitedWandbLog,
 ) -> TrainState:
     """The main train loop that handles training, logging, and checkpointing."""
     num_steps = config.train.max_steps

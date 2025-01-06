@@ -4,9 +4,9 @@ from omegaconf import DictConfig
 from typing import Any, List
 from loadit import LoadIt, chunk_shuffle
 
+from datasets import DataLoader
 from datasets import get_lm_loader_next_token
 from _src.base import lm_datasets, cv_datasets
-from _src.base import DataLoader
 from _src.model import init_tokenizer
 
 
