@@ -15,7 +15,7 @@ from _src.loss import init_loss_fn
 from _src.logger import init_logger
 from _src.train.base import TrainState
 from _src.train.base import back_prop
-from _src.train.base import train_step
+from _src.train.train_lm import lm_train_loop
 # from _src.train.train_lm import ...
 
 from _src.__about__ import __version__

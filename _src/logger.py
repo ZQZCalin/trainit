@@ -8,10 +8,12 @@ def init_logger(config: DictConfig) -> loggers.Logger:
     """Initializes the logger function.
     
     Args:
-        config: global_config.logging
+        config: global_config
     """
     logging_config = config.logging
-    name = config.logging.log_fn
+    # NOTE: we always use full log for now.
+    # name = config.logging.log_fn
+    name = "full_log"
 
     if name == "simple_log":
         return loggers.simple_log()

@@ -8,14 +8,14 @@ import jax.numpy as jnp
 import equinox as eqx
 import optax
 
-from typing import List, Tuple, Union, Optional, NamedTuple
+from typing import Tuple, Optional, NamedTuple
 from jaxtyping import Array, PRNGKeyArray, PyTree
 
 from jaxamp import amp, DynamicScalerState, dynamic_scale_value_and_grad
 
 from utils import get_dtype, get_accuracy
 from utils import tree_utils
-from datasets import DataBatch
+from dataloaders import DataBatch
 from loggers import LogState
 from losses import ObjectiveFn
 
@@ -48,9 +48,9 @@ class TrainState(NamedTuple):
 
 
 def forward_prop(
-        loss_fn: ObjectiveFn,
+        *batches: DataBatch,
         train_state: TrainState,
-        batches: Union[DataBatch, List[DataBatch]],
+        loss_fn: ObjectiveFn,
         use_amp: bool,
         amp_precision: str,
 ) -> Tuple[Array, Array, TrainState]:
@@ -59,11 +59,6 @@ def forward_prop(
     Returns:
         A tuple of (loss, accuracy, train_state).
     """
-    # TODO: This is an ugly way to handle single batch arguments.
-    if isinstance(batches, DataBatch):
-        batches = [batches]
-    num_batches = len(batches)
-
     if use_amp:
         amp_loss_fn = amp(loss_fn, compute_dtype=get_dtype(amp_precision))
     else:
@@ -71,6 +66,7 @@ def forward_prop(
 
     model = train_state.model
     train_key = train_state.train_key
+    num_batches = len(batches)
 
     current_key, new_key = jr.split(train_key)
     keys = jr.split(current_key, num_batches)
@@ -104,9 +100,9 @@ def forward_prop(
 
 
 def back_prop(
-        loss_fn: ObjectiveFn,
+        *batches: DataBatch,
         train_state: TrainState,
-        batches: List[DataBatch],
+        loss_fn: ObjectiveFn,
         use_amp: bool,
         amp_precision: str,
 ) -> Tuple[Array, Array, PyTree, TrainState]:
@@ -115,19 +111,15 @@ def back_prop(
     Only modifies the amp_state and train_key in the train_state.
 
     Args:
-        loss_fn: a mapping from (model, single_batch, key) to (loss, logits).
-        train_state: the train state container.
         batches: either a single data batch or a list of batches.
+        train_state: the train state container.
+        loss_fn: a mapping from (model, single_batch, key) to (loss, logits).
         use_amp: if true, turns on auto mixed precision.
         amp_precision: specifies the precision of amp.
     
     Returns:
         A tuple of (loss, accuracy, grads, train_state).
     """
-    if isinstance(batches, DataBatch):
-        batches = [batches]
-    num_batches = len(batches)
-
     if use_amp:
         amp_loss_fn = amp(loss_fn, compute_dtype=get_dtype(amp_precision))
         value_and_grad_fn = dynamic_scale_value_and_grad(
@@ -139,6 +131,7 @@ def back_prop(
     model = train_state.model
     dynamic_scaler_state = train_state.dynamic_scaler_state
     train_key = train_state.train_key
+    num_batches = len(batches)
 
     current_key, new_key = jr.split(train_key)
     keys = jr.split(current_key, num_batches)

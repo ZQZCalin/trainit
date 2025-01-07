@@ -46,7 +46,7 @@ def loss_to_objective(
     def objective(
         model: eqx.Module, 
         batch: Tuple[Array, Array],
-        *
+        *,
         key: PRNGKeyArray,
     ) -> Tuple[Array, Array]:
         def single_example_loss_fn(input, target):

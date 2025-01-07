@@ -6,74 +6,129 @@ import jax.random as jr
 import jax.numpy as jnp
 
 import equinox as eqx
+import optax
 from optax import GradientTransformation
 
-from typing import Any, Tuple, Optional, NamedTuple
-from jaxtyping import Array, PRNGKeyArray, PyTree
+from typing import List, Tuple
+from jaxtyping import Array
+from omegaconf import DictConfig, ListConfig
 
-from jaxamp import amp, DynamicScalerState, dynamic_scale_value_and_grad
-from omegaconf import DictConfig
-
-import os, sys, logging, warnings
+import os, logging
 from tqdm import tqdm
 
-import numpy as np
-import torch
-import random
-
 from serialize import serializer
-import utils
 from utils import tree_utils
 from utils import TimeKeeper, RateLimitedWandbLog
-from datasets import DataBatch, DataLoader
-from loggers import Logger, LogState, LogMetrics
-from losses import LossFn
+from dataloaders import DataBatch, DataLoader
+from dataloaders import shift_labels
+from loggers import Logger, LogMetrics
+from loggers import get_internal_logs
+from losses import ObjectiveFn
 from _src.train.base import TrainState
+from _src.train.base import forward_prop, back_prop
 
 
+# TODO: maybe a better design is to instantiate the Logger class in each train_loop function
+# so that each train_loop is coupled with one unique logger. This way, we don't need to worry
+# about manually changing codes when a different logger is used.
+# - Cons: only one logger is allowed, which violates my initial design.
 def train_step(
         train_state: TrainState,
         batches: List[DataBatch],
-        optimizer: optax.GradientTransformation,
+        optimizer: GradientTransformation,
+        loss_fn: ObjectiveFn,
+        logger: Logger,
         config: DictConfig,
 ) -> Tuple[Array, Array, LogMetrics, TrainState]:
-    """Wraps one training step, including back-prop, optimizer update, log update, etc."""
+    """Wraps one training step, including back-prop, optimizer update, log update, etc.
+
+    Given a train_state corresponding to model x_n and a mini-batch of data z_n
+    in iteration n (starting from n=0), performs one train step and updates to model x_(n+1).
+    
+    Returns:
+        A tuple of (loss, accuracy, log metrics, train state).
+    """
+    use_amp = config.train.use_amp
+    amp_precision = config.train.precision
+    use_log_callback = config.logging.wandb_project != None and config.logging.log_callback_data
+    use_forward_prev = config.logging.compute_last_loss and use_log_callback
+    use_back_prev = config.logging.compute_last_grads and use_log_callback
+
     model = train_state.model                                       # x_n
-    opt_state = train_state.opt_state                               # opt_state of x_n
+    opt_state = train_state.opt_state
+    log_state = train_state.log_state
+    iteration = train_state.iteration
 
     # Compute f(x_n, z_n) and g(x_n, z_n).
-    loss, accuracy, grads, train_state = back_prop(train_state, batches, config)
+    loss, accuracy, grads, train_state = back_prop(
+        *batches, 
+        train_state=train_state, 
+        loss_fn=loss_fn, 
+        use_amp=use_amp, 
+        amp_precision=amp_precision,
+    )
 
-    # Apply one-step update.
+    # Apply one-step update: x_n -> x_(n+1).
+    # NOTE: following the notion of online-to-non-convex, the updates 
+    # used for x_(n+1) has iteration index n+1, i.e., Delta_(n+1). 
+    # Hence, Delta_(n+1) is dependent on g_t but independent of g_(t+1).
     updates, opt_state = optimizer.update(
         grads, opt_state, eqx.filter(model, eqx.is_array)
-    )                                                               # s_(n+1) * Delta_(n+1) = x_(n+1) - x_n
+    )                                                               # x_(n+1) - x_n = s_(n+1) * Delta_(n+1)
     new_model = eqx.apply_updates(model, updates)                   # x_(n+1)
+
+    # Compute log metrics via logger.
+    # NOTE: this part of the code needs manual adaption to logger.update().
+    # For now, please be consistent with the logger.
+    # TODO: if we want back_prop at x_(n-1), then we also need to store amp_state
+    # of the last iteration as well?
+    # For full_log, we need to compute an extra forward prop at f(x_(n-1), z_n). 
+    if use_forward_prev:
+        is_nonarray = lambda x: not eqx.is_array(x)
+        train_state = train_state._replace(
+            model = eqx.combine(log_state.params_prev, eqx.filter(model, is_nonarray))
+        )
+        loss_prev, _, _ = forward_prop(
+            *batches, 
+            train_state=train_state, 
+            loss_fn=loss_fn, 
+            use_amp=use_amp, 
+            amp_precision=amp_precision,
+        )
+
+        optim_metrics = get_internal_logs(opt_state)
+        random_scaling = optim_metrics["update/random_scaling"] if "update/random_scaling" in optim_metrics else 1.0
+        if isinstance(logger, type(None)):
+            raise KeyboardInterrupt
+        log_state, log_metrics = logger.update(
+            log_state, loss=loss, loss_prev=loss_prev, 
+            params=eqx.filter(model, eqx.is_array),
+            grads=grads, updates=updates,
+            random_scaling=random_scaling,
+        )
+        log_metrics.update(optim_metrics)
+    else:
+        log_metrics = {}
 
     # Update new train_state.
     train_state = train_state._replace(
-        model=new_model,
-        opt_state=opt_state,
-        iteration=train_state.iteration+1,
+        model = new_model,
+        opt_state = opt_state,
+        log_state = log_state,
+        iteration = optax.safe_int32_increment(iteration),
     )
-
-    # Update aux_state and related loggings.
-    train_state = update_aux_state(
-        train_state, updates, grads, batches, loss, config=config)
-    log_data = train_state.aux_state.loggings
-    return loss, accuracy, log_data, train_state
+    return loss, accuracy, log_metrics, train_state
 
 
-# TODO: this train loop specifies many details targeting to LMs only.
-# so maybe it's a good idea to call it `lm_train_loop` and distinguish it with other possible train loops like `cv_train_loop`
-def train_loop(
+def lm_train_loop(
         config: DictConfig,
         train_state: TrainState,
         optimizer: GradientTransformation,
         dataloader: DataLoader,
-
+        loss_fn: ObjectiveFn,
+        logger: Logger,
         time_keeper: TimeKeeper,
-        logger: RateLimitedWandbLog,
+        wandb_logger: RateLimitedWandbLog,
 ) -> TrainState:
     """The main train loop that handles training, logging, and checkpointing."""
     num_steps = config.train.max_steps
@@ -85,7 +140,7 @@ def train_loop(
     start_steps = train_state.iteration                 # 0 if not loading from checkpoint
     end_steps = start_steps + num_steps
     dataloader_idx = range(start_steps*num_batches, end_steps*num_batches, num_batches)
-    pbar = tqdm.tqdm(enumerate(dataloader_idx), total=num_steps)
+    pbar = tqdm(enumerate(dataloader_idx), total=num_steps)
 
     running_loss, running_accuracy, total_tokens = 0, 0, 0
     
@@ -108,8 +163,6 @@ def train_loop(
         for batch in dataloader[batch_idx: batch_idx+num_batches]:
             # Manually shift labels for loadit dataset.
             if config.dataset.shift_labels:
-                # TODO: manually specify dataset.shift_labels=False for other tasks.
-                # In the future, we might want a cleaner way to integrate any pre-processing to data batches.
                 batch = shift_labels(batch)
             input_ids = jnp.asarray(batch["input_ids"])
             labels = jnp.asarray(batch["labels"])
@@ -120,8 +173,8 @@ def train_loop(
         time_keeper.mark(end_events={"dataloader": 1}, start_events=["train_step"])
 
         # Apply one-step train_step.
-        loss, accuracy, log_data, train_state = train_step_jit(
-            train_state, batches, optimizer
+        loss, accuracy, log_metrics, train_state = train_step_jit(
+            train_state, batches, optimizer, loss_fn, logger
         )
         # A dumb san check: end train loop if loss is infinite.
         if jnp.isnan(loss):
@@ -148,7 +201,7 @@ def train_loop(
             "total_tokens": total_tokens,
             "accuracy": accuracy,
         }
-        metrics.update(log_data)
+        metrics.update(log_metrics)
 
         # Time complexity related statistics.
         time_keeper.mark(
@@ -181,7 +234,7 @@ def train_loop(
             metrics.update(throughput)
 
         if config.logging.wandb_project is not None:
-            logger(
+            wandb_logger(
                 metrics,
                 step=train_state.iteration,
             )
@@ -199,8 +252,12 @@ def train_loop(
             else:
                 raise TypeError(f"checkpoint.save_steps has invalid type '{type(save_steps)}'.")
             if to_save:
-                checkpoint_file = os.path.join(config.checkpoint.save_path, f"iter_{it}.ckpt")
-                serializer.save(checkpoint_file, train_state)
-                logging.info(f"Successfully saves checkpoint file to '{checkpoint_file}'.")
+                checkpoint_train_state = os.path.join(config.checkpoint.save_path, f"iter_{it}.ckpt")
+                serializer.save(checkpoint_train_state, train_state)
+                logging.info(f"Successfully saves checkpoint file to '{checkpoint_train_state}'.")
+
+                checkpoint_model = os.path.join(config.checkpoint.save_path, f"iter_{it}_model.ckpt")
+                serializer.save(checkpoint_model, train_state.model)
+                logging.info(f"Successfully saves checkpoint model to '{checkpoint_model}'.")
 
     return train_state

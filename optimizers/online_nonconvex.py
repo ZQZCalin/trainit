@@ -4,18 +4,18 @@ import jax
 from jax import numpy as jnp
 from jax import random as jr
 from jax import tree_util as jtu
+
 import optax
 import chex
-import jaxtyping
-from jaxtyping import PRNGKeyArray
+from jaxtyping import Array, PRNGKeyArray
 from typing import Any, Tuple, NamedTuple, Optional, Callable
-from online_learners import OnlineLearner
+
 from utils import tree_utils, log_utils
-import online_learners as ol
+from optimizers.online_learners import OnlineLearner
 
 
 SampleFunction = Callable[[chex.Array], chex.Numeric]
-RandomScalingFn = Callable[[jaxtyping.PRNGKeyArray], chex.Numeric]
+RandomScalingFn = Callable[[PRNGKeyArray], chex.Numeric]
 ImportanceSamplingFn = Callable[[chex.Numeric], chex.Numeric]
 
 def get_random_scaling(
@@ -65,9 +65,9 @@ def wrap_random_scaling(
 
     def init_fn(params):
         logging = {
-            "update/params_norm": jnp.zeros([]),
+            # "update/params_norm": jnp.zeros([]),
             "update/update_norm_pre_scaling": jnp.zeros([]),
-            "update/update_norm_post_scaling": jnp.zeros([]),
+            # "update/update_norm_post_scaling": jnp.zeros([]),
             "update/random_scaling": jnp.ones([]),      # random scalar should be initialized to 1 (to avoid divide by 0 issue).
             "update/importance_sampling": jnp.ones([]),
         }
@@ -87,9 +87,9 @@ def wrap_random_scaling(
         new_updates = tree_utils.scalar_dot(updates, scalar)
         update_norm = tree_utils.norm(updates)
         logging = {
-            "update/params_norm": tree_utils.norm(params),
+            # "update/params_norm": tree_utils.norm(params),
             "update/update_norm_pre_scaling": update_norm,
-            "update/update_norm_post_scaling": update_norm*scalar,
+            # "update/update_norm_post_scaling": update_norm*scalar,
             "update/random_scaling": scalar,
             "update/importance_sampling": weight,
         }

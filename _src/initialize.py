@@ -23,7 +23,7 @@ import random
 
 from serialize import serializer
 
-from datasets import DataLoader
+from dataloaders import DataLoader
 from losses import LossFn
 from loggers import Logger
 from utils import RateLimitedWandbLog

@@ -4,7 +4,7 @@ import jax
 from jax import numpy as jnp
 from jax import random as jr
 from jax import tree_util as jtu
-from typing import Union
+from typing import Union, Literal
 from jaxtyping import PyTree
 import chex
 
@@ -42,10 +42,10 @@ def negative(tree: PyTree) -> PyTree:
     return scalar_dot(tree, scalar=-1.0)
 
 
-def norm(tree: PyTree, p: float=2) -> Scalar:
+def norm(tree: PyTree, p: Union[float, Literal["inf"]] = 2) -> Scalar:
     """Norm of a Pytree.
     
-    p = 1, 2, inf have specific implementation, other values are generic.
+    p = 1, 2, "inf" have specific implementation, other values are generic.
     """
     if p == 2:
         return jnp.sqrt(jtu.tree_reduce(
@@ -57,22 +57,24 @@ def norm(tree: PyTree, p: float=2) -> Scalar:
             lambda x, y: x + y,
             jtu.tree_map(lambda x: jnp.sum(jnp.abs(x)), tree)
         )
-    if p == float("inf"):
+    if p == "inf":
         return jtu.tree_reduce(
             lambda x, y: jnp.maximum(x, y),
             jtu.tree_map(lambda x: jnp.max(x), tree)
         )
-    return jtu.tree_reduce(
-        lambda x, y: x + y,
-        jtu.tree_map(lambda x: jnp.sum(jnp.abs(x)**p), tree)
-    ) ** (1/p)
+    if p > 0:
+        return jtu.tree_reduce(
+            lambda x, y: x + y,
+            jtu.tree_map(lambda x: jnp.sum(jnp.abs(x)**p), tree)
+        ) ** (1/p)
+    raise ValueError(f"p must be positive number of 'inf' but got '{p}'.")
 
 
-def normalize(tree: PyTree, p: float=2) -> PyTree:
+def normalize(tree: PyTree, p: Union[float, Literal["inf"]] = 2) -> PyTree:
     """Normalize a PyTree."""
     n = norm(tree, p)
     return jax.lax.cond(
-        n == 0,
+        n == 0.0,
         true_fun=lambda _: tree,
         false_fun=lambda _: jtu.tree_map(lambda x: x/n, tree),
         operand=None,

@@ -5,11 +5,11 @@ import random
 import numpy as np
 from itertools import chain
 import wandb
-import datasets
+import dataloaders
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from datasets import load_dataset
+from dataloaders import load_dataset
 from accelerate import Accelerator, DistributedType
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
@@ -35,7 +35,7 @@ from omegaconf import OmegaConf, DictConfig
 from argparse import Namespace
 from typing import Any, NamedTuple
 
-from datasets.lm_loader import get_lm_loader_next_token
+from dataloaders.lm_loader import get_lm_loader_next_token
 
 import os, sys
 sys.path.append('./minGPT')
@@ -463,10 +463,10 @@ def train(config: DictConfig) -> None:
     accelerator = Accelerator(gradient_accumulation_steps=1)    # default to no gradient accumulation
     logger.info(accelerator.state, main_process_only=False)
     if accelerator.is_local_main_process:
-        datasets.utils.logging.set_verbosity_warning()
+        dataloaders.utils.logging.set_verbosity_warning()
         transformers.utils.logging.set_verbosity_info()
     else:
-        datasets.utils.logging.set_verbosity_error()
+        dataloaders.utils.logging.set_verbosity_error()
         transformers.utils.logging.set_verbosity_error()
 
     # Set training seed.

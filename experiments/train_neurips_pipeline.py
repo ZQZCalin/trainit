@@ -5,13 +5,13 @@ import random
 from itertools import chain
 from pathlib import Path
 import wandb
-import datasets
+import dataloaders
 import torch
 import torch.nn.functional as F
 from accelerate import Accelerator, DistributedType
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
-from datasets import load_dataset
+from dataloaders import load_dataset
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from loadit import LoadIt
@@ -36,7 +36,7 @@ from typing import NamedTuple
 import sys
 sys.path.append('./minGPT')
 from mingpt.model import GPT as minGPT
-from datasets.lm_loader import get_lm_loader_next_token
+from dataloaders.lm_loader import get_lm_loader_next_token
 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
@@ -525,10 +525,10 @@ def train(config: DictConfig) -> None:
     accelerator = Accelerator(gradient_accumulation_steps=1)
     logger.info(accelerator.state, main_process_only=False)
     if accelerator.is_local_main_process:
-        datasets.utils.logging.set_verbosity_warning()
+        dataloaders.utils.logging.set_verbosity_warning()
         transformers.utils.logging.set_verbosity_info()
     else:
-        datasets.utils.logging.set_verbosity_error()
+        dataloaders.utils.logging.set_verbosity_error()
         transformers.utils.logging.set_verbosity_error()
 
     # Set training seed.

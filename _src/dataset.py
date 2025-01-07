@@ -4,8 +4,8 @@ from omegaconf import DictConfig
 from typing import Any, List
 from loadit import LoadIt, chunk_shuffle
 
-from datasets import DataLoader
-from datasets import get_lm_loader_next_token
+from dataloaders import DataLoader
+from dataloaders import get_lm_loader_next_token
 from _src.base import lm_datasets, cv_datasets
 from _src.model import init_tokenizer
 
@@ -37,8 +37,10 @@ def load_lm_data(
             # NOTE: for this reason, I will just set length to None so we shuffle the entire dataset.
             # max_steps = config.train.max_steps
             # length = max_steps * config.total_batch_size
-            length = None
-            loader = chunk_shuffle(loader, chunk_size=config.shuffle_buffer_size, length=length, seed=seed)
+            # length = None
+            chunk_size = config.shuffle_buffer_size
+            length = config.loadit_length
+            loader = chunk_shuffle(loader, chunk_size=chunk_size, length=length, seed=seed)
     else:
         if config.name not in lm_datasets:
             raise ValueError(f"invalid config: dataset.name '{config.name}' is not included in {lm_datasets}")

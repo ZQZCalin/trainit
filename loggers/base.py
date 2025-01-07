@@ -6,8 +6,8 @@ from jaxtyping import Array, PyTree
 from utils import merge_dicts, list_of_logs
 
 
-LogState = PyTree
-LogMetrics = PyTree
+LogState = NamedTuple
+LogMetrics = dict[Array]
 
 
 class LoggerInitFn(Protocol):
@@ -46,6 +46,6 @@ class Logger(NamedTuple):
     update: LoggerUpdateFn
 
 
-def get_internal_logs(opt_state: optax.OptState) -> Dict[Array]:
+def get_internal_logs(opt_state: optax.OptState) -> dict[Array]:
     """Fetchs `utils.Log` objects, the internal logging metrics, from an `optax.OptState`."""
     return merge_dicts(*list_of_logs(opt_state))

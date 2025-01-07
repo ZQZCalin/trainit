@@ -23,6 +23,8 @@ dataloader_workers: 2
 # if true, will use the loadit dataset in {loadit_path}
 use_loadit: true
 loadit_path: "/projectnb/aclab/tranhp/trainDataloader_pile/"
+# this specifies we are using the first 10 mil data.
+loadit_length: 10000000
 
 # if true, will manually shift labels to the left by one 
 # and pad the last label by -100 during the training step.

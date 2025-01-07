@@ -4,37 +4,14 @@
 # all components into a complete training pipeline.
 # ===================================================================
 
-import logging
-import warnings
-
-import jax
-from jax import numpy as jnp
-from jax import random as jr
-from jax import tree_util as jtu
-
-import optax
-import equinox as eqx
-
-from jaxamp import amp, DynamicScalerState, dynamic_scale_value_and_grad
-from typing import List, Tuple, Any, Optional, NamedTuple
-from jaxtyping import Array, PRNGKeyArray
-
-import tqdm
-import wandb
 import hydra
-from omegaconf import OmegaConf, DictConfig, ListConfig
+from omegaconf import DictConfig
 
-import os
-
-import serialize.serializer as serializer
-from datasets import shift_labels
-from loggers import LogMetrics
-from utils import TimeKeeper, RateLimitedWandbLog
-from _src import MiniBatch, TrainState
+from utils import TimeKeeper
 from _src import init_pipeline
 from _src import init_config
 from _src import init_wandb
-from _src import train_loop
+from _src import lm_train_loop
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
@@ -45,21 +22,23 @@ def main(config: DictConfig) -> None:
     config = init_config(config, verbose=2)
     
     # NOTE: customize each component in `_src` if needed.
-    train_state, optimizer, train_loader, loss_fn, logger, limited_log = init_pipeline(config)
+    train_state, optimizer, train_loader, loss_fn, logger, wandb_logger = init_pipeline(config)
 
     time_keeper = TimeKeeper()
 
     init_wandb(config)
-
-    # NOTE: customize your own train_loop in `_src/train.py`.
-    train_loop = init_train_loop(config)
-    train_loop(
+    
+    # NOTE: customize your own train_loop in `_src/train`.
+    # train_loop = init_train_loop(config)
+    lm_train_loop(
+        config = config,
         train_state = train_state,
         optimizer = optimizer,
         dataloader = train_loader,
-        config = config,
-        logger = limited_log,
-        time_keeper = time_keeper
+        loss_fn = loss_fn,
+        logger = logger,
+        time_keeper = time_keeper,
+        wandb_logger = wandb_logger,
     )
 
 

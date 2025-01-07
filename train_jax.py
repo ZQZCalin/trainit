@@ -35,7 +35,7 @@ from utils import softmax_cross_entropy, tree_norm, get_accuracy, get_dtype
 import logstate
 from logger import TimeKeeper, RateLimitedWandbLog
 from models.mingpt import GPT
-from datasets.lm_loader import get_lm_loader_next_token, shift_labels
+from dataloaders.lm_loader import get_lm_loader_next_token, shift_labels
 from loadit import LoadIt, chunk_shuffle
 
 import os, sys
