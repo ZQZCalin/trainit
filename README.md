@@ -148,3 +148,8 @@ The current configuration is recorded from the optimal Adam benchmark. You can e
 1. Implement your optimizer in `optimizer/NAME.py`.
 2. Create a configuration file `conf/optimizer/NAME.yaml`.
 3. In the main pipeline `train_jax.py`, add your optimizer in the `init_optimizer` component.
+
+
+## Credits
+
+- The code of `scalable_shampoo` is derived from [google-research](https://github.com/google-research/google-research/tree/master/scalable_shampoo).
