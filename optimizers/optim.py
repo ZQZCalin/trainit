@@ -6,14 +6,9 @@ from jax import random as jr
 from jax import tree_util as jtu
 import chex
 import optax
-from optax import Updates, Params, OptState, ScalarOrSchedule, GradientTransformation
-from typing import Any, Tuple, NamedTuple, Optional, Callable
-import sys
-sys.path.append('../trainit')
+from optax import GradientTransformation, OptState
+from typing import NamedTuple
 import utils
-import optimizers.schedule as schedule
-import logstate
-import optimizers.base as base
 
 
 class PolarDescentState(NamedTuple):

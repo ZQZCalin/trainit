@@ -1,12 +1,16 @@
+"""Test optimizers."""
+
 import jax
 from jax import numpy as jnp
 from jax import random as jr
 from jax import tree_util as jtu
+
 import optax
 from optax import GradientTransformation
-import optimizers.base as base
-import optimizers.schedule as schedule
-import optim
+
+from optimizers import base
+from optimizers import optim
+from optimizers import schedule
 
 
 def test_optimizer(
