@@ -3,18 +3,10 @@ from jax import numpy as jnp
 from jax import random as jr
 from jax import tree_util as jtu
 import optax
-from optax import Updates, Params, OptState, ScalarOrSchedule, GradientTransformation
-from typing import Any, Tuple, NamedTuple, Optional, Union, Callable, Protocol
-from tqdm import tqdm
-import sys
-sys.path.append('../trainit')
-import utils
-import online_learners as ol
-from optimizers.online_nonconvex import online_nonconvex
+from optax import GradientTransformation
 import optimizers.base as base
 import optimizers.schedule as schedule
 import optim
-from models.mingpt import GPT
 
 
 def test_optimizer(
