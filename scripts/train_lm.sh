@@ -3,6 +3,7 @@
 # project=null
 project=precond
 run=baseline
+log_data=True
 steps=2000
 batch_size=128
 
@@ -17,10 +18,7 @@ lr=1e-3
 warmup=200
 
 # BELOW for saving checkpoint without loggings
-project=null
-log_data=False
-
-save_checkpoint=True
+save_checkpoint=False
 save_path=checkpoint/precond/adam_baseline
 save_steps="[2000]"
 
