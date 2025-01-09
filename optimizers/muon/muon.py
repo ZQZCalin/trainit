@@ -105,6 +105,9 @@ def scale_by_muon(
         # Wrap final update.
         lr = get_current_lr(learning_rate, count)
         updates = tree_utils.scalar_dot(updates, -lr)
+
+        # NOTE: there's still one more step: line 135
+        raise NotImplementedError
         return updates, ScaleByMuonState(
             count = optax.safe_int32_increment(count),
             muon_momentum = muon_momentum
