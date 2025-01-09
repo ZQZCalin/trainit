@@ -8,53 +8,78 @@ import optax
 from typing import Any, Tuple, NamedTuple, Optional, Callable, Union
 from jaxtyping import Array, PyTree
 from utils import tree_utils, log_utils
+from loggers import Logger, LogState
 import optimizers.schedule as schedule
 
 
 ScalarOrPytree = Union[float, PyTree]
 
 
-class AdamWState(NamedTuple):
-    """AdamW State."""
+class AdamState(NamedTuple):
+    """Adam State."""
     count: Array
-    mu: optax.Updates
-    nu: optax.Updates
-    logging: log_utils.Log
+    mu: Optional[optax.Updates]
+    nu: Optional[optax.Updates]
+    log_state: Optional[LogState]
+    logging: Optional[log_utils.Log]
 
 
-def adamw(
+def adam(
     learning_rate: optax.ScalarOrSchedule = 1e-4,
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
-    weight_decay: ScalarOrPytree = 0.0,
+    weight_decay: float = 0.0,
+    decouple_weight_decay: bool = True,
     debias_beta1: bool = True,
     debias_beta2: bool = True,
     use_momentum: bool = True,
-    use_preconditioning: bool = True,
-    decouple_weight_decay: bool = False,
+    use_momentum_state: bool = True,
+    use_precond: bool = True,
+    use_precond_state: bool = True,
+    use_constant_wd: bool = False,
 ) -> optax.GradientTransformation:
-    """AdamW for benchmark.
+    """The Adam optimizer.
+
+    Implements the Adam optimizer from:
+
+    https://arxiv.org/pdf/1412.6980
+
+    This is the base implementation that will be derived into variants
+    including SGD, SGDM, and RMSProp.
+
+    `decouple_weight_decay` controls whether to update as Adam (wd before momentum) 
+    or AdamW (wd after momentum), where AdamW is implemented from:
+
+    https://arxiv.org/pdf/1711.05101
+
+    If users need to apply different lr or wd to different subgroups of the model,
+    please use `optax.multi_transform`.
 
     Args:
-        learning_rate (ScalarOrSchedule): _description_. Defaults to 1e-4.
-        beta1 (float): _description_. Defaults to 0.9.
-        beta2 (float): _description_. Defaults to 0.999.
-        eps (float): _description_. Defaults to 1e-8.
-        weight_decay (float): _description_. Defaults to 0.0.
-        debias_beta1 (bool): Defaults to True.
-        debias_beta2 (bool): Defaults to True.
-        use_momentum (bool): Defaults to True. If false, replace \hat m_t with the gradients.
-            However, m_t will still be compated based on beta1 and stored in the opt_state.
-        use_preconditioning (bool): Defaults to True. If false, use \hat m_t as the update (without dividing by v_t).
-            However, v_t will still be computed based on beta2 and stored in the opt_state.
-        decouple_weight_decay (bool): Defaults to False. If true, learning rate eta will not be applied to weight_decay regularization.
+        learning_rate: learning rate schedule.
+        beta1: momentum constant.
+        beta2: momentum constant of adaptive gradients.
+        eps: stability constant.
+        weight_decay: weight decay.
+        decouple_weight_decay: Defaults to False. If true, learning rate eta will not be applied to weight_decay regularization.
+        debias_beta1: if true, uses unbiased EMA of momentum. Defaults to True.
+        debias_beta2: if true, uses unbiased EMA of gradient preconditioner. Defaults to True.
+        use_momentum: If false, replace \hat m_t with g_t.
+        use_momentum_state: If false, does not store m_t in the opt_state.
+        use_precond: If false, does not scale \hat m_t by the adaptive gradient pre-conditioner v_t.
+        use_precond_state: if false, does not store v_t in the opt_state.
+        use_constant_wd: an experimental parameter. if true, weight decay does not scale with learning rate schedule. Defaults to False.
 
     Returns:
         A `GradientTransformation` object.
     """
 
     use_pytree_wd = type(weight_decay) != float
+    if use_momentum:
+        use_momentum_state = True
+    if use_precond:
+        use_precond_state = True
 
     def init_fn(params):
         # Checks weight_decay structure during initialization.
@@ -65,7 +90,7 @@ def adamw(
             "optimizer/cos(g,m/sqrt(v))": jnp.zeros([]),
             "optimizer/cos(g,g/sqrt(v))": jnp.zeros([]),
         }
-        return AdamWState(
+        return AdamState(
             count=jnp.zeros([], jnp.int32),
             mu=jtu.tree_map(jnp.zeros_like, params),
             nu=jtu.tree_map(jnp.zeros_like, params),
@@ -122,7 +147,7 @@ def adamw(
             "optimizer/cos(g,m/sqrt(v))": tree_utils.cosine(updates, precond_mu),
             "optimizer/cos(g,g/sqrt(v))": tree_utils.cosine(updates, precond_g),
         }
-        return new_updates, AdamWState(
+        return new_updates, AdamState(
             count=count_inc, mu=mu, nu=nu, logging=log_utils.Log(logging))
     
     return optax.GradientTransformation(init_fn, update_fn)
