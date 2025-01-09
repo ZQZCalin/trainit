@@ -57,6 +57,7 @@ def init_schedule(lr_config: DictConfig) -> optax.ScalarOrSchedule:
                 end_value=0.0,
                 transition_steps=config.max_steps,
             )
+        # TODO: add 3-phase linear schedule
         return learning_rate
 
     def init_piecewise_linear_lr(config):
@@ -142,6 +143,25 @@ def init_optimizer(
             beta=config.beta,
             weight_decay=config.weight_decay
         )
+    
+    def init_muon(config: DictConfig):
+        muon_lr = wrap_scheduler(
+            init_schedule(config.lr_config), wandb_log=wandb_log)
+        adam_lr_config = config.lr_config
+        adam_lr_config.lr = config.adam_lr
+        adam_lr = wrap_scheduler(
+            init_schedule(adam_lr_config), wandb_log=wandb_log, schedule_title="adam_schedule")
+        return optimizers.muon(
+            learning_rate=muon_lr,
+            momentum=config.momentum,
+            nesterov=config.nesterov,
+            ns_steps=config.ns_steps,
+            adam_lr=adam_lr,
+            adam_beta1=config.adam_beta1,
+            adam_beta2=config.adam_beta2,
+            adam_eps=config.adam_eps,
+            adam_wd=config.adam_wd
+        )
 
     # Initialize base optimizer.
     name = config.optimizer.name
@@ -150,6 +170,12 @@ def init_optimizer(
         optimizer = init_adamw(config=opt_config)
     elif name == "sgdm":
         optimizer = init_sgdm(config=opt_config)
+    elif name == "muon":
+        optimizer = init_muon(config=opt_config)
+
+    # DEBUG
+    opt_state = optimizer.init(eqx.filter(model, eqx.is_array))
+    raise KeyboardInterrupt
 
     # Wrap online-to-nonconvex.
     if name in ["ogd_md"]:

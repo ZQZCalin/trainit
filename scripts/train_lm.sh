@@ -20,7 +20,7 @@ warmup=200
 project=null
 log_data=False
 
-save_checkpoint=True
+save_checkpoint=False
 save_path=checkpoint/precond/adam_baseline
 save_steps="[2000]"
 

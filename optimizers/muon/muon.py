@@ -69,6 +69,7 @@ def scale_by_muon(
         nesterov: bool = True,
         ns_steps: int = 6,
 ) -> optax.GradientTransformation:
+    """Muon update on parameters with 2d arrays."""
     
     def init_fn(params):
         return ScaleByMuonState(
@@ -112,10 +113,51 @@ def scale_by_muon(
     return optax.GradientTransformation(init_fn, update_fn)
 
 
-def Muon(
-        
+def muon(
+        learning_rate: optax.ScalarOrSchedule = 0.05,
+        momentum: float = 0.95,
+        nesterov: bool = True,
+        ns_steps: int = 6,
+        adam_lr: optax.ScalarOrSchedule = 3e-4,
+        adam_beta1: float = 0.95,
+        adam_beta2: float = 0.95,
+        adam_eps: float = 1e-8,
+        adam_wd: float = 0.0,
 ) -> optax.GradientTransformation:
-    """The muon optimizer."""
-    optimizer1 = scale_by_muon()
-    optimizer2 = adamw()
-    return optax.multi_transform()
+    """The muon optimizer.
+    
+    Applies muon update on suitable parameters and
+    applies adam update on the rest.
+
+    We use `optax.multi_transform` to combine these updates.
+
+    Args:
+        learning_rate: muon learning rate.
+        momentum: sgd momentum of muon.
+        nesterov: whether to use nesterov momentum.
+        ns_steps: number of steps of Newton-Schulz.
+        adam_lr: adam learning rate.
+        adam_beta1: adam beta1.
+        adam_beta2: adam beta2.
+        adam_eps: adam eps.
+        adam_wd: adam weight decay.
+    """
+    optim_muon = scale_by_muon(
+        learning_rate, momentum, nesterov, ns_steps
+    )
+    optim_adam = adamw(
+        learning_rate = adam_lr,
+        beta1 = adam_beta1,
+        beta2 = adam_beta2,
+        eps = adam_eps,
+        weight_decay = adam_wd
+    )
+    transforms = {
+        "muon": optim_muon,
+        "adam": optim_adam,
+    }
+    def label_params(params):
+        return jtu.tree_map(
+            lambda p: "muon" if p.ndim == 2 else "adam", params
+        )
+    return optax.multi_transform(transforms, label_params)

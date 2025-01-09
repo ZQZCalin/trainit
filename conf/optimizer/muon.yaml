@@ -1,0 +1,13 @@
+name: muon
+defaults:
+  - lr_config: linear
+
+momentum: 0.95
+nesterov: True
+ns_steps: 6
+
+adam_lr: 3e-4
+adam_beta1: 0.95
+adam_beta2: 0.95
+adam_eps: 1e-8
+adam_wd: 0.0
