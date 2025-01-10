@@ -3,8 +3,14 @@
 Extends/re-implements existing algorithms in optax.
 """
 
-from optimizers.base import sgdm
-from optimizers.base import adamw
+from optimizers.base import (
+    adam_base,
+    adam,
+    adamw,
+    nadam,
+    rmsprop,
+    sgdm,
+)
 from optimizers.online_nonconvex import wrap_random_scaling
 from optimizers.online_nonconvex import online_to_gradient_transformation
 # from optimizers.online_nonconvex import online_to_non_convex

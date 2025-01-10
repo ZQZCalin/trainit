@@ -2,26 +2,22 @@
 
 # project=null
 project=precond
-run=baseline
+run=adamw
+log_data=True
 steps=2000
 batch_size=128
 
-optimizer=adam
+optimizer=adamw
 wd=0.1
-use_momentum=True
-use_preconditioning=True
-decouple_weight_decay=False
+nesterov=True
 
 schedule=linear
 lr=1e-3
 warmup=200
 
 # BELOW for saving checkpoint without loggings
-project=null
-log_data=False
-
 save_checkpoint=False
-save_path=checkpoint/precond/adam_baseline
+save_path=checkpoint/precond/adamw
 save_steps="[2000]"
 
 python main.py \
@@ -32,9 +28,7 @@ python main.py \
     dataset.total_batch_size=$batch_size \
     optimizer=$optimizer \
     optimizer.weight_decay=$wd \
-    optimizer.use_momentum=$use_momentum \
-    optimizer.use_preconditioning=$use_preconditioning \
-    optimizer.decouple_weight_decay=$decouple_weight_decay \
+    optimizer.use_nesterov=$nesterov \
     optimizer/lr_config=$schedule \
     optimizer.lr_config.lr=$lr \
     optimizer.lr_config.warmup=$warmup \

@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import equinox as eqx
 from optax import GradientTransformation
 
-from typing import Any, List, Tuple, Optional, NamedTuple, Union, Iterable
+from typing import Tuple, Literal
 from jaxtyping import Array
 
 from jaxamp import amp, DynamicScalerState, dynamic_scale_value_and_grad
@@ -93,7 +93,7 @@ def init_pipeline(
     # if they customize their own logger function that takes more arguments than default ones.
     # Parsing unnecessary arguments, on the other hand, is safe as they will just be dropped.
     logger = init_logger(config)
-    log_state = logger.init(
+    log_state, _ = logger.init(
         params=eqx.filter(model, eqx.is_array),
         # parse extra arguments if needed...
     )
@@ -157,7 +157,7 @@ def init_pipeline(
 
 def init_config(
         config: DictConfig,
-        verbose: int = 2,
+        verbose: Literal[0,1,2] = 2,
     ) -> DictConfig:
     """Pre-process config files.
 
@@ -257,9 +257,6 @@ def init_config(
             logging.info(f"Successfully created checkpoint path '{checkpoint_path}'.")
             logging.info(f"Successfully saved checkpoint config to '{config_path}'.")
         return config
-    
-    if verbose not in range(3):
-        raise ValueError("invalid argument: verbose cannot be '{verbose}'.")
     
     if verbose == 2:
         logging.info(">>> Loaded config:")

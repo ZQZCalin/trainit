@@ -1,4 +1,4 @@
-name: adam
+name: nadam
 defaults: 
   - lr_config: linear
 lr_config:
@@ -7,3 +7,4 @@ beta1: 0.9
 beta2: 0.999
 eps: 1e-8
 weight_decay: 0.1
+decouple_weight_decay: False

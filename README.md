@@ -1,9 +1,14 @@
-# LLM Training Pipeline
+# Trainit -- A ML Training Pipeline
+
+Trainit is a machine learning training pipeline based on [jax](https://jax.readthedocs.io/en/latest/index.html). It is also built on [optax](https://optax.readthedocs.io/en/latest/) for optimizers, [equinox](https://docs.kidger.site/equinox/all-of-equinox/) for models, [wandb](https://wandb.ai/site/) for logging, and [hydra](https://hydra.cc/docs/intro/) for convenient configuration management.
+
+*News:*
+This pipeline is now updated to v2.0! In the new update, we made it more available to train other ML tasks beyond language models.
 
 ### Table of Content
 
 - [Installation](#installation)
-- [Usage](#usage)
+- [Quick Start](#quick-start)
 - [Advanced](#advanced)
 
 ## Installation
@@ -23,10 +28,10 @@ To setup wandb logging:
 wandb login
 ```
 
-We use [minGPT](https://github.com/karpathy/minGPT) to confirm pytorch/jax equivalence.
+<!-- We use [minGPT](https://github.com/karpathy/minGPT) to confirm pytorch/jax equivalence.
 ```bash
 git clone https://github.com/karpathy/minGPT.git
-```
+``` -->
 
 ### Activate Environment
 
@@ -37,35 +42,59 @@ cd /YOUR/PATH/trainit
 module load python3/3.10.12 cuda/12.2
 source env/bin/activate
 python check_env.py
+
+# or simply
+cd /YOUR/PATH/trainit
+source activate_env.sh
 ```
 
-## Usage
+## Quick Start
 
 ### Run the Training Pipeline
 
-To reproduce the optimal benchmark:
+We provide an example script of training GPT-2 with AdamW in `scripts/train_lm.sh`. You can modify the configs there and simply run
 
 ```bash
-python train_jax.py logging.wandb_project=PROJECT_NAME
+bash scripts/train_lm.sh
 ```
 
 This may fail if your GPU does not have enough memory (24GB should be enough). If you want to use a 12GB GPU like a V100, you can cut down the memory significantly by disabling some logging:
-```bash
-python train_jax.py logging.wandb_project=PROJECT_NAME logging.store_last_grads=false logging.store_past_grads=false logging.store_last_params=false logging.compute_last_
-loss=false logging.compute_last_grads=false
-```
-
-You can also customize your own configurations. For example, if you want to train SGDM:
 
 ```bash
-python train_jax.py logging.wandb_project=PROJECT_NAME \
-    optimizer=sgdm optimizer.lr_config.lr=1.0 ...
+python train_jax.py \
+    # add these lines
+    logging.store_last_grads=false \
+    logging.store_past_grads=false \
+    logging.store_last_params=false \
+    logging.compute_last_loss=false \
+    logging.compute_last_grads=false
 ```
 
+If you do not need any logging at all, you can simply change to `log_data=false` in `train_lm.sh` or specify in your command
 
-See [later](#configurations) for details.
+```bash
+python train_jax.py logging.log_callback_data=false
+```
 
-### Checkpoint your Training
+### Configuration Management 
+
+You can always customize your own configurations. Trainit uses hydra for config management, so the syntax is the same as hydra. You can find all default configs in the `conf/` subfolder. 
+
+As an example, to change the optimizer from the default AdamW to SGDM, you can simply specify this
+
+```bash
+python train_jax.py \
+    optimizer=sgdm \
+    # you can also change the default hyper-parameters of sgdm here:
+    optimizer/lr_config=linear \
+    optimizer.lr_config.lr=1.0 \
+    optimizer.lr_config.warmup=200 \
+    optimizer.lr_config.max_steps=2000
+```
+
+For more details, please see the next section.
+
+### Training Checkpoints
 
 We have implemented a checkpointing system for you. All you need is changing the checkpoint configuration:
 
@@ -96,6 +125,8 @@ python train_jax.py \
 - `overwrite_optimizer`: Defaults to `False` and loads `opt_state` from the saved train_state (and thus continues training the existing optimizer). If true, reinitializes a new optimizer with a fresh `opt_state`.  USE WITH CAUTION: This should only be used if you need to either restart your optimizer or use a different optimizer family (e.g. from Adam to SGDM). If you only need to change optimizer hyper-parameters such as learning rate or momentum, keep `overwrite_optimizer=False` and just turn on `overwrite_config=True`.
 
 ## Advanced
+
+*Note:* this part of documentation is still under construction.
 
 ### The Training Pipeline
 

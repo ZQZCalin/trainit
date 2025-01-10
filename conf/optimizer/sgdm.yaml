@@ -2,6 +2,8 @@ name: sgdm
 defaults: 
   - lr_config: linear
 lr_config:
-  lr: 1.0
-beta: 0.9
-weight_decay: 1e-6
+  lr: 0.1
+momentum: 0.9   # set to null to turn off momentum (vanilla sgd)
+use_nesterov: False
+weight_decay: 0.0
+decouple_weight_decay: True

@@ -120,6 +120,36 @@ def init_optimizer(
     Returns:
         A tuple of optax.GradientTransofrmation and optax.OptState.
     """
+    def init_adam_base(config: DictConfig):
+        learning_rate = wrap_scheduler(
+            init_schedule(config.lr_config), wandb_log=wandb_log)
+        return optimizers.adam_base(
+            learning_rate=learning_rate,
+            beta1=config.beta1,
+            beta2=config.beta2,
+            eps=config.eps,
+            weight_decay=config.weight_decay,
+            use_nesterov=config.use_nesterov,
+            debias_beta1=config.debias_beta1,
+            debias_beta2=config.debias_beta2,
+            use_momentum=config.use_momentum,
+            use_momentum_state=config.use_momentum_state,
+            use_precond=config.use_precond,
+            use_precond_state=config.use_precond_state,
+            logger=None,
+        )
+    
+    def init_adam(config: DictConfig):
+        learning_rate = wrap_scheduler(
+            init_schedule(config.lr_config), wandb_log=wandb_log)
+        return optimizers.adam(
+            learning_rate=learning_rate,
+            beta1=config.beta1,
+            beta2=config.beta2,
+            eps=config.eps,
+            weight_decay=config.weight_decay,
+        )
+
     def init_adamw(config: DictConfig):
         learning_rate = wrap_scheduler(
             init_schedule(config.lr_config), wandb_log=wandb_log)
@@ -127,11 +157,31 @@ def init_optimizer(
             learning_rate=learning_rate,
             beta1=config.beta1,
             beta2=config.beta2,
+            eps=config.eps,
             weight_decay=config.weight_decay,
-            debias_beta1=config.debias_beta1,
-            debias_beta2=config.debias_beta2,
-            use_momentum=config.use_momentum,
-            use_preconditioning=config.use_preconditioning,
+            use_nesterov=config.use_nesterov,
+        )
+
+    def init_nadam(config: DictConfig):
+        learning_rate = wrap_scheduler(
+            init_schedule(config.lr_config), wandb_log=wandb_log)
+        return optimizers.nadam(
+            learning_rate=learning_rate,
+            beta1=config.beta1,
+            beta2=config.beta2,
+            eps=config.eps,
+            weight_decay=config.weight_decay,
+            decouple_weight_decay=config.decouple_weight_decay,
+        )
+
+    def init_rmsprop(config: DictConfig):
+        learning_rate = wrap_scheduler(
+            init_schedule(config.lr_config), wandb_log=wandb_log)
+        return optimizers.rmsprop(
+            learning_rate=learning_rate,
+            momentum=config.momentum,
+            eps=config.eps,
+            weight_decay=config.weight_decay,
             decouple_weight_decay=config.decouple_weight_decay,
         )
 
@@ -140,8 +190,10 @@ def init_optimizer(
             init_schedule(config.lr_config), wandb_log=wandb_log)
         return optimizers.sgdm(
             learning_rate=learning_rate,
-            beta=config.beta,
-            weight_decay=config.weight_decay
+            momentum=config.momentum,
+            use_nesterov=config.use_nesterov,
+            weight_decay=config.weight_decay,
+            decouple_weight_decay=config.decouple_weight_decay,
         )
     
     def init_muon(config: DictConfig):
@@ -166,16 +218,20 @@ def init_optimizer(
     # Initialize base optimizer.
     name = config.optimizer.name
     opt_config = config.optimizer
-    if name == "adamw":
-        optimizer = init_adamw(config=opt_config)
+    if name == "adam_base":
+        optimizer = init_adam_base(opt_config)
+    elif name == "adam":
+        optimizer = init_adam(opt_config)
+    elif name == "adamw":
+        optimizer = init_adamw(opt_config)
+    elif name == "nadam":
+        optimizer = init_nadam(opt_config)
+    elif name == "rmsprop":
+        optimizer = init_rmsprop(opt_config)
     elif name == "sgdm":
-        optimizer = init_sgdm(config=opt_config)
+        optimizer = init_sgdm(opt_config)
     elif name == "muon":
-        optimizer = init_muon(config=opt_config)
-
-    # DEBUG
-    opt_state = optimizer.init(eqx.filter(model, eqx.is_array))
-    raise KeyboardInterrupt
+        optimizer = init_muon(opt_config)
 
     # Wrap online-to-nonconvex.
     if name in ["ogd_md"]:
