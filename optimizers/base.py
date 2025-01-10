@@ -365,13 +365,13 @@ def sgdm(
             &= x_{t-1} - \\eta/(1-\\beta) * (\\beta * \\mu'_t + (1-\\beta) * g_t).
         \\end{align*}
     """
-    if not momentum:
+    if momentum is not None:
+        use_momentum = True
+        use_momentum_state = True
+    else:
         use_momentum = False
         use_momentum_state = False
         momentum = 0.0
-    else:
-        use_momentum = True
-        use_momentum_state = True
     base = adam_base(
         learning_rate=learning_rate,
         beta1=momentum,
@@ -390,7 +390,7 @@ def sgdm(
     # we scale up the final update by 1/(1-\beta).
     # This way, the learning rate has the same scale as heuristics.
     return optax.chain(
-        optax.scale_by_learning_rate(1/(1-momentum)),
+        optax.scale(1/(1-momentum)),
         base
     )
 
