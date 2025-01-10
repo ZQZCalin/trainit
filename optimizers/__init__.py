@@ -10,7 +10,6 @@ from optimizers.base import (
     nadam,
     rmsprop,
     sgdm,
-    sgd,
 )
 from optimizers.online_nonconvex import wrap_random_scaling
 from optimizers.online_nonconvex import online_to_gradient_transformation
