@@ -32,8 +32,8 @@ do
 #$ -l gpu_type=L40S     # Specifies the gpu type.
 #$ -l h_rt=8:00:00      # Specifies the hard time limit for the job
 #$ -N "$name"_"$lr".sh
-#$ -o $OUTPUT_PATH/$JOB_NAME.o$JOB_ID
-#$ -e $OUTPUT_PATH/$JOB_NAME.e$JOB_ID
+#$ -o $OUTPUT_PATH/\$JOB_NAME.o\$JOB_ID
+#$ -e $OUTPUT_PATH/\$JOB_NAME.e\$JOB_ID
 
 sleep $(((RANDOM % 1000) / 100))   # Prevents simultaneous reads of loadit dataset
 
