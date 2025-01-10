@@ -129,6 +129,7 @@ def lm_train_loop(
         logger: Logger,
         time_keeper: TimeKeeper,
         wandb_logger: RateLimitedWandbLog,
+        max_nan_loss: int = 5,
 ) -> TrainState:
     """The main train loop that handles training, logging, and checkpointing."""
     num_steps = config.train.max_steps
@@ -176,10 +177,18 @@ def lm_train_loop(
         loss, accuracy, log_metrics, train_state = train_step_jit(
             train_state, batches, optimizer, loss_fn, logger
         )
-        # A dumb san check: end train loop if loss is infinite.
+
+        # Auto-terminate if there are too many consecutive nan losses.
+        num_nans = train_state.num_nans
         if jnp.isnan(loss):
-            logging.info(f"iteration {train_state.iteration}: loss = inf, training stopped.")
-            break
+            if num_nans >= max_nan_loss:
+                logging.info(f"iteration {train_state.iteration}: loss = {loss}, training stopped.")
+                break
+            else:
+                train_state = train_state._replace(num_nans=num_nans+1)
+        elif num_nans > 0:
+            train_state = train_state._replace(num_nans=0)
+
         time_keeper.mark(
             end_events={"train_step": 1},
         )
