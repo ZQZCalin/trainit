@@ -21,7 +21,7 @@ class AdamBaseState(NamedTuple):
     mu: Optional[optax.Updates]
     nu: Optional[optax.Updates]
     log_state: Optional[LogState]
-    logging: Optional[log_utils.Log]
+    log_metrics: Optional[log_utils.Log]
 
 
 def adam_base(
@@ -58,6 +58,7 @@ def adam_base(
     `use_nesterov` controls whether to apply nesterov's accelerated gradient to update,
     which is adapted from this report:
 
+    https://openreview.net/pdf/OM0jvwB8jIp57ZJjtNEZ.pdf
     https://cs229.stanford.edu/proj2015/054_report.pdf
 
     If users need to apply different lr or wd to different subgroups of the model,
@@ -71,93 +72,135 @@ def adam_base(
         weight_decay: weight decay.
         decouple_weight_decay: if true, uses adamw update, i.e., apply weight decay after momentum aggregation.
         use_nesterov: if true, uses NAG update, i.e., slighly overshoots the momentum update with current gradient.
-        debias_beta1: if true, uses unbiased EMA of momentum. Defaults to True.
-        debias_beta2: if true, uses unbiased EMA of gradient preconditioner. Defaults to True.
-        use_momentum: If false, replace \hat m_t with g_t.
-        use_momentum_state: If false, does not store m_t in the opt_state.
-        use_precond: If false, does not scale \hat m_t by the adaptive gradient pre-conditioner v_t.
-        use_precond_state: if false, does not store v_t in the opt_state.
-        use_constant_wd: an experimental parameter. if true, weight decay does not scale with learning rate schedule. Defaults to False.
+        debias_beta1 (optional): if true, uses unbiased EMA of momentum. Defaults to True.
+        debias_beta2 (optional): if true, uses unbiased EMA of gradient preconditioner. Defaults to True.
+        use_momentum (optional): If false, replace \hat m_t with g_t.
+        use_momentum_state (optional): If false, does not store m_t in the opt_state.
+        use_precond (optional): If false, does not scale \hat m_t by the adaptive gradient pre-conditioner v_t.
+        use_precond_state (optional): if false, does not store v_t in the opt_state.
+        use_constant_wd (optional): an experimental parameter. if true, weight decay does not scale with learning rate schedule. Defaults to False.
         logger: logging callback, a `loggers.Logger` object that initializes and updates log_state and log_metrics.
         
     Returns:
         A `GradientTransformation` object.
     """
 
-    use_pytree_wd = type(weight_decay) != float
+    wd = weight_decay
     if use_momentum:
         use_momentum_state = True
     if use_precond:
         use_precond_state = True
 
     def init_fn(params):
-        # Checks weight_decay structure during initialization.
-        if use_pytree_wd and jtu.tree_structure(weight_decay)!=jtu.tree_structure(params):
-            raise ValueError("structure of weight_decay must match model structure.")
-        logging = {
-            "optimizer/cos(g,m)": jnp.zeros([]),
-            "optimizer/cos(g,m/sqrt(v))": jnp.zeros([]),
-            "optimizer/cos(g,g/sqrt(v))": jnp.zeros([]),
-        }
+        if logger is not None:
+            log_state, log_metrics = logger.init(params=params)
+            log_metrics = log_utils.Log(log_metrics)
+        else:
+            log_state, log_metrics = (None, None)
         return AdamBaseState(
             count=jnp.zeros([], jnp.int32),
-            mu=jtu.tree_map(jnp.zeros_like, params),
-            nu=jtu.tree_map(jnp.zeros_like, params),
-            logging=log_utils.Log(logging),
+            mu=jtu.tree_map(jnp.zeros_like, params) if use_momentum_state else None,
+            nu=jtu.tree_map(jnp.zeros_like, params) if use_precond_state else None,
+            log_state=log_state,
+            log_metrics=log_metrics,
         )
     
     def update_fn(updates, state, params):
-        count_inc = optax.safe_int32_increment(state.count)
-        mu = jtu.tree_map(
-            lambda m, g: beta1*m + (1-beta1)*g, state.mu, updates)
-        nu = jtu.tree_map(
-            lambda v, g: beta2*v + (1-beta2)*g**2, state.nu, updates)
-        
-        # Debias to get the true weighted average.
-        if debias_beta1:
-            mu_hat = tree_utils.scalar_dot(mu, 1/(1-beta1**count_inc))
-        else:
-            mu_hat = mu
-        if debias_beta2:
-            nu_hat = tree_utils.scalar_dot(nu, 1/(1-beta2**count_inc))
-        else:
-            nu_hat = nu
+        count = state.count
+        mu = state.mu
+        nu = state.nu
 
-        # Other optional features: turn off momentum and/or pre-conditioning.
-        if not use_momentum:
-            mu_hat = updates
-        if not use_preconditioning:
-            nu_hat = jtu.tree_map(jnp.ones_like, nu_hat)
+        count_inc = optax.safe_int32_increment(count)
 
-        # Unpack learning rate schedule.
-        eta = schedule.get_current_lr(learning_rate, state.count)
-
-        # Weight decay regularization.
-        if not use_pytree_wd:
-            regularization = tree_utils.scalar_dot(params, weight_decay)
-        else:
-            regularization = tree_utils.multiply(params, weight_decay)
+        # Apply coupled weight decay
         if not decouple_weight_decay:
-            regularization = tree_utils.scalar_dot(regularization, eta)
+            updates = jtu.tree_map(
+                lambda g, p: g + wd * p, updates, params)
+
+        if use_momentum_state:
+            mu = jtu.tree_map(
+                lambda m, g: beta1*m + (1-beta1)*g, mu, updates)
+            if use_momentum:
+                if use_nesterov:
+                    # Apply nesterov's momentum.
+                    count_inc2 = optax.safe_int32_increment(count_inc)
+                    mu_hat = jtu.tree_map(
+                        lambda m, g: beta1*m/(1-beta1**count_inc2) + (1-beta1)*g/(1-beta1**count_inc),
+                        mu, updates)
+                else:
+                    mu_hat = tree_utils.scalar_dot(mu, 1/(1-beta1**count_inc))
+            else:
+                mu_hat = updates
+        else:
+            mu = None
+            mu_hat = updates
+
+        if use_precond_state:
+            nu = jtu.tree_map(
+                lambda v, g: beta2*v + (1-beta2)*g**2, nu, updates)
+            if use_precond:
+                nu_hat = tree_utils.scalar_dot(nu, 1/(1-beta2**count_inc))
+            else:
+                nu_hat = None
+        else:
+            nu = None
+            nu_hat = None
+
+        # mu = jtu.tree_map(
+        #     lambda m, g: beta1*m + (1-beta1)*g, state.mu, updates)
+        # nu = jtu.tree_map(
+        #     lambda v, g: beta2*v + (1-beta2)*g**2, state.nu, updates)
+        
+        # # Debias EMA of momentums.
+        # debias_scaler1 = 1/(1-beta1**count_inc) if debias_beta1 else 1.0
+        # debias_scaler2 = 1/(1-beta2**count_inc) if debias_beta2 else 1.0
+        # mu_hat = tree_utils.scalar_dot(mu, debias_scaler1)
+        # nu_hat = tree_utils.scalar_dot(nu, debias_scaler2)
 
         # Compute one-step update: -eta * [mu / (eps+sqrt(nu)) + lam * params]
-        new_updates = jtu.tree_map(
-            lambda m, v, r: -(eta * m / (eps+jnp.sqrt(v)) + r),
-            mu_hat, nu_hat, regularization 
-        )
+        if nu_hat is not None:
+            updates = jtu.tree_map(
+                lambda m, v: m / (jnp.sqrt(v) + eps), mu_hat, nu_hat)
+        else:
+            updates = mu_hat
+
+        # Apply decoupled weight decay.
+        if decouple_weight_decay:
+            updates = jtu.tree_map(
+                lambda u, p: u + wd * p, updates, params)
+
+        # Apply negative learning rate.
+        eta = schedule.get_current_lr(learning_rate, count)
+        updates = tree_utils.scalar_dot(updates, -eta)
 
         # Additional logs.
-        mu_hat = tree_utils.scalar_dot(mu, 1/(1-beta1**count_inc))
-        nu_hat = tree_utils.scalar_dot(nu, 1/(1-beta2**count_inc))
-        precond_mu = jtu.tree_map(lambda m, v: m / (eps+jnp.sqrt(v)), mu_hat, nu_hat)
-        precond_g = jtu.tree_map(lambda g, v: g / (eps+jnp.sqrt(v)), updates, nu_hat)
-        logging = {
-            "optimizer/cos(g,m)": tree_utils.cosine(updates, mu),
-            "optimizer/cos(g,m/sqrt(v))": tree_utils.cosine(updates, precond_mu),
-            "optimizer/cos(g,g/sqrt(v))": tree_utils.cosine(updates, precond_g),
-        }
-        return new_updates, AdamBaseState(
-            count=count_inc, mu=mu, nu=nu, logging=log_utils.Log(logging))
+        # mu_hat = tree_utils.scalar_dot(mu, 1/(1-beta1**count_inc))
+        # nu_hat = tree_utils.scalar_dot(nu, 1/(1-beta2**count_inc))
+        # precond_mu = jtu.tree_map(lambda m, v: m / (eps+jnp.sqrt(v)), mu_hat, nu_hat)
+        # precond_g = jtu.tree_map(lambda g, v: g / (eps+jnp.sqrt(v)), updates, nu_hat)
+        # logging = {
+        #     "optimizer/cos(g,m)": tree_utils.cosine(updates, mu),
+        #     "optimizer/cos(g,m/sqrt(v))": tree_utils.cosine(updates, precond_mu),
+        #     "optimizer/cos(g,g/sqrt(v))": tree_utils.cosine(updates, precond_g),
+        # }
+        
+        # Logger callback.
+        if logger is not None:
+            log_state, log_metrics = logger.update(
+                log_state,
+                # pass extra args to your logger if needed.
+            )
+            log_metrics = log_utils.Log(log_metrics)
+        else:
+            log_state, log_metrics = (None, None)
+
+        return updates, AdamBaseState(
+            count=count_inc,
+            mu=mu,
+            nu=nu,
+            log_state=log_state,
+            log_metrics=log_metrics,
+        )
     
     return optax.GradientTransformation(init_fn, update_fn)
 
@@ -311,6 +354,24 @@ def sgdm(
     
     Decoupled weight decay is default to true,
     and nesterov's momentum is default to false.
+
+    Note: the implementation of SGD-momentum is slightly different
+    from classical polyak momentum notation of decaying sum where
+
+    :math:`\mu_t = \beta * \mu_{t-1} + g_t`.
+
+    Instead, we compute the momentum as exponential average,
+    which is the same as adam, where
+
+    :math:`\mu_t = \beta * \mu_{t-1} + g_t`
+
+    and later debiased as
+
+    :math:`\hat \mu_t = \mu_t / (1+\beta**t)`.
+
+    Nesterov's momentum is computed in the same way as Nadam, see:
+
+    https://cs229.stanford.edu/proj2015/054_report.pdf
     """
     return adam_base(
         learning_rate=learning_rate,
