@@ -38,7 +38,6 @@ def adam_base(
         use_momentum_state: bool = True,
         use_precond: bool = True,
         use_precond_state: bool = True,
-        use_constant_wd: bool = False,
         logger: Optional[Logger] = None,
 ) -> optax.GradientTransformation:
     """The base Adam optimizer.
@@ -78,7 +77,6 @@ def adam_base(
         use_momentum_state (optional): If false, does not store m_t in the opt_state.
         use_precond (optional): If false, does not scale \hat m_t by the adaptive gradient pre-conditioner v_t.
         use_precond_state (optional): if false, does not store v_t in the opt_state.
-        use_constant_wd (optional): an experimental parameter. if true, weight decay does not scale with learning rate schedule. Defaults to False.
         logger: logging callback, a `loggers.Logger` object that initializes and updates log_state and log_metrics.
         
     Returns:
@@ -123,12 +121,17 @@ def adam_base(
             if use_momentum:
                 if use_nesterov:
                     # Apply nesterov's momentum.
-                    count_inc2 = optax.safe_int32_increment(count_inc)
-                    mu_hat = jtu.tree_map(
-                        lambda m, g: beta1*m/(1-beta1**count_inc2) + (1-beta1)*g/(1-beta1**count_inc),
-                        mu, updates)
+                    if debias_beta1:
+                        count_inc2 = optax.safe_int32_increment(count_inc)
+                        mu_hat = jtu.tree_map(
+                            lambda m, g: beta1*m/(1-beta1**count_inc2) + (1-beta1)*g/(1-beta1**count_inc),
+                            mu, updates)
+                    else:
+                        mu_hat = jtu.tree_map(
+                            lambda m, g: beta1*m + (1-beta1)*g, mu, updates)
                 else:
-                    mu_hat = tree_utils.scalar_dot(mu, 1/(1-beta1**count_inc))
+                    scaler = 1/(1-beta1**count_inc) if debias_beta1 else 1.0
+                    mu_hat = tree_utils.scalar_dot(mu, scaler)
             else:
                 mu_hat = updates
         else:
@@ -139,26 +142,16 @@ def adam_base(
             nu = jtu.tree_map(
                 lambda v, g: beta2*v + (1-beta2)*g**2, nu, updates)
             if use_precond:
-                nu_hat = tree_utils.scalar_dot(nu, 1/(1-beta2**count_inc))
+                scaler = 1/(1-beta2**count_inc) if debias_beta2 else 1.0
+                nu_hat = tree_utils.scalar_dot(nu, scaler)
             else:
                 nu_hat = None
         else:
             nu = None
             nu_hat = None
 
-        # mu = jtu.tree_map(
-        #     lambda m, g: beta1*m + (1-beta1)*g, state.mu, updates)
-        # nu = jtu.tree_map(
-        #     lambda v, g: beta2*v + (1-beta2)*g**2, state.nu, updates)
-        
-        # # Debias EMA of momentums.
-        # debias_scaler1 = 1/(1-beta1**count_inc) if debias_beta1 else 1.0
-        # debias_scaler2 = 1/(1-beta2**count_inc) if debias_beta2 else 1.0
-        # mu_hat = tree_utils.scalar_dot(mu, debias_scaler1)
-        # nu_hat = tree_utils.scalar_dot(nu, debias_scaler2)
-
         # Compute one-step update: -eta * [mu / (eps+sqrt(nu)) + lam * params]
-        if nu_hat is not None:
+        if use_precond:
             updates = jtu.tree_map(
                 lambda m, v: m / (jnp.sqrt(v) + eps), mu_hat, nu_hat)
         else:
@@ -234,7 +227,6 @@ def adam(
         use_momentum_state=True,
         use_precond=True,
         use_precond_state=True,
-        use_constant_wd=False,
         logger=logger,
     )
 
@@ -269,7 +261,6 @@ def adamw(
         use_momentum_state=True,
         use_precond=True,
         use_precond_state=True,
-        use_constant_wd=False,
         logger=logger,
     )
 
@@ -305,7 +296,6 @@ def nadam(
         use_momentum_state=True,
         use_precond=True,
         use_precond_state=True,
-        use_constant_wd=False,
         logger=logger,
     )
 
@@ -337,17 +327,16 @@ def rmsprop(
         use_momentum_state=False,
         use_precond=True,
         use_precond_state=True,
-        use_constant_wd=False,
         logger=logger,
     )
 
 
 def sgdm(
         learning_rate: optax.ScalarOrSchedule = 1e-4,
-        momentum: float = 0.9,
+        momentum: Optional[float] = None,
+        use_nesterov: bool = False,
         weight_decay: float = 0.0,
         decouple_weight_decay: bool = True,
-        use_nesterov: bool = False,
         logger: Optional[Logger] = None,
 ) -> optax.GradientTransformation:
     """The SGD-Momentum optimizer.
@@ -358,53 +347,51 @@ def sgdm(
     Note: the implementation of SGD-momentum is slightly different
     from classical polyak momentum notation of decaying sum where
 
-    :math:`\mu_t = \beta * \mu_{t-1} + g_t`.
+    ..math::
+        \\mu_t = \\beta * \\mu_{t-1} + g_t
 
     Instead, we compute the momentum as exponential average,
-    which is the same as adam, where
+    which is the same as adam (except that we don't debias it), where
 
-    :math:`\mu_t = \beta * \mu_{t-1} + g_t`
+    ..math::
+        \\mu'_t = \\beta * \\mu'_{t-1} + (1-\\beta) * g_t
 
-    and later debiased as
+    Note that setting \mu'_t = (1-\beta)\mu_t. Similarly, note that
+    nesterov's momentum can also be rewritten as
 
-    :math:`\hat \mu_t = \mu_t / (1+\beta**t)`.
-
-    Nesterov's momentum is computed in the same way as Nadam, see:
-
-    https://cs229.stanford.edu/proj2015/054_report.pdf
+    ..math::
+        \\begin{align*}
+        x_t &= x_{t-1} - \\eta * (\\beta * \\mu_t + g_t) \\\\
+            &= x_{t-1} - \\eta/(1-\\beta) * (\\beta * \\mu'_t + (1-\\beta) * g_t).
+        \\end{align*}
     """
-    return adam_base(
+    if not momentum:
+        use_momentum = False
+        use_momentum_state = False
+        momentum = 0.0
+    else:
+        use_momentum = True
+        use_momentum_state = True
+    base = adam_base(
         learning_rate=learning_rate,
         beta1=momentum,
         weight_decay=weight_decay,
         decouple_weight_decay=decouple_weight_decay,
         use_nesterov=use_nesterov,
-        debias_beta1= True,
+        debias_beta1= False,
         debias_beta2=True,
-        use_momentum=True,
-        use_momentum_state=True,
+        use_momentum=use_momentum,
+        use_momentum_state=use_momentum_state,
         use_precond=False,
         use_precond_state=False,
-        use_constant_wd=False,
         logger=logger,
     )
-
-
-def sgd(
-        learning_rate: optax.ScalarOrSchedule = 1e-4,
-        weight_decay: float = 0.0,
-        logger: Optional[Logger] = None,
-) -> optax.GradientTransformation:
-    """The vanilla SGD optimizer."""
-    return adam_base(
-        learning_rate=learning_rate,
-        weight_decay=weight_decay,
-        use_momentum=False,
-        use_momentum_state=False,
-        use_precond=False,
-        use_precond_state=False,
-        use_constant_wd=False,
-        logger=logger,
+    # NOTE: to adhere to conventional implementation of SGDM,
+    # we scale up the final update by 1/(1-\beta).
+    # This way, the learning rate has the same scale as heuristics.
+    return optax.chain(
+        optax.scale_by_learning_rate(1/(1-momentum)),
+        base
     )
 
 
