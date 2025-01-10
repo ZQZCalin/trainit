@@ -112,6 +112,7 @@ def init_pipeline(
         epoch = jnp.zeros([], dtype=jnp.int32),
         iteration = jnp.zeros([], dtype=jnp.int32),
         train_key = train_key,
+        num_nans = 0,
     )
 
     # If loading is true, loads train state from checkpoint.

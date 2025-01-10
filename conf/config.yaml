@@ -1,7 +1,7 @@
 defaults:
   - model: gpt
   - dataset: pile
-  - optimizer: adam
+  - optimizer: adamw
   - train
   - logging
   - checkpoint

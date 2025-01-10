@@ -37,6 +37,7 @@ class TrainState(NamedTuple):
         epoch: current epoch number
         iteration: current iteration number
         train_key: the root seed for all randomness of training
+        num_nans: number of consecutive iterations where loss = nan, used for auto-terminating
     """
     model: eqx.Module
     opt_state: optax.OptState
@@ -45,6 +46,7 @@ class TrainState(NamedTuple):
     epoch: Array
     iteration: Array
     train_key: PRNGKeyArray
+    num_nans: int
 
 
 def forward_prop(
