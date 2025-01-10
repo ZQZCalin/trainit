@@ -11,7 +11,7 @@ LogMetrics = dict[Array]
 
 
 class LoggerInitFn(Protocol):
-    def __call__(self, **extra_args: Any) -> LogState:
+    def __call__(self, **extra_args: Any) -> Tuple[LogState, LogMetrics]:
         """The `init` function."""
 
 
@@ -36,12 +36,11 @@ class Logger(NamedTuple):
         >>> def example_log() -> base.Logger:
         ...  '''An example log function.'''
         ...  # logger = example_log()
-        ...  # log_state = logger.init(params=...)
+        ...  # log_state, log_metrics = logger.init(params=...)
         ...  # log_state, log_metrics = logger.update(log_state, params=..., grads=...)
     """
-    # TODO: this is the only part I don't like about LogFn: users need to write different lines
-    # in the train() function to update different log functions. Ideally, we'd want one uniform
-    # line to achieve this.
+    # NOTE: for users who want to customize their own logger functions,
+    # they need to manually change the lines (e.g., `train_step` and `train_loop`) in `_src/train`.
     init: LoggerInitFn
     update: LoggerUpdateFn
 

@@ -37,7 +37,14 @@ def simple_log() -> base.Logger:
                 "grad/cosine_sum": jnp.zeros([]),
             },
         )
-        return state
+        metrics = {
+            "loss": jnp.zeros([]),
+            "grad/norm": jnp.zeros([]),
+            "grad/inner": jnp.zeros([]),
+            "grad/cosine": jnp.zeros([]),
+        }
+        metrics.update(state.cumulatives)
+        return state, metrics
     
     def update_fn(
             state, 
@@ -152,14 +159,14 @@ def full_log(
     def init_fn(params: optax.Params):
         """Initializes aux_state from confg."""
         if not log_callback_data:
-            return None
+            return None, {}
         return FullLogState(
             params_prev = params if has_params_prev else None,
             grads_prev = tree_utils.zeros_like(params) if has_grads_prev else None,
             grads_hist = tree_utils.zeros_like(params) if has_grads_hist else None,
             num_inf_grads = jnp.zeros([], jnp.int32),
             metrics_prev = DEFAULT_METRICS,
-        )
+        ), DEFAULT_METRICS
 
     def update_fn(
             state: base.LogState,
@@ -180,7 +187,7 @@ def full_log(
             updates: Delta_(n+1), dependent of g(x_n, z_n)
         """
         if not log_callback_data:
-            return None
+            return None, {}
         
         # `apply_if_finite` wrapper.
         def reject_update(state):
