@@ -14,6 +14,9 @@ schedule=linear
 lrs=(1e-2 3e-3 1e-3 3e-4 1e-4)
 warmup=200
 
+BASE_DIR=/projectnb/aclab/qinziz/trainit
+DATE=$(date +"%Y/%m/%d")
+
 for lr in "${lrs[@]}"
 do
     qsub <<EOF
@@ -24,8 +27,11 @@ do
 #$ -l gpu_type=L40S     # Specifies the gpu type.
 #$ -l h_rt=8:00:00      # Specifies the hard time limit for the job
 #$ -N "$optimizer"_"$lr".sh
+#$ -o $BASE_DIR/scc_outputs/$DATE/$optimizer/$JOB_NAME.o$JOB_ID
+#$ -e $BASE_DIR/scc_outputs/$DATE/$optimizer/$JOB_NAME.e$JOB_ID
 
-cd /projectnb/aclab/qinziz/trainit
+sleep $(((RANDOM % 1000) / 100))   # Prevents simultaneous reads of loadit dataset
+
 source activate_env.sh
 
 python main.py \
@@ -43,5 +49,4 @@ python main.py \
     optimizer.lr_config.max_steps=$steps
 EOF
     echo "Submitted job: $optimizer lr=$lr"
-    sleep 0.5   # ugly hack to prevent simultaneous reads of loadit dataset.
 done

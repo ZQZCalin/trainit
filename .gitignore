@@ -27,6 +27,9 @@ wandb/
 batch_job/
 *.sh.*
 
+# output files
+scc_outputs/
+
 # checkpoint files
 checkpoint/
 
