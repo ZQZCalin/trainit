@@ -7,13 +7,14 @@ steps=2000
 batch_size=128
 
 optimizer=adamw
+# lr=1e-3
+lrs=(1e-2 3e-3 1e-3 3e-4 1e-4)
 wd=0.1
 nesterov=False
 
 schedule=linear
-# lr=1e-3
-lrs=(1e-2 3e-3 1e-3 3e-4 1e-4)
 warmup=200
+wait=0
 
 # System variables
 BASE_DIR=/projectnb/aclab/qinziz/trainit
@@ -51,6 +52,7 @@ python main.py \
     optimizer/lr_config=$schedule \
     optimizer.lr_config.lr=$lr \
     optimizer.lr_config.warmup=$warmup \
+    optimizer.lr_config.const=$wait \
     optimizer.lr_config.max_steps=$steps
 EOF
     echo "Submitted job: $name lr=$lr"
