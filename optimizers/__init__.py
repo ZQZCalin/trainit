@@ -11,6 +11,9 @@ from optimizers.base import (
     rmsprop,
     sgdm,
 )
+from optimizers.combine import (
+    multi_transform
+)
 from optimizers.online_nonconvex import wrap_random_scaling
 from optimizers.online_nonconvex import online_to_gradient_transformation
 # from optimizers.online_nonconvex import online_to_non_convex
