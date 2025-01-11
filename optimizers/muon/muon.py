@@ -84,30 +84,26 @@ def scale_by_muon(
 
         # Update momentum.
         muon_momentum = jtu.tree_map(
-            lambda mu, g: momentum * mu + g, muon_momentum, updates
-        )
+            lambda mu, g: momentum * mu + g, muon_momentum, updates)
 
         # Orthogonalize momentum matrix.
-        # NOTE: I don't quite understand why aggregating the momentum again
-        # if we are using nesterov momentum. Right now I just copy from
-        # https://github.com/KellerJordan/Muon/blob/master/muon.py
-        # see line 130.
         if nesterov:
+            # Apply nesterov's momentum before applying normalization.
             updates = jtu.tree_map(
-                lambda mu, g: momentum * mu + g, muon_momentum, updates
-            )
+                lambda mu, g: momentum * mu + g, muon_momentum, updates)
         else:
             updates = muon_momentum
         updates = jtu.tree_map(
-            lambda G: newton_schulz(G, steps=ns_steps), updates
-        )
+            lambda G: newton_schulz(G, steps=ns_steps), updates)
+        
+        # Additional scaling based on shape (see line 135).
+        updates = jtu.tree_map(
+            lambda G: G * max(1, G.shape[0]/G.shape[1])**0.5, updates)
 
         # Wrap final update.
         lr = get_current_lr(learning_rate, count)
         updates = tree_utils.scalar_dot(updates, -lr)
 
-        # NOTE: there's still one more step: line 135
-        raise NotImplementedError
         return updates, ScaleByMuonState(
             count = optax.safe_int32_increment(count),
             muon_momentum = muon_momentum
@@ -149,11 +145,12 @@ def muon(
         learning_rate, momentum, nesterov, ns_steps
     )
     optim_adam = adamw(
-        learning_rate = adam_lr,
-        beta1 = adam_beta1,
-        beta2 = adam_beta2,
-        eps = adam_eps,
-        weight_decay = adam_wd
+        learning_rate=adam_lr,
+        beta1=adam_beta1,
+        beta2=adam_beta2,
+        eps=adam_eps,
+        weight_decay=adam_wd,
+        use_nesterov=False,
     )
     transforms = {
         "muon": optim_muon,
