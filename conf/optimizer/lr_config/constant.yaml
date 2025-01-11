@@ -1,2 +1,2 @@
 schedule: constant
-lr: 3e-4
+lr: null
