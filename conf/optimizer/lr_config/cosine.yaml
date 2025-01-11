@@ -1,4 +1,4 @@
 schedule: cosine
-lr: 3e-4
-warmup: 5000
-max_steps: 50000
+lr: null
+warmup: null
+max_steps: null
