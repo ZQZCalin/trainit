@@ -17,6 +17,7 @@ from jaxtyping import Array, PyTree
 
 from utils import tree_utils
 from optimizers.base import adamw
+from optimizers.combine import multi_transform
 from optimizers.schedule import get_current_lr
 
 
@@ -160,4 +161,4 @@ def muon(
         return jtu.tree_map(
             lambda p: "muon" if p.ndim == 2 else "adam", params
         )
-    return optax.multi_transform(transforms, label_params)
+    return multi_transform(transforms, label_params)
