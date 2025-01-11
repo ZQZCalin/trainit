@@ -23,6 +23,8 @@ outputs/
 # wandb log files
 wandb/
 
+scc_outputs/
+
 # batch job and output files
 batch_job/
 *.sh.*
