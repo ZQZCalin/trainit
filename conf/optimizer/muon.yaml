@@ -1,6 +1,8 @@
 name: muon
 defaults:
   - lr_config: linear
+lr_config:
+  lr: 0.05
 
 momentum: 0.95
 nesterov: True
