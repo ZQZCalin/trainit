@@ -72,3 +72,45 @@ def warmup_linear_decay_schedule(
         )
     ]
     return optax.join_schedules(schedules, [warmup_steps])
+
+
+def warmup_const_linear_decay_schedule(
+        peak_value: float,
+        warmup_steps: int,
+        const_steps: int,
+        total_steps: int,
+        init_value: float = 0.0,
+        end_value: float = 0.0,
+) -> optax.Schedule:
+    """The 3-phase linear decay schedule.
+
+    The first phase is warmup from init_value to peak_value,
+    the second phase stays constant at peak_value, and
+    the third phase decays from peak_value to end_value.
+
+    Args:
+        peak_value: maximum lr.
+        warmup_steps: number of warmup steps.
+        const_steps: number of constant steps.
+        total_steps: total number of steps, including warmup and constant.
+        init_value: starting lr.
+        end_value: final lr.
+
+    Returns:
+        An `optax.Schedule` object
+    """
+    
+    schedules = [
+        optax.linear_schedule(
+            init_value=init_value,
+            end_value=peak_value,
+            transition_steps=warmup_steps,
+        ),
+        optax.linear_schedule(
+            init_value=peak_value,
+            end_value=end_value,
+            transition_steps=total_steps-warmup_steps-const_steps,
+            transition_begin=const_steps,
+        ),
+    ]
+    return optax.join_schedules(schedules, [warmup_steps])
