@@ -21,8 +21,8 @@ def init_schedule(lr_config: DictConfig) -> optax.ScalarOrSchedule:
     Returns:
         A `optax.ScalarOrSchedule` object.
     """
-    def use_warmup(warmup: Any) -> bool:
-        return isinstance(warmup, int) and (warmup > 0)
+    use_warmup = lambda warmup: isinstance(warmup, int) and (warmup > 0)
+    use_const = lambda const: isinstance(const, int) and (const > 0)
 
     def init_constant_lr(config):
         learning_rate = config.lr
@@ -44,19 +44,16 @@ def init_schedule(lr_config: DictConfig) -> optax.ScalarOrSchedule:
         return learning_rate
     
     def init_linear_lr(config):
-        if use_warmup(config.warmup):
-            learning_rate = optimizers.warmup_linear_decay_schedule(
-                init_value=0.0,
-                peak_value=config.lr,
-                warmup_steps=config.warmup,
-                decay_steps=config.max_steps,
-            )
-        else:
-            learning_rate = optax.linear_schedule(
-                init_value=config.lr,
-                end_value=0.0,
-                transition_steps=config.max_steps,
-            )
+        warmup_steps = config.warmup if use_warmup(config.warmup) else 0
+        const_steps = config.const if use_const(config.const) else 0
+        learning_rate = optimizers.warmup_const_linear_decay_schedule(
+            peak_value=config.lr,
+            warmup_steps=warmup_steps,
+            const_steps=const_steps,
+            total_steps=config.max_steps,
+            init_value=0.0,
+            end_value=0.0,
+        )
         return learning_rate
 
     def init_piecewise_linear_lr(config):
