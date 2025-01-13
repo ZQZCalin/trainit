@@ -8,9 +8,11 @@ batch_size=128
 
 optimizer=muon
 # muon_lr=0.03
-muon_lrs=(0.3 0.1 3e-2 1e-2 3e-3)
+# muon_lrs=(0.3 0.1 3e-2 1e-2 3e-3)
+muon_lrs=(0.1 3e-2 1e-2 3e-3 1e-3)
 momentum=0.95
-nesterov=True
+# nesterov=True
+nesterov=False
 ns_steps=6
 
 adam_lr=3e-4
