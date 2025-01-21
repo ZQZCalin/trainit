@@ -3,6 +3,7 @@
 from omegaconf import DictConfig
 from typing import Any, List
 from loadit import LoadIt, chunk_shuffle
+import time, random
 
 from dataloaders import DataLoader
 from dataloaders import get_lm_loader_next_token
@@ -30,6 +31,10 @@ def load_lm_data(
     if config.use_loadit:
         if config.loadit_path is None:
             raise ValueError("invalid config: dataset.loadit_path cannot be None.")
+        # [Optional]: sleeping a random time prevents simultaneous read of LoadIt datasets.
+        # this will prevent loadit raising some sharding error.
+        time.sleep(random.random())     # sleeps Unif([0,1]) seconds
+
         loader = LoadIt(config.loadit_path)
         if config.shuffle_buffer_size > 0:
             # TODO: either specify max_samples in config, or set length to full dataset length.
