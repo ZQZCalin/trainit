@@ -1,6 +1,7 @@
 logging:
   wandb_project: null
   wandb_name: null
+  wandb_runid: null
 
   # this will slow down computation a bit (I believe due to extra GPU/CPU communication),
   # but will log more stuff (like learning rates).
