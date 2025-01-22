@@ -13,7 +13,7 @@ save_path_base="${checkpoint_path}/${start_step}-${end_step}"
 if (( i > 0 )); then
     start_step_prev=${segments[$((i-1))]}
     load=True
-    load_path="${checkpoint_path}/${start_step_prev}-${start_step}/lr2:${lr1}"
+    load_path="${checkpoint_path}/${start_step_prev}-${start_step}/lr2:$(printf "%.1e" "$lr1")"
     load_file="iter_${start_step}.ckpt"
 else
     load=False
@@ -26,10 +26,12 @@ fi
 OUTPUT_PATH="${BASE_PATH}/scc_outputs/${DATE}/${NAME}/seg$((i+1))"
 mkdir -p $OUTPUT_PATH
 
-# Template to test communications
+# NOTE: hack to create consistent checkpoint path names
+# we convert all lrs into %.1e scientific notations in all path names
+# (the precise value is still used in actual training)
 for lr2 in "${lr2_candidates[@]}"; do
-    job_name="seg$((i+1))_lr2_${lr2}"
-    save_path="${save_path_base}/lr2:${lr2}"
+    job_name="seg$((i+1))_lr2_$(printf "%.1e" "$lr2")"
+    save_path="${save_path_base}/lr2:$(printf "%.1e" "$lr2")"
     
     # generate random number in fractions
     rand_int=$(((RANDOM % 10000)))
