@@ -8,11 +8,11 @@
 # - 
 
 
-NAME="toy_example"
+NAME="eps-greedy_10segs"
 DESC="
 Experiment description:
 
-Use a small scale example for testing.
+2000 steps split into 10 segments, with eps-greedy mechanism.
 "
 
 # =========================================================
@@ -35,10 +35,10 @@ GPU_HOUR="4:00:00"
 # =========================================================
 
 # maximum number of training steps
-total_steps=100
+total_steps=2000
 
 # number of segments
-num_segments=3
+num_segments=10
 
 # list of checkpoint iterations
 #   i. you can use evenly distributed segments by changing `num_segments`
@@ -94,7 +94,7 @@ port=51204
 # maximum wait time of listener (in seconds)
 #   NOTE: a job still sends ACK token if the python job
 #   throws an error.
-#   currently set to 2 hours. feel free to change
-max_wait_mins=120
+#   currently set to 4 hours. feel free to change
+max_wait_mins=240
 max_wait_time=$((max_wait_mins*60))
 # max_wait_time=10    # uncomment it for test purpose

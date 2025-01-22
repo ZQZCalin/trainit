@@ -129,6 +129,7 @@ def main():
 
     arr = []
     for run_id in args.job_ids:
+        # Probably add a exception thrower to catch any failed runs
         run = api.run(f"{entity}/{project}/{run_id}")
         arr.append(get_run_info(run))
 
