@@ -1,11 +1,12 @@
 # Global configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="eps-greedy_10segs"
+NAME="eps-greedy_10segs(2)"
 DESC="
 Experiment description:
 
 2000 steps split into 10 segments, with eps-greedy mechanism.
+Trial 2 after adding the error catcher.
 "
 
 # =========================================================
@@ -16,6 +17,9 @@ Experiment description:
 BASE_PATH="/projectnb/aclab/qinziz/trainit"
 
 DATE=$(date +"%Y-%m-%d")
+
+# Total cpu hour of the master script.
+CPU_HOUR="24:00:00"
 
 GPU_TYPE="L40S"
 
