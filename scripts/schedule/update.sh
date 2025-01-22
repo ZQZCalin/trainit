@@ -5,7 +5,7 @@
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Update: fetching lr1 and lr2_candidates for the next segment..."
 
 # Capture the JSON output from the Python script
-output=$(python3 scripts/schedule/get_next_lr.py --job_ids ${received_jobs[@]})
+output=$(python3 scripts/schedule/get_next_lr.py --project $project --job_ids ${received_jobs[@]})
 
 # Extract the integer
 lr1=$(echo "$output" | jq -r '.lr1')

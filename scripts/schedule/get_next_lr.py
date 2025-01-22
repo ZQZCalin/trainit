@@ -61,15 +61,15 @@ def get_run_info(run: Any) -> tuple[float, float]:
 
 def greedy_lr1(arr: np.ndarray) -> float:
     """Returns lr with lowest loss value."""
-    i = np.argmin(arr, axis=1)
+    i = np.argmin(arr[:, 1])
     return arr[i, 0]
 
 
 def eps_greedy_lr1(arr: np.ndarray) -> float:
     """Returns largest lr such that loss <= loss_min + eps."""
-    loss_min = np.min(arr, axis=1)
+    loss_min = np.min(arr[:, 1])
     arr_filtered = arr[arr[:, 1] <= loss_min + EPS_GREEDY_VAL]
-    return np.max(arr_filtered, axis=0)
+    return np.max(arr_filtered[:, 0])
 
 
 # Customize your own lr mechanism if needed.
@@ -87,7 +87,7 @@ def log_lr2(val: float) -> list:
     lr = val
     for _ in range(LOG_GRID_SIZE):
         lr /= LOG_GRID_MULTI
-        res.append(NEXT_LR1)
+        res.append(lr)
     return sorted(res)
 
 
@@ -143,3 +143,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # arr = np.array([
+    #     [1,2],
+    #     [2,1],
+    #     [3,4]
+    # ])
+    # print(eps_greedy_lr1(arr))
