@@ -8,13 +8,12 @@
 # - 
 
 
-NAME="test1"
+NAME="toy_example"
 DESC="
 Experiment description:
 
-Testing for the automation script. Trial 1.
+Use a small scale example for testing.
 "
-
 
 # =========================================================
 # >>> GLOBAL VARIABLES
@@ -27,7 +26,8 @@ DATE=$(date +"%Y-%m-%d")
 
 GPU_TYPE="L40S"
 
-GPU_HOUR="8:00:00"
+# GPU hour per parallel job.
+GPU_HOUR="4:00:00"
 
 
 # =========================================================
@@ -35,10 +35,10 @@ GPU_HOUR="8:00:00"
 # =========================================================
 
 # maximum number of training steps
-total_steps=2000
+total_steps=100
 
 # number of segments
-num_segments=7
+num_segments=3
 
 # list of checkpoint iterations
 #   i. you can use evenly distributed segments by changing `num_segments`
@@ -50,8 +50,7 @@ segments[-1]=$total_steps           # set last segment to total_steps
 
 # learning rates for the first segment
 lr1=0
-# lr2_candidates=(1e0 1e-1 1e-2 1e-3 1e-4 1e-5 1e-6)
-lr2_candidates=(1 2)
+lr2_candidates=(1e0 1e-1 1e-2 1e-3 1e-4 1e-5)
 
 
 # >>> Other training configs

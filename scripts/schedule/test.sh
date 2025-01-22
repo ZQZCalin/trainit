@@ -1,9 +1,12 @@
 #!/bin/bash
 
+# Testing scientific notation
+val=13.456
+echo $(printf "%.1e" "$val")
+
 # Testing next_lr python script
-i=3
-path=/SOME/PATH
-echo $(python3 scripts/schedule/get_next_lr.py --segment $i --path $path)
+# jobs=(1 2 3 4)
+# echo $(python3 scripts/schedule/get_next_lr.py --job_ids ${jobs[@]})
 
 # Testing fraction division
 # numerator1=3 
