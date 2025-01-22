@@ -1,13 +1,6 @@
 # Global configuration variables
 
-# Here's a list of variables that you can specify.
-# For the rest of variables, we encourage you to leave
-# them as is unless you understand what they do.
-# 
-# For 
-# - 
-
-
+# PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
 NAME="eps-greedy_10segs"
 DESC="
 Experiment description:
