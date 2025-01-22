@@ -3,9 +3,13 @@
 source scripts/schedule/config.sh
 OUTPUT_PATH="${BASE_PATH}/scc_outputs/${DATE}/${NAME}"
 
-qsub scripts/schedule/master.sh \
+mkdir -p "$OUTPUT_PATH"
+
+qsub -l h_rt="$CPU_HOUR" \
     -N "${NAME}_master" \
-    -o "${OUTPUT_PATH}/${NAME}_master.o" \
-    -e "${OUTPUT_PATH}/${NAME}_master.e"
+    -o "${OUTPUT_PATH}/master.o\$JOB_ID" \
+    -e "${OUTPUT_PATH}/master.e\$JOB_ID" \
+    -v CPU_HOUR,NAME,OUTPUT_PATH \
+    scripts/schedule/master.sh
 
 echo "Submitted the master script for experiment ${NAME}."
