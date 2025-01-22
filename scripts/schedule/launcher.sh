@@ -7,13 +7,13 @@ schedule=piecewise_linear
 segment_steps=$((end_step-start_step))
 
 # saving
-save_path="${checkpoint_path}/${start_step}-${end_step}/lr2:${lr2}"
+save_path_base="${checkpoint_path}/${start_step}-${end_step}"
 
 # loading
 if (( i > 0 )); then
     start_step_prev=${segments[$((i-1))]}
     load=True
-    load_path="${checkpoint_path}/${start_step_prev}-${start_step}/lr2:${lr2}"
+    load_path="${checkpoint_path}/${start_step_prev}-${start_step}/lr2:${lr1}"
     load_file="iter_${start_step}.ckpt"
 else
     load=False
@@ -29,6 +29,7 @@ mkdir -p $OUTPUT_PATH
 # Template to test communications
 for lr2 in "${lr2_candidates[@]}"; do
     job_name="seg$((i+1))_lr2_${lr2}"
+    save_path="${save_path_base}/lr2:${lr2}"
     
     # generate random number in fractions
     rand_int=$(((RANDOM % 10000)))

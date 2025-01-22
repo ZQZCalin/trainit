@@ -9,6 +9,7 @@ expected_acks=${#lr2_candidates[@]}
 echo "$(date '+%Y-%m-%d %H:%M:%S') - Listener: Waiting for ${expected_acks} ACKs on port ${port}..."
 
 received_acks=0
+received_jobs=()
 start_time=$(date +%s)
 
 while (( received_acks < expected_acks )); do
@@ -31,14 +32,12 @@ while (( received_acks < expected_acks )); do
     if [[ "$ack" == "ACK" ]]; then
         # Increment received_acks
         ((received_acks++))
+        # Store job id
+        received_jobs+=($job_id)
         echo "$(date '+%Y-%m-%d %H:%M:%S') - Listener: Received ACK ${received_acks}/${expected_acks} from job ID ${job_id}"
     elif [[ "$ack" != "" ]]; then
         echo "$(date '+%Y-%m-%d %H:%M:%S') - Listener: Unexpected message: ${msg}"
     fi
 done
 
-if (( received_acks < expected_acks )); then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - Listener: ${received_acks} / ${expected_acks} ACKs received."
-else
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - Listener: All ${expected_acks} ACKs received."
-fi
+echo "$(date '+%Y-%m-%d %H:%M:%S') - Listener: ${received_acks} / ${expected_acks} ACKs received from jobs (${received_jobs[@]})."
