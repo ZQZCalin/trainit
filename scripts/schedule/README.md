@@ -66,7 +66,7 @@ All configurations in the script are located in `config.sh`. Below lists a detai
 
 **Important Configs**
 - `NAME`: specifies experiment name. 
-    *NOTE: please change name for every new experiment. Otherwise,*
+    *NOTE: please change name for every new experiment. Otherwise, there will be conflicts in `checkpoint/` and `scc_outputs/` and an error will likely be raised (this feature is intended as it prevents overwriting existing checkpoints).*
 - `BASE_PATH`: change to the path where you clone this repo.
 - `project`: specifies wandb project name. change it as you like.
 
