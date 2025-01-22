@@ -6,6 +6,8 @@ You can customize your learning rate choosing logic here.
 import argparse
 import json
 import wandb
+from wandb.errors import CommError
+import logging
 import pandas as pd
 import numpy as np
 from typing import Any
@@ -129,9 +131,13 @@ def main():
 
     arr = []
     for run_id in args.job_ids:
-        # Probably add a exception thrower to catch any failed runs
-        run = api.run(f"{entity}/{project}/{run_id}")
-        arr.append(get_run_info(run))
+        # Added an error catcher for any failed runs
+        try:
+            run = api.run(f"{entity}/{project}/{run_id}")
+            arr.append(get_run_info(run))
+        except CommError as e:
+            logging.info(f"- Update: failed to fetch run {run_id}.")
+            logging.error(f"Failed to fetch run {run_id}:\n{e}")
 
     # Customized method to decide lrs in the next segment.
     lr1, lr2_candidates = get_next_lrs(np.array(arr))
@@ -141,12 +147,5 @@ def main():
     print(json.dumps(result))
 
 
-
 if __name__ == "__main__":
     main()
-    # arr = np.array([
-    #     [1,2],
-    #     [2,1],
-    #     [3,4]
-    # ])
-    # print(eps_greedy_lr1(arr))
