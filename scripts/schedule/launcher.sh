@@ -24,7 +24,7 @@ fi
 
 # Parallel submit
 OUTPUT_PATH="${BASE_PATH}/scc_outputs/${DATE}/${NAME}/seg$((i+1))"
-mkdir -p $OUTPUT_PATH
+mkdir -p $OUTPUT_PATHIN
 
 # NOTE: hack to create consistent checkpoint path names
 # we convert all lrs into %.1e scientific notations in all path names
