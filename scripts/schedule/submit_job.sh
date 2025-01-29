@@ -85,7 +85,9 @@ python main.py \
     checkpoint.load_file=$load_file \
     checkpoint.overwrite_config=True
 
-status=\$
+status=\$?
+
+echo "\$(date '+%Y-%m-%d %H:%M:%S') - Job \$JOB_ID completed with status \$status"
 
 # Create temperary configs for resubmission
 if [[ \$status -ne 0 ]]; then
@@ -100,8 +102,6 @@ fi
 
 # Send ACK token, together with job ID and exit code
 echo "ACK \$JOB_ID \$status" | nc "$MASTER_HOST" "$PORT"
-
-echo "\$(date '+%Y-%m-%d %H:%M:%S') - Job \$JOB_ID completed with status \$?"
 EOF
 
     echo "$(date '+%Y-%m-%d %H:%M:%S') - Launcher: Submitted job with lr1=${lr1} lr2=${lr2}."
