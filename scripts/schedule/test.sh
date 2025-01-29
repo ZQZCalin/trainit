@@ -1,22 +1,44 @@
 #!/bin/bash
 
-source scripts/schedule/utils.sh
 
-output=$(python3 scripts/schedule/get_next_lr.py --job_ids)
+seg=0
+lr2=0.1
+val="someVal"
 
-# Extract lr1
-lr1=$(echo "$output" | jq -r '.lr1')
+my_function() {
+  local param1="$1"
+  local param2="$2"
+  echo "param1=$param1, param2=$param2"
+}
 
-# Extract the list into a Bash array
-# This uses `jq` to output each element on a new line, then reads them into an array
-mapfile -t lr2_candidates < <(echo "$output" | jq -r '.lr2_candidates[]')
+# Call with seg first, lr2 second
+my_function "$seg" "$lr2"
+# Outputs: param1=0, param2=0.1
 
-echo ${lr1}
-echo ${lr2_candidates[@]}
-log_info "${lr2_candidates[@]}"
+# If reversed:
+my_function "$lr2" "$seg"
+# param1=0.1, param2=0
 
-x=(1 2 3 4 5)
-log_info "${x[@]} bla bla bla"
+
+
+# >>
+# source scripts/schedule/utils.sh
+
+# output=$(python3 scripts/schedule/get_next_lr.py --job_ids)
+
+# # Extract lr1
+# lr1=$(echo "$output" | jq -r '.lr1')
+
+# # Extract the list into a Bash array
+# # This uses `jq` to output each element on a new line, then reads them into an array
+# mapfile -t lr2_candidates < <(echo "$output" | jq -r '.lr2_candidates[]')
+
+# echo ${lr1}
+# echo ${lr2_candidates[@]}
+# log_info "${lr2_candidates[@]}"
+
+# x=(1 2 3 4 5)
+# log_info "${x[@]} bla bla bla"
 
 # >>
 # declare -A dict
