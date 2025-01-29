@@ -1,11 +1,11 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="test_v2_trial2"
+NAME="test_v2_trial3"
 DESC="
 Experiment description:
 
-Second trial of testing the new automation script after adding the resubmit feature.
+Third trial of testing the new automation script after adding the resubmit feature.
 "
 
 # =========================================================
