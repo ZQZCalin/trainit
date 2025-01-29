@@ -3,13 +3,13 @@
 SCHEDULE="piecewise_linear"
 
 submit_job() {
-    local lr1=$1
-    local lr2=$2
-    local seg=$3
+    local lr1="$1"
+    local lr2="$2"
+    local seg="$3 "                   # index-0 segment number
 
-    local seg_next=$((seg+1))
-    local seg_prev=$((seg-1))
-    local seg_print=$((seg+1))  # convert to index-1 numbering
+    local seg_next=$((seg + 1))
+    local seg_prev=$((seg - 1))
+    local seg_print=$((seg + 1))    # convert to index-1 numbering
 
     local start_step=${SEGMENTS[$seg]}
     local end_step=${SEGMENTS[$seg_next]}
