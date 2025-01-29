@@ -1,11 +1,11 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="test_v2_trial3"
+NAME="test_v2_trial4"
 DESC="
 Experiment description:
 
-Third trial of testing the new automation script after adding the resubmit feature.
+4th trial of testing the new automation script after adding the resubmit feature.
 "
 
 # =========================================================
@@ -29,7 +29,7 @@ GPU_HOUR="4:00:00"
 SCC_OUTPUT_PATH="${BASE_PATH}/scc_outputs/${DATE}/${NAME}"
 
 # path of checkpoint files
-CHECKPOINT_PATH="checkpoint/lr_schedule/${NAME}"
+CHECKPOINT_PATH="${BASE_PATH}/checkpoint/lr_schedule/${NAME}"
 
 # delete checkpoints of suboptimal runs
 CLEAN_CHECKPOINTS=True
@@ -43,7 +43,7 @@ CLEAN_CHECKPOINTS=True
 MASTER_HOST=$(hostname -I | awk '{print $1}')
 
 # port number for communication
-PORT=51204
+PORT=51205
 
 # backoff time (in seconds) between listener attempts
 LISTENER_BACKOFF=5
@@ -61,9 +61,6 @@ MAX_LISTEN_TIME=14400     # 4 hours
 
 # Maximum number of retry attempts per job
 MAX_RETRIES=3
-
-# Backoff time (in seconds) between retry attempts
-RETRY_BACKOFF=60
 
 # Optional: Enable or disable resubmission feature
 ENABLE_RETRY=true
@@ -86,6 +83,8 @@ SEGMENTS[-1]=$TOTAL_STEPS           # set last segment to TOTAL_STEPS
 
 #   ii. alternatively, you can customize unevenly distributed segments
 # SEGMENTS=(0 150 300 500 1000 1500 $TOTAL_STEPS)
+#       manually adapt NUM_SEGMENTS
+# NUM_SEGMENTS=$((${#SEGMENTS[@]} - 1))
 
 
 # >>> Other training configs
@@ -102,9 +101,6 @@ BETA1=0.9
 BETA2=0.999
 WEIGHT_DECAY=0.1
 NESTEROV=False
-
-# checkpoint subfolder relative path
-CHECKPOINT_PATH="checkpoint/lr_schedule/${NAME}"
 
 
 # >>> Logging configs
