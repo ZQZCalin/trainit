@@ -22,38 +22,38 @@ The output files will be automatically stored in `scc_outputs/yyyy-mm-dd/$NAME`,
 <summary>A snippet of progress logs.</summary>
 
 ```txt
-Running experiment eps-greedy_10segs.
+Running experiment $NAME.
 
 Experiment description:
 
-2000 steps split into 10 segments, with eps-greedy mechanism.
+$DESC
 
-master host ip: 192.168.18.244; port number: 51204
+master host ip: 192.168.18.244; port number: 51205
 ====================================================================================================
-2025-01-21 23:43:43 - Master: Training segment 1 from iteration 0 to 200...
-Your job 2134881 ("seg1_lr2_1.0e+00") has been submitted
-2025-01-21 23:43:43 - Submitter: Submitted job with lr1=0 lr2=1e0.
-Your job 2134882 ("seg1_lr2_1.0e-01") has been submitted
-2025-01-21 23:43:44 - Submitter: Submitted job with lr1=0 lr2=1e-1.
-Your job 2134883 ("seg1_lr2_1.0e-02") has been submitted
-2025-01-21 23:43:44 - Submitter: Submitted job with lr1=0 lr2=1e-2.
-Your job 2134884 ("seg1_lr2_1.0e-03") has been submitted
-2025-01-21 23:43:44 - Submitter: Submitted job with lr1=0 lr2=1e-3.
-Your job 2134885 ("seg1_lr2_1.0e-04") has been submitted
-2025-01-21 23:43:44 - Submitter: Submitted job with lr1=0 lr2=1e-4.
-Your job 2134886 ("seg1_lr2_1.0e-05") has been submitted
-2025-01-21 23:43:44 - Submitter: Submitted job with lr1=0 lr2=1e-5.
-2025-01-21 23:43:44 - Listener: Waiting for 6 ACKs on port 51204...
-2025-01-21 23:52:58 - Listener: Received ACK 1/6 from job ID 2134881
-2025-01-22 00:04:46 - Listener: Received ACK 2/6 from job ID 2134884
-2025-01-22 00:05:50 - Listener: Received ACK 3/6 from job ID 2134882
-2025-01-22 00:05:57 - Listener: Received ACK 4/6 from job ID 2134883
-2025-01-22 00:14:57 - Listener: Received ACK 5/6 from job ID 2134885
-2025-01-22 00:18:10 - Listener: Received ACK 6/6 from job ID 2134886
-2025-01-22 00:18:10 - Listener: 6 / 6 ACKs received from jobs (2134881 2134884 2134882 2134883 2134885 2134886).
-2025-01-22 00:18:10 - Update: fetching lr1 and lr2_candidates for the next segment...
-2025-01-22 00:18:23 - Update: lr1=0.001, lr2_candidates=(0.0 0.00025 0.0005 0.001 0.002 0.004) for segment 1.
-2025-01-22 00:18:23 - Master: Segment 1/10 completed.
+2025-01-28 22:28:37 - Master: Training segment 1 from iteration 0 to 200...
+2025-01-28 22:28:37 - Update: computing lr1 and lr2_candidates...
+2025-01-28 22:28:39 - Update: lr1=0.0, lr2_candidates=(1.0 0.1 0.01 0.001 0.0001 0.00001) for segment 1.
+2025-01-28 22:28:39 - Listener: Waiting for 6 ACKs on port 51205...
+Your job 2370475 ("seg1_lr2_1.0e+00") has been submitted
+2025-01-28 22:28:39 - Launcher: Submitted job with lr1=0.0 lr2=1.0.
+Your job 2370476 ("seg1_lr2_1.0e-01") has been submitted
+2025-01-28 22:28:39 - Launcher: Submitted job with lr1=0.0 lr2=0.1.
+Your job 2370477 ("seg1_lr2_1.0e-02") has been submitted
+2025-01-28 22:28:39 - Launcher: Submitted job with lr1=0.0 lr2=0.01.
+Your job 2370478 ("seg1_lr2_1.0e-03") has been submitted
+2025-01-28 22:28:39 - Launcher: Submitted job with lr1=0.0 lr2=0.001.
+Your job 2370479 ("seg1_lr2_1.0e-04") has been submitted
+2025-01-28 22:28:39 - Launcher: Submitted job with lr1=0.0 lr2=0.0001.
+Your job 2370480 ("seg1_lr2_1.0e-05") has been submitted
+2025-01-28 22:28:39 - Launcher: Submitted job with lr1=0.0 lr2=0.00001.
+2025-01-28 22:37:17 - Listener: Received ACK 0/6 from job ID 2370475
+2025-01-28 22:50:41 - Listener: Received ACK 1/6 from job ID 2370480
+2025-01-28 22:50:49 - Listener: Received ACK 2/6 from job ID 2370476
+2025-01-28 22:50:52 - Listener: Received ACK 3/6 from job ID 2370477
+2025-01-28 22:51:05 - Listener: Received ACK 4/6 from job ID 2370478
+2025-01-28 22:52:06 - Listener: Received ACK 5/6 from job ID 2370479
+2025-01-28 22:52:07 - Listener: 6 / 6 ACKs received from jobs (2370475 2370480 2370476 2370477 2370478 2370479).
+2025-01-28 22:52:07 - Master: Segment 1/10 completed.
 
 ...
 ```
@@ -62,42 +62,53 @@ Your job 2134886 ("seg1_lr2_1.0e-05") has been submitted
 
 ## Configurations
 
-All configurations in the script are located in `config.sh`. Below lists a detailed explanation of each configuration. 
+`config.sh` stores all static variables. Below lists a detailed explanation of each configuration. 
 
 **Important Configs**
+
 - `NAME`: specifies experiment name. 
-    *NOTE: please change name for every new experiment. Otherwise, there will be conflicts in `checkpoint/` and `scc_outputs/` and an error will likely be raised (this feature is intended as it prevents overwriting existing checkpoints).*
+
+    *Note:* PLEASE change name for every new experiment. Otherwise, there will be conflicts in `checkpoint/` and `scc_outputs/` and an error will likely be raised (this feature is intended as it prevents overwriting existing checkpoints).
+
 - `BASE_PATH`: change to the path where you clone this repo.
-- `project`: specifies wandb project name. change it as you like.
+
+- `PROJECT`: specifies wandb project name. change it as you like.
+
+- `PORT`: specifies the port number for communication between workers and the master thread.
+
+    *Note:* If you submit multiple experiments at the same time, a safe practice is to assign different port numbers to different experiments to avoid port conflicts.
 
 **Experiment Configs**
-- `num_segments`: number of segments
-- `segments`: a list of intergers indicating the checkpoints. The default is an evenly distributed list, but you can also customize it. Please make sure `num_segments` is equal to `len(segments)-1`.
-- optimizer configs: we are using `AdamW` by default. You can use other optimizers, but you need to make sure the submission script in `launcher.sh` matches the configs. See example below.
+
+- `NUM_SEGMENTS`: number of segments
+
+- `SEGMENTS`: a list of intergers indicating the checkpoints. The default is an evenly distributed list. You can also use a customized definition.
+
+- optimizer configs: we are using `AdamW` by default. You can use other optimizers, but you need to make sure the submission script in `submit_job.sh` matches the configs. See example below.
     <details>
     <summary>Replace AdamW with SGDM</summary>
 
     ```bash
     # config.sh
     # Refer to the main README.md for more details about optimization configs.
-    optimizer=sgdm
-    momentum=0.9
-    use_nesterov=False
-    weight_decay=0.0
-    decouple_weight_decay=True
+    OPTIMIZER=sgdm
+    MOMENTUM=0.9
+    USE_NESTEROV=False
+    WEIGHT_DECAY=0.0
+    DECOUPLE_WEIGHT_DECAY=True
     ```
 
     ```bash
-    # launcher.sh
+    # submit_job.sh
     qsub <<EOF
     ...
     python main.py \
         ... \
-        optimizer=$optimizer \
-        optimizer.momentum=$momentum \
-        optimizer.use_nesterov=$use_nesterov \
-        optimizer.weight_decay=$weight_decay \
-        optimizer.decouple_weight_decay=$decouple_weight_decay \
+        optimizer=$OPTIMIZER \
+        optimizer.momentum=$MOMENTUM \
+        optimizer.use_nesterov=$USE_NESTEROV \
+        optimizer.weight_decay=$WEIGHT_DECAY \
+        optimizer.decouple_weight_decay=$DECOUPLE_WEIGHT_DECAY \
         ...
     ...
     EOF
@@ -106,12 +117,31 @@ All configurations in the script are located in `config.sh`. Below lists a detai
 
 For other experiment-related configs, please refer to the `Experiment` section in `config.sh`.
 
-**Optional Configs**
+**System Configs**
+
 - `DESC`: add a description of your experiment here.
+
 - `CPU_HOUR`: specifies maximum cpu hours for the master script. Defaults to 24 hours. You can increase to up to 720 hours for larger experiments.
+
 - `GPU_TYPE`: specifies a gpu type for training. as of this writing, `L40S` is the most available gpu on SCC.
+
 - `GPU_HOUR`: specifies maximum gpu hours for each single job. a rough guideline is that 200 iterations per segment takes about 20 minutes; so the default 4hr should be sufficient for most experiments.
-- `max_wait_mins`: specifies the maximum wait time of the listener. the master script moves on to the next segment if it exceeds the max wait time. Defaults to 4 hours, which again should be fine for more experiments. For larger scale experiments, 2x `GPU_HOUR` should be a safe value.
+
+**Path Configs**
+
+- `SCC_OUTPUT_PATH`: specifies the path for scc stdout and stderr output files.
+
+- `CHECKPOINT_PATH`: specifies the path for checkpoint saving and loading.
+
+**Feature Configs**
+
+- `CLEAN_CHECKPOINTS`: if true, deletes all checkpoints in the last segment besides the one corresponding to the selected learning rate.
+
+- `ENABLE_RETRY`: if true, turns on the resubmit upon failure feature.
+
+- `MAX_RETRIES`: specifies the maximum number of resubmits of each job.
+
+- `MAX_LISTEN_TIME`: specifies the maximum wait time (in seconds) of the listener. The master script moves on to the next segment if it exceeds the max wait time. Defaults to 4 hours, which again should be fine for more experiments. For larger scale experiments, 2x `GPU_HOUR` should be a safe value.
 
 
 ## Customizing LR Schedules
@@ -177,6 +207,13 @@ done
 </details>
 
 
+## Updates
+
+- version 0.0.2: 
+    - Implements the "resubmit upon failure" feature, which triggers if the exit code of the main python script is non-zero;
+    - Implements the checkpoint cleaning feature which deletes all checkpoints other than the optimal one.
+
+
 ## Future Features
 
-- Right now the script ignores any jobs that fail to run. Might add a function of re-submitting jobs if the failure is caused by invalid cuda environment.
+- 
