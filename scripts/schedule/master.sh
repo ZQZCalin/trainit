@@ -9,6 +9,10 @@ source scripts/schedule/utils.sh
 source scripts/schedule/submit_job.sh
 
 
+# Create temporary folder for system files.
+mkdir -p "${SCC_OUTPUT_PATH}/tmp"
+
+
 echo "Running experiment ${NAME}." && echo "${DESC}"
 
 echo "master host ip: ${MASTER_HOST}; port number: ${PORT}"
@@ -62,6 +66,8 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
     expected_acks=${#lr2_candidates[@]}
     # expected_acks=1     # uncomment for test purpose
 
+    log_info "Listener: Waiting for ${expected_acks} ACKs on port ${PORT}..."
+
     received_acks=0
     received_jobs=()
     start_time=$(date +%s)
@@ -72,15 +78,13 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
         job_retries[$lr2]=0
     done
 
-    log_info "Listener: Waiting for ${expected_acks} ACKs on port ${PORT}..."
-
     # a copy of lr2_candidates
-    job_queue=${lr2_candidates[@]}
+    job_queue=( "${lr2_candidates[@]}" )
 
     while (( received_acks < expected_acks )); do
         # Parallel submit all jobs
         for lr2 in "${job_queue[@]}"; do
-            submit_job $lr1 $lr2 $seg
+            submit_job "$lr1" "$lr2" "$i"
         done
         job_queue=()    # make sure only submit once
 
