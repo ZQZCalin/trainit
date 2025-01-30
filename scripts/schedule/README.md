@@ -216,4 +216,4 @@ done
 
 ## Future Features
 
-- 
+- Add the `NAME` config to the wandb configuration so that grouping in wandb is easier.
