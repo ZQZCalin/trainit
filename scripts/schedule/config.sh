@@ -1,11 +1,11 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="test_v2_trial4"
+NAME="eps_greedy_0.1"
 DESC="
 Experiment description:
 
-4th trial of testing the new automation script after adding the resubmit feature.
+Epsilon-greedy lr with eps=0.1.
 "
 
 # =========================================================
