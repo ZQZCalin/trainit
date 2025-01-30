@@ -109,11 +109,11 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
         elif [[ "$ack" != "ACK" ]]; then
             log_info "Listener: Unexpected message: ${msg}"
         elif [[ "$state" -eq 0 ]]; then
-            log_info "Listener: Received ACK ${#received_jobs[@]}/${expected_acks} from job ID ${job_id}"
             # Increment received_acks
             ((received_acks++))
             # Store job id
             received_jobs+=($job_id)
+            log_info "Listener: Received ACK ${#received_jobs[@]}/${expected_acks} from job ID ${job_id}"
         else
             log_info "Listener: Job ${job_id} failed, resubmitting..."
             # submit_job() creates a temperary config file for resubmission
