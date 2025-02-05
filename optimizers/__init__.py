@@ -21,6 +21,7 @@ from optimizers.schedule import get_current_lr
 from optimizers.schedule import (
     warmup_linear_decay_schedule,
     warmup_const_linear_decay_schedule,
+    trapezoid_schedule,
 )
 from optimizers.muon.muon import scale_by_muon
 from optimizers.muon.muon import muon

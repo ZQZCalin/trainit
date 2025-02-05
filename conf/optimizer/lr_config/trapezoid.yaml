@@ -1,0 +1,5 @@
+schedule: trapezoid
+lr: null
+warmup: null
+decay: null
+max_steps: null

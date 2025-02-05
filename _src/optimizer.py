@@ -21,15 +21,14 @@ def init_schedule(lr_config: DictConfig) -> optax.ScalarOrSchedule:
     Returns:
         A `optax.ScalarOrSchedule` object.
     """
-    use_warmup = lambda warmup: isinstance(warmup, int) and (warmup > 0)
-    use_const = lambda const: isinstance(const, int) and (const > 0)
+    is_positive_int = lambda x: isinstance(x, int) and (x > 0)
 
     def init_constant_lr(config):
         learning_rate = config.lr
         return learning_rate
     
     def init_cosine_lr(config):
-        if use_warmup(config.warmup):
+        if is_positive_int(config.warmup):
             learning_rate = optax.warmup_cosine_decay_schedule(
                 init_value=0.0,
                 peak_value=config.lr,
@@ -44,8 +43,8 @@ def init_schedule(lr_config: DictConfig) -> optax.ScalarOrSchedule:
         return learning_rate
     
     def init_linear_lr(config):
-        warmup_steps = config.warmup if use_warmup(config.warmup) else 0
-        const_steps = config.const if use_const(config.const) else 0
+        warmup_steps = config.warmup if is_positive_int(config.warmup) else 0
+        const_steps = config.const if is_positive_int(config.const) else 0
         learning_rate = optimizers.warmup_const_linear_decay_schedule(
             peak_value=config.lr,
             warmup_steps=warmup_steps,
@@ -53,6 +52,17 @@ def init_schedule(lr_config: DictConfig) -> optax.ScalarOrSchedule:
             total_steps=config.max_steps,
             init_value=0.0,
             end_value=0.0,
+        )
+        return learning_rate
+    
+    def init_trapezoid_lr(config):
+        warmup_steps = config.warmup if is_positive_int(config.warmup) else 0
+        decay_steps = config.decay if is_positive_int(config.decay) else 0
+        learning_rate = optimizers.trapezoid_schedule(
+            peak_value=config.lr,
+            total_steps=config.max_steps,
+            warmup_steps=warmup_steps,
+            decay_steps=decay_steps,
         )
         return learning_rate
 
@@ -71,6 +81,8 @@ def init_schedule(lr_config: DictConfig) -> optax.ScalarOrSchedule:
         learning_rate = init_cosine_lr(lr_config)
     elif lr_config.schedule == "linear":
         learning_rate = init_linear_lr(lr_config)
+    elif lr_config.schedule == "trapezoid":
+        learning_rate = init_trapezoid_lr(lr_config)
     elif lr_config.schedule == "piecewise_linear":
         learning_rate = init_piecewise_linear_lr(lr_config)
     else:
