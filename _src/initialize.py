@@ -284,7 +284,7 @@ def init_wandb(config: DictConfig) -> None:
         wandb.init(
             project=config.logging.wandb_project, 
             name=config.logging.wandb_name,
-            id=str(config.logging.wandb_runid),
+            id=str(config.logging.wandb_runid) if (config.logging.wandb_runid is not None) else None,
             resume="never",
         )
         wandb.config.update(OmegaConf.to_container(config))
