@@ -5,7 +5,7 @@ SCHEDULE="piecewise_linear"
 submit_job() {
     local lr1="$1"
     local lr2="$2"
-    local seg="$3 "                   # index-0 segment number
+    local seg="$3"                   # index-0 segment number
 
     local seg_next=$((seg + 1))
     local seg_prev=$((seg - 1))
