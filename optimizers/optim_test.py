@@ -6,33 +6,40 @@ from jax import random as jr
 from jax import tree_util as jtu
 
 import optax
-from optax import GradientTransformation
 
 from optimizers import base
 from optimizers import optim
 from optimizers import schedule
 
+from utils import tree_utils
+
 
 def test_optimizer(
-    optimizer: GradientTransformation,
+        optimizer: optax.GradientTransformation
 ):
-    # Simple pytree for testing
+
+    grad_clip = optax.clip_by_global_norm(10.0)
+    optimizer = optax.chain(
+        grad_clip,
+        optax.apply_if_finite(optimizer, 15)
+    )
+
+    # We use a PyTree of 2d arrays to test muon.
     params = {
-        'a': [jnp.array(1.), jnp.array(2.)],  # List of arrays
-        'b': (jnp.array(3.), jnp.array(4.)),  # Tuple of arrays
-        'c': {'d': jnp.array(5.)}  # Nested dictionary with an array
+        'a': jnp.ones((3,2)), 
+        'b': jnp.array([[1,2,3], [2,3,4]], dtype=jnp.float32),
     }
-    grads = jtu.tree_map(jnp.ones_like, params)
     print("initial params:\n", params)
     
     opt_state = optimizer.init(params)
-    # print(">>>optimizer initialized")
     
     for i in range(3):
-        # print(">>>updating optimizer")
+        grads = tree_utils.normalize(params)
         updates, opt_state = optimizer.update(grads, opt_state, params)
         params = optax.apply_updates(params, updates)
-        print(f"round{i+1} new params:\n", params)
+        print(f"iter {i+1}\n  >> grads\n", grads)
+        print(f"  >> updates\n", updates)
+        print(f"  >> new params\n", params)
 
 
 def test_sgdm():

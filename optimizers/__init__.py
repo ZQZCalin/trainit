@@ -25,3 +25,5 @@ from optimizers.schedule import (
 )
 from optimizers.muon.muon import scale_by_muon
 from optimizers.muon.muon import muon
+from optimizers.preconditioners.normalized_sgdm import normalized_sgdm
+from optimizers.optim_test import test_optimizer
