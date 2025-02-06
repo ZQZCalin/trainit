@@ -7,7 +7,8 @@ steps=2000
 batch_size=128
 
 optimizer=normalized_sgdm
-lrs=(0.1 3e-2 1e-2 3e-3 1e-3)
+# lrs=(0.1 3e-2 1e-2 3e-3 1e-3)
+lrs=(3.0 1.0 0.3)
 momentum=0.95
 nesterov=True
 normalize=layer
@@ -15,6 +16,10 @@ normalize=layer
 schedule=linear
 warmup=200
 wait=0
+
+# Additional wrapper
+wrapper=null
+# wrapper=adamw_2dmask
 
 # System variables
 BASE_DIR=/projectnb/aclab/qinziz/trainit
@@ -54,7 +59,8 @@ python main.py \
     optimizer.lr_config.lr=$lr \
     optimizer.lr_config.warmup=$warmup \
     optimizer.lr_config.const=$wait \
-    optimizer.lr_config.max_steps=$steps
+    optimizer.lr_config.max_steps=$steps \
+    optimizer/wrapper=$wrapper
 EOF
     echo "Submitted job: $name lr=$lr"
 done
