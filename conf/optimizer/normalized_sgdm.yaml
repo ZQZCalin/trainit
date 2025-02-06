@@ -1,6 +1,7 @@
 name: normalized_sgdm
 defaults:
   - lr_config: linear
+  - wrapper: null
 lr_config:
   lr: 0.05
 
