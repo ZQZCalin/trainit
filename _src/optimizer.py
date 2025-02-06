@@ -222,6 +222,16 @@ def init_optimizer(
             adam_eps=config.adam_eps,
             adam_wd=config.adam_wd
         )
+    
+    def init_normalized_sgdm(config: DictConfig):
+        learning_rate = wrap_scheduler(
+            init_schedule(config.lr_config), wandb_log=wandb_log)
+        return optimizers.normalized_sgdm(
+            learning_rate=learning_rate,
+            momentum=config.momentum,
+            nesterov=config.nesterov,
+            normalize=config.normalize,
+        )
 
     # Initialize base optimizer.
     name = config.optimizer.name
@@ -240,6 +250,10 @@ def init_optimizer(
         optimizer = init_sgdm(opt_config)
     elif name == "muon":
         optimizer = init_muon(opt_config)
+    elif name == "normalized_sgdm":
+        optimizer = init_normalized_sgdm(opt_config)
+    else:
+        raise ValueError(f"invalid config: optimizer.name = '{name}'.")
 
     # Wrap online-to-nonconvex.
     if name in ["ogd_md"]:
