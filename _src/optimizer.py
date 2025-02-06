@@ -254,6 +254,30 @@ def init_optimizer(
         optimizer = init_normalized_sgdm(opt_config)
     else:
         raise ValueError(f"invalid config: optimizer.name = '{name}'.")
+    
+    # Add optional wrappers.
+    def wrap_adamw_2dmask(optimizer, config, lr_config):
+        lr_config.lr = config.adam_lr
+        adam_lr = wrap_scheduler(
+            init_schedule(lr_config), wandb_log=wandb_log, schedule_title="adam_schedule")
+        return optimizers.adamw_2dmask(
+            optimizer=optimizer,
+            adam_lr=adam_lr,
+            adam_beta1=config.adam_beta1,
+            adam_beta2=config.adam_beta2,
+            adam_eps=config.adam_eps,
+            adam_wd=config.adam_wd,
+            adam_nesterov=config.adam_nesterov,
+        )
+        
+    wrapper_config = opt_config.wrapper if "wrapper" in opt_config else None
+    wrapper_name = wrapper_config.name if wrapper_config else None
+    if wrapper_name is None:
+        pass
+    elif wrapper_name == "adamw_2dmask":
+        optimizer = wrap_adamw_2dmask(optimizer, wrapper_config, opt_config.lr_config)
+    else:
+        raise ValueError(f"invalid config: wrapper.name = '{wrapper_name}'.")
 
     # Wrap online-to-nonconvex.
     if name in ["ogd_md"]:
