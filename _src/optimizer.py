@@ -6,7 +6,7 @@ import jax.random as jr
 import optax
 import optimizers
 import equinox as eqx
-from omegaconf import DictConfig
+from omegaconf import OmegaConf, DictConfig
 from typing import Any, Tuple
 from jaxtyping import PRNGKeyArray
 
@@ -207,7 +207,7 @@ def init_optimizer(
     def init_muon(config: DictConfig):
         muon_lr = wrap_scheduler(
             init_schedule(config.lr_config), wandb_log=wandb_log)
-        adam_lr_config = config.lr_config
+        adam_lr_config = OmegaConf.create(config.lr_config)     # creates a copy of lr_config
         adam_lr_config.lr = config.adam_lr
         adam_lr = wrap_scheduler(
             init_schedule(adam_lr_config), wandb_log=wandb_log, schedule_title="adam_schedule")
@@ -257,6 +257,7 @@ def init_optimizer(
     
     # Add optional wrappers.
     def wrap_adamw_2dmask(optimizer, config, lr_config):
+        lr_config = OmegaConf.create(lr_config)
         lr_config.lr = config.adam_lr
         adam_lr = wrap_scheduler(
             init_schedule(lr_config), wandb_log=wandb_log, schedule_title="adam_schedule")
