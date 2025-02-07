@@ -43,3 +43,22 @@ def parse_state_dict(params: list[str]) -> list[str]:
             param = re.sub(re.escape(key), value, param)
         output.append(param)
     return output
+
+
+def summarize_model_parmas(model: eqx.Module):
+    """Summarizes model parameters."""
+    
+    def label(path, p):
+        parts = []
+        for part in path:
+            if isinstance(part, jtu.GetAttrKey):
+                parts.append(part.name)
+            elif isinstance(part, jtu.SequenceKey):
+                parts[-1] += f"[{str(part.idx)}]"
+        info = ".".join(parts)
+        return f"{info} -> {p.shape}"
+    
+    params = eqx.filter(model, eqx.is_array)
+    params_path = jax.tree_util.tree_map_with_path(label, params)
+    # Print path of each param in new line.
+    print("\n".join(jax.tree_util.tree_flatten(params_path)[0]))
