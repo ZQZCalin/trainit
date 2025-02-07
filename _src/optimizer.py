@@ -232,7 +232,47 @@ def init_optimizer(
             nesterov=config.nesterov,
             normalize=config.normalize,
         )
-
+    
+    def init_muon_laprop(config: DictConfig):
+        learning_rate = wrap_scheduler(
+            init_schedule(config.lr_config), wandb_log=wandb_log)
+        lr_1d_config = OmegaConf.create(config.lr_config)
+        lr_1d_config.lr = config.lr_1d
+        lr_1d = wrap_scheduler(
+            init_schedule(lr_1d_config), wandb_log=wandb_log, schedule_title="1d_schedule")
+        return optimizers.muon_laprop(
+            learning_rate=learning_rate,
+            momentum=config.momentum,
+            nesterov=config.nesterov,
+            ns_steps=config.ns_steps,
+            eps=config.eps,
+            lr_1d=lr_1d,
+            beta2=config.beta2,
+            offset_beta=config.offset_beta,
+        )
+    
+    def init_muon_adamw(config: DictConfig):
+        muon_lr = wrap_scheduler(
+            init_schedule(config.lr_config), wandb_log=wandb_log)
+        adam_lr_config = OmegaConf.create(config.lr_config)
+        adam_lr_config.lr = config.adam_lr
+        adam_lr = wrap_scheduler(
+            init_schedule(adam_lr_config), wandb_log=wandb_log, schedule_title="adam_schedule")
+        return optimizers.muon_adamw(
+            learning_rate=muon_lr,
+            momentum=config.momentum,
+            nesterov=config.nesterov,
+            ns_steps=config.ns_steps,
+            eps=config.eps,
+            beta2=config.beta2,
+            offset_beta=config.offset_beta,
+            adam_lr=adam_lr,
+            adam_beta1=config.adam_beta1,
+            adam_beta2=config.adam_beta2,
+            adam_eps=config.adam_eps,
+            adam_wd=config.adam_wd
+        )
+    
     # Initialize base optimizer.
     name = config.optimizer.name
     opt_config = config.optimizer
@@ -250,6 +290,12 @@ def init_optimizer(
         optimizer = init_sgdm(opt_config)
     elif name == "muon":
         optimizer = init_muon(opt_config)
+    elif name == "muon_adamw":
+        optimizer = init_muon_adamw(opt_config)
+    elif name == "muon_laprop":
+        if config.model.name != "gpt":
+            raise NotImplementedError(f"muon_laprop doesn't support model = '{config.model.name}' now.")
+        optimizer = init_muon_laprop(opt_config)
     elif name == "normalized_sgdm":
         optimizer = init_normalized_sgdm(opt_config)
     else:

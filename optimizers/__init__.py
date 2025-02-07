@@ -25,6 +25,10 @@ from optimizers.schedule import (
 )
 from optimizers.muon.muon import scale_by_muon
 from optimizers.muon.muon import muon
+from optimizers.muon.muon_laprop import (
+    muon_laprop,
+    muon_adamw,
+)
 from optimizers.preconditioners.combine import (
     adamw_2dmask,
 )
