@@ -243,7 +243,9 @@ def muon_laprop(
         scale_by_normalization(
             normalize_fn=lambda G: G / (jnp.linalg.norm(G, axis=1, keepdims=True) + eps),
         ),
-        optax.scale_by_learning_rate(lr_1d),
+        # optax.scale_by_learning_rate(lr_1d),
+        # change this to 2d array learning rates
+        optax.scale_by_learning_rate(learning_rate),
     )
 
     # Normalize by inf-norm.
