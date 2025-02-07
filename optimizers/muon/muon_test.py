@@ -1,9 +1,16 @@
 """Tests the muon optimizer."""
 
+import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import optax
+import equinox as eqx
+from omegaconf import OmegaConf
 from utils import tree_utils
 from optimizers.muon.muon import scale_by_muon, muon
+from optimizers.muon.muon_laprop import label_gpt
+from models import summarize_model_parmas
+from _src import init_language_model
 
 
 def test_scale_by_muon():
@@ -63,6 +70,20 @@ def test_muon():
         print(f"iter {i+1}\n  >> grads\n", grads)
         print(f"  >> updates\n", updates)
         print(f"  >> new params\n", params)
+
+
+def visualize_label_params():
+    model = init_language_model(config=OmegaConf.load("conf/model/gpt.yaml"), key=jax.random.PRNGKey(42))
+    summary = summarize_model_parmas(model, verbose=False)
+    labels = jtu.tree_map_with_path(label_gpt, eqx.filter(model, eqx.is_array))
+
+    summary_list, _ = jtu.tree_flatten(summary)
+    labels_list, _ = jtu.tree_flatten(labels)
+
+    max_len = max(len(s) for s in summary_list)
+    lines = [f"{s:<{max_len}} | {label}" for s, label in zip(summary_list, labels_list)]
+
+    print("\n".join(lines))
 
 
 if __name__ == "__main__":
