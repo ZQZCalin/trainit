@@ -1,11 +1,12 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="eps_greedy_0.1"
+NAME="eps_greedy_0.07"
 DESC="
 Experiment description:
 
-Epsilon-greedy lr with eps=0.1.
+In progress of binary search for an optimal epsilon.
+Epsilon-greedy lr with eps=0.07.
 "
 
 # =========================================================

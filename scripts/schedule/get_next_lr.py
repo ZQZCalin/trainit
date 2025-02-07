@@ -25,7 +25,7 @@ DEFAULT_LR2 = [1e0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
 
 # >> Next lr methods.
 NEXT_LR1 = "eps_greedy"
-EPS_GREEDY_VAL = 0.1
+EPS_GREEDY_VAL = 0.07
 
 NEXT_LR2 = "log"
 LOG_GRID_MULTI = 2
