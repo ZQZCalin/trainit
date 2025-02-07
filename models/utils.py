@@ -2,7 +2,7 @@ import jax
 from jax import tree_util as jtu
 from jax import numpy as jnp
 from jax import random as jr
-from jaxtyping import Array
+from jaxtyping import Array, PyTree
 
 import re
 import torch
@@ -45,20 +45,34 @@ def parse_state_dict(params: list[str]) -> list[str]:
     return output
 
 
-def summarize_model_parmas(model: eqx.Module):
-    """Summarizes model parameters."""
+def summarize_model_parmas(
+        model: eqx.Module,
+        verbose: bool = True,
+) -> PyTree:
+    """Summarizes model parameters with aligned output."""
     
-    def label(path, p):
+    def get_path(path, p):
+        # Parse path list into a single string.
         parts = []
         for part in path:
             if isinstance(part, jtu.GetAttrKey):
                 parts.append(part.name)
             elif isinstance(part, jtu.SequenceKey):
-                parts[-1] += f"[{str(part.idx)}]"
-        info = ".".join(parts)
-        return f"{info} -> {p.shape}"
-    
+                parts[-1] += f"[{part.idx}]"
+        return ".".join(parts)
+
     params = eqx.filter(model, eqx.is_array)
-    params_path = jax.tree_util.tree_map_with_path(label, params)
-    # Print path of each param in new line.
-    print("\n".join(jax.tree_util.tree_flatten(params_path)[0]))
+    path_tree = jtu.tree_map_with_path(get_path, params)
+    path_list, treedef = jtu.tree_flatten(path_tree)
+    shape_list, _ = jtu.tree_flatten(
+        jtu.tree_map(lambda p: str(p.shape), params)
+    )
+    
+    # Format summarize print lines.
+    max_len = max(len(path) for path in path_list)
+    lines = [f"{path:<{max_len+3}}| {shape}" for path, shape in zip(path_list, shape_list)]
+
+    if verbose:
+        print("\n".join(lines))
+
+    return jtu.tree_unflatten(treedef, lines)
