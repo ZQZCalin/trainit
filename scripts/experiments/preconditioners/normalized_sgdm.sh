@@ -17,9 +17,6 @@ schedule=linear
 warmup=200
 wait=0
 
-# Additional wrapper
-wrapper=null
-# wrapper=adamw_2dmask
 
 # System variables
 BASE_DIR=/projectnb/aclab/qinziz/trainit
@@ -59,8 +56,8 @@ python main.py \
     optimizer.lr_config.lr=$lr \
     optimizer.lr_config.warmup=$warmup \
     optimizer.lr_config.const=$wait \
-    optimizer.lr_config.max_steps=$steps \
-    optimizer/wrapper=$wrapper
+    optimizer.lr_config.max_steps=$steps
+    # optimizer/wrapper=adamw_2dmask
 EOF
     echo "Submitted job: $name lr=$lr"
 done
