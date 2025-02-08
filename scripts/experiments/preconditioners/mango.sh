@@ -70,6 +70,11 @@ mkdir -p $OUTPUT_PATH
 # normalization_vec_b=null
 
 # ...
+# name="mango_bias_inf"
+# normalization_vec_b="inf_"
+# normalization_attn_b="inf_"
+
+# ...
 # name="mango_attn-split"
 # normalization_attn_w="ns_split"
 # normalization_attn_b="l2_split"
@@ -89,17 +94,48 @@ mkdir -p $OUTPUT_PATH
 # normalization_head="l2_col"
 
 # ...
+# name="mango_head_l2col_lr3e-3"
+# normalization_head="l2_col"
+# lr_head=3e-3
+
+# ...
 # name="mango_head_null"
 # normalization_head="null"
+
+# ...
+# name="mango_head_null_lr1e-3"
+# normalization_head="null"
+# lr_head=1e-3
+
+# ...
+# name="mango_head_null_lr3e-3"
+# normalization_head="null"
+# lr_head=3e-3
 
 # ...
 # name="mango_vecW_l2"
 # normalization_vec_w="l2"
 
 # ...
-# name="mango_bias_inf"
-# normalization_vec_b="inf_"
-# normalization_attn_b="inf_"
+# name="mango_vecW_null"
+# normalization_vec_w="null"
+
+# ...
+# name="mango_emb_null"
+# normalization_embedding="null"
+
+# ...
+# name="mango_emb_infcol"
+# normalization_embedding="inf_col"
+
+# ...
+# name="mango_emb_l2col_lr3e-4"
+# normalization_embedding="null"
+# lr_embedding=3e-4
+
+# ...
+name="mango_emb_ns"
+normalization_embedding="ns"
 
 
 args=(
