@@ -9,6 +9,7 @@ from omegaconf import OmegaConf
 from utils import tree_utils
 from optimizers.muon.muon import scale_by_muon, muon
 from optimizers.muon.muon_laprop import label_gpt, muon_laprop
+from optimizers.muon.mango import mango_label_gpt
 from models import summarize_model_parmas
 from _src import init_language_model
 
@@ -76,7 +77,8 @@ def visualize_label_params():
     """A visualization util function that structures the partition of muon_laprop."""
     model = init_language_model(config=OmegaConf.load("conf/model/gpt.yaml"), key=jax.random.PRNGKey(42))
     summary = summarize_model_parmas(model, verbose=False)
-    labels = label_gpt(eqx.filter(model, eqx.is_array))
+    # labels = label_gpt(eqx.filter(model, eqx.is_array))
+    labels = mango_label_gpt(eqx.filter(model, eqx.is_array))
 
     summary_list, _ = jtu.tree_flatten(summary)
     labels_list, _ = jtu.tree_flatten(labels)
