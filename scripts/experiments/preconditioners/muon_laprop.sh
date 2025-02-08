@@ -11,17 +11,17 @@ momentum=0.95
 nesterov=True
 ns_steps=6
 eps=1e-8
-lr_1d=3e-4
-# lr_1d=$lr
+# lr_1d=3e-4
+lr_1d=$lr
 beta2=0.95
-offset_beta=0.99
-# offset_beta=null
+# offset_beta=0.99
+offset_beta=null
 
 schedule=linear
 warmup=200
 const=null
 
-name=muon_laprop_emb_lr2d
+name=muon_laprop_same-lr_no-offset
 
 # System variables
 BASE_DIR=/projectnb/aclab/qinziz/trainit
