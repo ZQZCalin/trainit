@@ -99,12 +99,12 @@ def wrap_scheduler(
     
     The wrapped schedule takes in `learning_rate` as argument and returns a scalar lr.
     """
-    def wrapper(schedule, count, wandb_log, title):
+    def wrapper(schedule, count, wandb_log, title, log_callback=True):
         if callable(schedule):
             lr = schedule(count)
         else:
             lr = schedule
-        if wandb_log is not None:
+        if wandb_log is not None and log_callback:
             jax.experimental.io_callback(wandb_log, None, {f"lr/{title}": lr}, commit=False)
         return lr
     return jtu.Partial(wrapper, learning_rate, wandb_log=wandb_log, title=schedule_title)
