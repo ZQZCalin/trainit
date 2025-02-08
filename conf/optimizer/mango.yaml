@@ -26,5 +26,5 @@ normalizations:
   head: "ns"
   attn_w: "ns"
   attn_b: "l2"
-  vec_w: "inf_"
+  vec_w: "inf_"   # NOTE: it's annoying to make SGE correctly parse a string "inf"; changed to "inf_"
   vec_b: "l2"
