@@ -1,0 +1,149 @@
+token_embedding.weight                              | (50258, 768) | embedding
+position_embedding.weight                           | (1024, 768)  | embedding
+transformer_blocks.layers[0].ln1.weight             | (768,)       | vec_w
+transformer_blocks.layers[0].ln1.bias               | (768,)       | vec_b
+transformer_blocks.layers[0].attn.attn_fc.weight    | (2304, 768)  | attn_w
+transformer_blocks.layers[0].attn.attn_fc.bias      | (2304,)      | attn_b
+transformer_blocks.layers[0].attn.linear.weight     | (768, 768)   | mat
+transformer_blocks.layers[0].attn.linear.bias       | (768,)       | vec_b
+transformer_blocks.layers[0].ln2.weight             | (768,)       | vec_w
+transformer_blocks.layers[0].ln2.bias               | (768,)       | vec_b
+transformer_blocks.layers[0].expand_fc.weight       | (3072, 768)  | mat
+transformer_blocks.layers[0].expand_fc.bias         | (3072,)      | vec_b
+transformer_blocks.layers[0].reduce_fc.weight       | (768, 3072)  | mat
+transformer_blocks.layers[0].reduce_fc.bias         | (768,)       | vec_b
+transformer_blocks.layers[1].ln1.weight             | (768,)       | vec_w
+transformer_blocks.layers[1].ln1.bias               | (768,)       | vec_b
+transformer_blocks.layers[1].attn.attn_fc.weight    | (2304, 768)  | attn_w
+transformer_blocks.layers[1].attn.attn_fc.bias      | (2304,)      | attn_b
+transformer_blocks.layers[1].attn.linear.weight     | (768, 768)   | mat
+transformer_blocks.layers[1].attn.linear.bias       | (768,)       | vec_b
+transformer_blocks.layers[1].ln2.weight             | (768,)       | vec_w
+transformer_blocks.layers[1].ln2.bias               | (768,)       | vec_b
+transformer_blocks.layers[1].expand_fc.weight       | (3072, 768)  | mat
+transformer_blocks.layers[1].expand_fc.bias         | (3072,)      | vec_b
+transformer_blocks.layers[1].reduce_fc.weight       | (768, 3072)  | mat
+transformer_blocks.layers[1].reduce_fc.bias         | (768,)       | vec_b
+transformer_blocks.layers[2].ln1.weight             | (768,)       | vec_w
+transformer_blocks.layers[2].ln1.bias               | (768,)       | vec_b
+transformer_blocks.layers[2].attn.attn_fc.weight    | (2304, 768)  | attn_w
+transformer_blocks.layers[2].attn.attn_fc.bias      | (2304,)      | attn_b
+transformer_blocks.layers[2].attn.linear.weight     | (768, 768)   | mat
+transformer_blocks.layers[2].attn.linear.bias       | (768,)       | vec_b
+transformer_blocks.layers[2].ln2.weight             | (768,)       | vec_w
+transformer_blocks.layers[2].ln2.bias               | (768,)       | vec_b
+transformer_blocks.layers[2].expand_fc.weight       | (3072, 768)  | mat
+transformer_blocks.layers[2].expand_fc.bias         | (3072,)      | vec_b
+transformer_blocks.layers[2].reduce_fc.weight       | (768, 3072)  | mat
+transformer_blocks.layers[2].reduce_fc.bias         | (768,)       | vec_b
+transformer_blocks.layers[3].ln1.weight             | (768,)       | vec_w
+transformer_blocks.layers[3].ln1.bias               | (768,)       | vec_b
+transformer_blocks.layers[3].attn.attn_fc.weight    | (2304, 768)  | attn_w
+transformer_blocks.layers[3].attn.attn_fc.bias      | (2304,)      | attn_b
+transformer_blocks.layers[3].attn.linear.weight     | (768, 768)   | mat
+transformer_blocks.layers[3].attn.linear.bias       | (768,)       | vec_b
+transformer_blocks.layers[3].ln2.weight             | (768,)       | vec_w
+transformer_blocks.layers[3].ln2.bias               | (768,)       | vec_b
+transformer_blocks.layers[3].expand_fc.weight       | (3072, 768)  | mat
+transformer_blocks.layers[3].expand_fc.bias         | (3072,)      | vec_b
+transformer_blocks.layers[3].reduce_fc.weight       | (768, 3072)  | mat
+transformer_blocks.layers[3].reduce_fc.bias         | (768,)       | vec_b
+transformer_blocks.layers[4].ln1.weight             | (768,)       | vec_w
+transformer_blocks.layers[4].ln1.bias               | (768,)       | vec_b
+transformer_blocks.layers[4].attn.attn_fc.weight    | (2304, 768)  | attn_w
+transformer_blocks.layers[4].attn.attn_fc.bias      | (2304,)      | attn_b
+transformer_blocks.layers[4].attn.linear.weight     | (768, 768)   | mat
+transformer_blocks.layers[4].attn.linear.bias       | (768,)       | vec_b
+transformer_blocks.layers[4].ln2.weight             | (768,)       | vec_w
+transformer_blocks.layers[4].ln2.bias               | (768,)       | vec_b
+transformer_blocks.layers[4].expand_fc.weight       | (3072, 768)  | mat
+transformer_blocks.layers[4].expand_fc.bias         | (3072,)      | vec_b
+transformer_blocks.layers[4].reduce_fc.weight       | (768, 3072)  | mat
+transformer_blocks.layers[4].reduce_fc.bias         | (768,)       | vec_b
+transformer_blocks.layers[5].ln1.weight             | (768,)       | vec_w
+transformer_blocks.layers[5].ln1.bias               | (768,)       | vec_b
+transformer_blocks.layers[5].attn.attn_fc.weight    | (2304, 768)  | attn_w
+transformer_blocks.layers[5].attn.attn_fc.bias      | (2304,)      | attn_b
+transformer_blocks.layers[5].attn.linear.weight     | (768, 768)   | mat
+transformer_blocks.layers[5].attn.linear.bias       | (768,)       | vec_b
+transformer_blocks.layers[5].ln2.weight             | (768,)       | vec_w
+transformer_blocks.layers[5].ln2.bias               | (768,)       | vec_b
+transformer_blocks.layers[5].expand_fc.weight       | (3072, 768)  | mat
+transformer_blocks.layers[5].expand_fc.bias         | (3072,)      | vec_b
+transformer_blocks.layers[5].reduce_fc.weight       | (768, 3072)  | mat
+transformer_blocks.layers[5].reduce_fc.bias         | (768,)       | vec_b
+transformer_blocks.layers[6].ln1.weight             | (768,)       | vec_w
+transformer_blocks.layers[6].ln1.bias               | (768,)       | vec_b
+transformer_blocks.layers[6].attn.attn_fc.weight    | (2304, 768)  | attn_w
+transformer_blocks.layers[6].attn.attn_fc.bias      | (2304,)      | attn_b
+transformer_blocks.layers[6].attn.linear.weight     | (768, 768)   | mat
+transformer_blocks.layers[6].attn.linear.bias       | (768,)       | vec_b
+transformer_blocks.layers[6].ln2.weight             | (768,)       | vec_w
+transformer_blocks.layers[6].ln2.bias               | (768,)       | vec_b
+transformer_blocks.layers[6].expand_fc.weight       | (3072, 768)  | mat
+transformer_blocks.layers[6].expand_fc.bias         | (3072,)      | vec_b
+transformer_blocks.layers[6].reduce_fc.weight       | (768, 3072)  | mat
+transformer_blocks.layers[6].reduce_fc.bias         | (768,)       | vec_b
+transformer_blocks.layers[7].ln1.weight             | (768,)       | vec_w
+transformer_blocks.layers[7].ln1.bias               | (768,)       | vec_b
+transformer_blocks.layers[7].attn.attn_fc.weight    | (2304, 768)  | attn_w
+transformer_blocks.layers[7].attn.attn_fc.bias      | (2304,)      | attn_b
+transformer_blocks.layers[7].attn.linear.weight     | (768, 768)   | mat
+transformer_blocks.layers[7].attn.linear.bias       | (768,)       | vec_b
+transformer_blocks.layers[7].ln2.weight             | (768,)       | vec_w
+transformer_blocks.layers[7].ln2.bias               | (768,)       | vec_b
+transformer_blocks.layers[7].expand_fc.weight       | (3072, 768)  | mat
+transformer_blocks.layers[7].expand_fc.bias         | (3072,)      | vec_b
+transformer_blocks.layers[7].reduce_fc.weight       | (768, 3072)  | mat
+transformer_blocks.layers[7].reduce_fc.bias         | (768,)       | vec_b
+transformer_blocks.layers[8].ln1.weight             | (768,)       | vec_w
+transformer_blocks.layers[8].ln1.bias               | (768,)       | vec_b
+transformer_blocks.layers[8].attn.attn_fc.weight    | (2304, 768)  | attn_w
+transformer_blocks.layers[8].attn.attn_fc.bias      | (2304,)      | attn_b
+transformer_blocks.layers[8].attn.linear.weight     | (768, 768)   | mat
+transformer_blocks.layers[8].attn.linear.bias       | (768,)       | vec_b
+transformer_blocks.layers[8].ln2.weight             | (768,)       | vec_w
+transformer_blocks.layers[8].ln2.bias               | (768,)       | vec_b
+transformer_blocks.layers[8].expand_fc.weight       | (3072, 768)  | mat
+transformer_blocks.layers[8].expand_fc.bias         | (3072,)      | vec_b
+transformer_blocks.layers[8].reduce_fc.weight       | (768, 3072)  | mat
+transformer_blocks.layers[8].reduce_fc.bias         | (768,)       | vec_b
+transformer_blocks.layers[9].ln1.weight             | (768,)       | vec_w
+transformer_blocks.layers[9].ln1.bias               | (768,)       | vec_b
+transformer_blocks.layers[9].attn.attn_fc.weight    | (2304, 768)  | attn_w
+transformer_blocks.layers[9].attn.attn_fc.bias      | (2304,)      | attn_b
+transformer_blocks.layers[9].attn.linear.weight     | (768, 768)   | mat
+transformer_blocks.layers[9].attn.linear.bias       | (768,)       | vec_b
+transformer_blocks.layers[9].ln2.weight             | (768,)       | vec_w
+transformer_blocks.layers[9].ln2.bias               | (768,)       | vec_b
+transformer_blocks.layers[9].expand_fc.weight       | (3072, 768)  | mat
+transformer_blocks.layers[9].expand_fc.bias         | (3072,)      | vec_b
+transformer_blocks.layers[9].reduce_fc.weight       | (768, 3072)  | mat
+transformer_blocks.layers[9].reduce_fc.bias         | (768,)       | vec_b
+transformer_blocks.layers[10].ln1.weight            | (768,)       | vec_w
+transformer_blocks.layers[10].ln1.bias              | (768,)       | vec_b
+transformer_blocks.layers[10].attn.attn_fc.weight   | (2304, 768)  | attn_w
+transformer_blocks.layers[10].attn.attn_fc.bias     | (2304,)      | attn_b
+transformer_blocks.layers[10].attn.linear.weight    | (768, 768)   | mat
+transformer_blocks.layers[10].attn.linear.bias      | (768,)       | vec_b
+transformer_blocks.layers[10].ln2.weight            | (768,)       | vec_w
+transformer_blocks.layers[10].ln2.bias              | (768,)       | vec_b
+transformer_blocks.layers[10].expand_fc.weight      | (3072, 768)  | mat
+transformer_blocks.layers[10].expand_fc.bias        | (3072,)      | vec_b
+transformer_blocks.layers[10].reduce_fc.weight      | (768, 3072)  | mat
+transformer_blocks.layers[10].reduce_fc.bias        | (768,)       | vec_b
+transformer_blocks.layers[11].ln1.weight            | (768,)       | vec_w
+transformer_blocks.layers[11].ln1.bias              | (768,)       | vec_b
+transformer_blocks.layers[11].attn.attn_fc.weight   | (2304, 768)  | attn_w
+transformer_blocks.layers[11].attn.attn_fc.bias     | (2304,)      | attn_b
+transformer_blocks.layers[11].attn.linear.weight    | (768, 768)   | mat
+transformer_blocks.layers[11].attn.linear.bias      | (768,)       | vec_b
+transformer_blocks.layers[11].ln2.weight            | (768,)       | vec_w
+transformer_blocks.layers[11].ln2.bias              | (768,)       | vec_b
+transformer_blocks.layers[11].expand_fc.weight      | (3072, 768)  | mat
+transformer_blocks.layers[11].expand_fc.bias        | (3072,)      | vec_b
+transformer_blocks.layers[11].reduce_fc.weight      | (768, 3072)  | mat
+transformer_blocks.layers[11].reduce_fc.bias        | (768,)       | vec_b
+ln.weight                                           | (768,)       | vec_w
+ln.bias                                             | (768,)       | vec_b
+head.weight                                         | (50258, 768) | head
