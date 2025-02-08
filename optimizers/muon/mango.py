@@ -72,7 +72,7 @@ def mango_label_gpt(params):
 
 
 def mango(
-        base_lr: float = 0.05,
+        lrs: float | Dict[str, float] = 0.05,
         schedule: optax.Schedule | None = None,
         momentum: float = 0.95,
         nesterov: bool = True,
@@ -80,7 +80,6 @@ def mango(
         eps: float = 1e-8,
         beta2: float | None = None,
         offset_beta: float | None = None,
-        lrs: Dict[str, float] | None = None,
         normalizations: Dict[str, str | None] | None = default_mango_normalizations,
 ) -> optax.GradientTransformation:
     """Mango (Momentum with Advanced Normalization, Gradient-preconditing and Offset update).
@@ -110,20 +109,22 @@ def mango(
         def split_fn(G):
             assert G.ndim == 1 or G.ndim == 2
             assert G.shape[0] % (3 * num_heads) == 0
+            ndim = G.ndim
+            shape = G.shape
             n = num_heads
             d = G.shape[0] // (3 * num_heads)
             # Reshape into [3,n,d,:].
-            if G.ndim == 1:
+            if ndim == 1:
                 G = jnp.reshape(G, (3, n, d))
             else:
-                G = jnp.reshape(G, (3, n, d, G.shape[1]))
+                G = jnp.reshape(G, (3, n, d, shape[1]))
             # Use nested vmap to broadcast mapping f to the last axes (d,:).
             G = jax.vmap(jax.vmap(f))(G)
             # Reshape back into [3nd,:].
-            if G.ndim == 1:
+            if ndim == 1:
                 G = jnp.reshape(G, (3*n*d,))
             else:
-                G = jnp.reshape(G, (3*n*d, G.shape[1]))
+                G = jnp.reshape(G, (3*n*d, shape[1]))
             return G
         return split_fn
 
@@ -163,6 +164,7 @@ def mango(
                 # although it's always 1 for GPT-2 attn layers 
                 # since d=64 << D=768.
                 G = G * max(1, G.shape[0]/G.shape[1])**0.5
+                return G
             return scale_by_function(split_vmap(f))
         raise ValueError(f"invalid normalization type = '{normalize}'.")
 
@@ -173,8 +175,8 @@ def mango(
         optim_normalization = multi_transform(transforms, mango_label_gpt)
 
     # Advanced learning rate schedules based on parameters.
-    if lrs is None:
-        learning_rate = base_lr if schedule is None else lambda t: base_lr * schedule(t)
+    if isinstance(lrs, float):
+        learning_rate = lrs if schedule is None else lambda t: lrs * schedule(t)
         optim_schedule = optax.scale_by_learning_rate(learning_rate)
     else:
         if schedule is None:
