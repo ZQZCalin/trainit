@@ -55,6 +55,9 @@ mkdir -p $OUTPUT_PATH
 # ========================================================================
 
 # ...
+# name="mango_baseline"
+
+# ...
 # name="mango_bias-null-lr3e-4"
 # normalization_attn_b=null
 # normalization_vec_b=null
@@ -74,11 +77,29 @@ mkdir -p $OUTPUT_PATH
 # ...
 # The rationale is that we should scale lr of
 # weight by sqrt(1/12) and bias by sqrt(1/36)
+# ...
 # name="mango_attn-split_lr-w3e-3b1.5e-3"
 # normalization_attn_w="ns_split"
 # normalization_attn_b="l2_split"
 # lr_attn_w=3e-3
 # lr_attn_b=1.5e-3
+
+# ...
+# name="mango_head_l2col"
+# normalization_head="l2_col"
+
+# ...
+# name="mango_head_null"
+# normalization_head="null"
+
+# ...
+# name="mango_vecW_l2"
+# normalization_vec_w="l2"
+
+# ...
+# name="mango_bias_inf"
+# normalization_vec_b="inf_"
+# normalization_attn_b="inf_"
 
 
 args=(
