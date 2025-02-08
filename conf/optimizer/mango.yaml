@@ -12,19 +12,19 @@ beta2: 0.95
 offset_beta: 0.99
 
 lrs:
-  2d: 0.05
+  mat: 0.05
   embedding: 0.05
   head: 0.05
   attn_w: 0.05
   attn_b: 0.05
-  1d_w: 0.05
-  1d_b: 0.05
+  vec_w: 0.05
+  vec_b: 0.05
 
 normalizations:
-  2d: "ns"
+  mat: "ns"
   embedding: "l2_col"
   head: "ns"
-  attn_w: "ns_split"
-  attn_b: "l2_split"
-  1d_w: "inf"
-  1d_b: "l2"
+  attn_w: "ns"
+  attn_b: "l2"
+  vec_w: "inf"
+  vec_b: "l2"

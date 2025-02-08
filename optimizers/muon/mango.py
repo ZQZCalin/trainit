@@ -22,7 +22,7 @@ from optimizers.muon.base import (
 )
 
 
-mango_gpt_keys = ["2d", "embedding", "head", "attn_w", "attn_b", "1d_w", "1d_b"]
+mango_gpt_keys = ["mat", "embedding", "head", "attn_w", "attn_b", "vec_w", "vec_b"]
 
 
 normalization_list = [
@@ -38,13 +38,13 @@ normalization_list = [
 
 
 default_mango_normalizations = {
-    "2d": "ns",
+    "mat": "ns",
     "embedding": "l2_col",
     "head": "ns",
     "attn_w": "ns_split",
     "attn_b": "l2_split",
-    "1d_w": "inf",
-    "1d_b": "l2",
+    "vec_w": "inf",
+    "vec_b": "l2",
 }
 
 
@@ -62,11 +62,11 @@ def mango_label_gpt(params):
             return "attn_b"
         # General arrays.
         if p.ndim == 2:
-            return "2d"
+            return "mat"
         if p.ndim == 1 and "weight" in parts:
-            return "1d_w"
+            return "vec_w"
         if p.ndim == 1 and "bias" in parts:
-            return "1d_b"
+            return "vec_b"
         raise ValueError(f"cannot categorize parameter: {p}")
     return jtu.tree_map_with_path(fn, params) 
 
@@ -131,6 +131,7 @@ def mango(
     def scale_by_normalization(normalize):
         if normalize is None:
             return optax.identity()
+        # normalize = str(normalize)
         if normalize == "l2":
             return scale_by_function(
                 f=lambda G: G / (jnp.linalg.norm(G) + eps)
@@ -183,7 +184,7 @@ def mango(
             lr_transforms = { k: optax.scale_by_learning_rate(lrs[k]) for k in mango_gpt_keys }
         else:
             lr_transforms = { k: optax.scale_by_learning_rate(
-                lambda t: lrs[k] * schedule(t, log_callback=(k=="2d"))  # we use a wrapped schedule that logs to wandb
+                lambda t: lrs[k] * schedule(t, log_callback=(k=="mat"))  # we use a wrapped schedule that logs to wandb
             ) for k in mango_gpt_keys }
         optim_schedule = multi_transform(lr_transforms, mango_label_gpt)
 
