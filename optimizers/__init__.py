@@ -29,6 +29,9 @@ from optimizers.muon.muon_laprop import (
     muon_laprop,
     muon_adamw,
 )
+from optimizers.muon.mango import (
+    mango,
+)
 from optimizers.preconditioners.combine import (
     adamw_2dmask,
 )

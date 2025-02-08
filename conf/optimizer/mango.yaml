@@ -1,0 +1,30 @@
+name: mango
+defaults:
+  - lr_config: linear
+lr_config:
+  lr: 1.0
+
+momentum: 0.95
+nesterov: True
+ns_steps: 6
+eps: 1e-8
+beta2: 0.95
+offset_beta: 0.99
+
+lrs:
+  2d: 0.05
+  embedding: 0.05
+  head: 0.05
+  attn_w: 0.05
+  attn_b: 0.05
+  1d_w: 0.05
+  1d_b: 0.05
+
+normalizations:
+  2d: "ns"
+  embedding: "l2_col"
+  head: "ns"
+  attn_w: "ns_split"
+  attn_b: "l2_split"
+  1d_w: "inf"
+  1d_b: "l2"

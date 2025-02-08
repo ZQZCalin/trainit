@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 from utils import tree_utils
 from optimizers.muon.muon import scale_by_muon, muon
 from optimizers.muon.muon_laprop import label_gpt, muon_laprop
-from optimizers.muon.mango import mango_label_gpt
+from optimizers.muon.mango import mango_label_gpt, mango
 from models import summarize_model_parmas
 from _src import init_language_model
 
@@ -94,6 +94,22 @@ def test_muon_laprop():
     params = eqx.filter(model, eqx.is_array)
 
     optimizer = muon_laprop()
+    opt_state = optimizer.init(params)
+
+    for i in range(2):
+        grads = tree_utils.normalize(params)
+        updates, opt_state = optimizer.update(grads, opt_state, params)
+        params = optax.apply_updates(params, updates)
+        print(f"iter {i+1}\n  >> grads\n", jtu.tree_flatten(grads)[0])
+        print(f"  >> updates\n", jtu.tree_flatten(updates)[0])
+        print(f"  >> new params\n", jtu.tree_flatten(params)[0])
+
+
+def test_mango():
+    model = init_language_model(config=OmegaConf.load("conf/model/gpt.yaml"), key=jax.random.PRNGKey(42))
+    params = eqx.filter(model, eqx.is_array)
+
+    optimizer = mango()
     opt_state = optimizer.init(params)
 
     for i in range(2):

@@ -273,6 +273,27 @@ def init_optimizer(
             adam_wd=config.adam_wd
         )
     
+    def init_mango(config: DictConfig):
+        lr_config = OmegaConf.create(config.lr_config)
+        lr_config.lr = 1.0
+        base_schedule = wrap_scheduler(
+            init_schedule(lr_config), wandb_log=wandb_log)
+        if isinstance(config.lrs, DictConfig):
+            lrs = OmegaConf.to_container(config.lrs)
+        else:
+            lrs = config.lrs
+        return optimizers.mango(
+            lrs=lrs,
+            schedule=base_schedule,
+            momentum=config.momentum,
+            nesterov=config.nesterov,
+            ns_steps=config.ns_steps,
+            eps=config.eps,
+            beta2=config.beta2,
+            offset_beta=config.offset_beta,
+            normalizations=OmegaConf.to_container(config.normalizations)
+        )
+    
     # Initialize base optimizer.
     name = config.optimizer.name
     opt_config = config.optimizer
@@ -296,6 +317,10 @@ def init_optimizer(
         if config.model.name != "gpt":
             raise NotImplementedError(f"muon_laprop doesn't support model = '{config.model.name}' now.")
         optimizer = init_muon_laprop(opt_config)
+    elif name == "mango":
+        if config.model.name != "gpt":
+            raise NotImplementedError(f"mango doesn't support model = '{config.model.name}' now.")
+        optimizer = init_mango(opt_config)
     elif name == "normalized_sgdm":
         optimizer = init_normalized_sgdm(opt_config)
     else:
@@ -337,13 +362,15 @@ def init_optimizer(
         optimizer = optimizers.online_to_gradient_transformation(optimizer)
 
     # Wrap random scaling.
-    random_scaling_key, key = jr.split(key)
-    optimizer = optimizers.wrap_random_scaling(
-        gradient_transformation=optimizer,
-        random_scaling=config.train.random_scaling,
-        use_importance_sampling=config.train.use_importance_sampling,
-        key=random_scaling_key,
-    )
+    # NOTE: random scaling is not really used at this moment,
+    # so I temporarily turn it off. 
+    # random_scaling_key, key = jr.split(key)
+    # optimizer = optimizers.wrap_random_scaling(
+    #     gradient_transformation=optimizer,
+    #     random_scaling=config.train.random_scaling,
+    #     use_importance_sampling=config.train.use_importance_sampling,
+    #     key=random_scaling_key,
+    # )
     
     # Gradient clipping and finite gradient wrapper.
     grad_clip = optax.clip_by_global_norm(config.train.gradient_clip_val)
