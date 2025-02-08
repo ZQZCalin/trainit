@@ -25,12 +25,24 @@ from optimizers.muon.base import (
 mango_gpt_keys = ["2d", "embedding", "head", "attn_w", "attn_b", "1d_w", "1d_b"]
 
 
+normalization_list = [
+    "l2",               # l2 norm for vectors or frobenius norm for matrices
+    "l2_col",           # column-wise l2 norm for matrices
+    "l2_split",         # head-wise l2 (frobenius) norm, for attention weights / bias
+    "inf",              # inf norm for vectors or spectral norm for matrices
+    "inf_col",          # column-wise inf norm for matrices
+    "inf_split",        # head-wise inf (spectral) norm, for attention weights / bias
+    "ns",               # newton-schulz for matrices
+    "ns_split",         # head-wise newton-schulz for matrices, particularly attention weights
+]
+
+
 default_mango_normalizations = {
     "2d": "ns",
-    "embedding": "l2",
+    "embedding": "l2_col",
     "head": "ns",
-    "attn_w": "ns",
-    "attn_b": "ns",
+    "attn_w": "ns_split",
+    "attn_b": "l2_split",
     "1d_w": "inf",
     "1d_b": "l2",
 }
@@ -59,43 +71,6 @@ def mango_label_gpt(params):
     return jtu.tree_map_with_path(fn, params) 
 
 
-def scale_by_normalization(
-        normalization: Literal["l2", "inf", "ns"] | None,
-        eps: float = 1e-8,
-        axis: int | None = None,
-        ns_steps: int | None = None,
-) -> optax.GradientTransformation:
-    """Normalize update per layer.
-
-    A wrapper function that wraps different normalization methods for mango.
-
-    * NOTE: we do not check dimension for users.
-    
-    Args:
-        normalization:
-            - "l2": l2 norm on vectors and frobenius norm on matrices;
-            - "inf": inf norm on vectors and spectral norm on matrices;
-            - "ns": newton-schulz on matrices only;
-            - None: no normalization at all
-        eps: numerical stability constant
-        axis: specifies which axis to normalize if "l2" or "inf"
-        ns_steps: number of newton-schulz if "ns"
-    """
-    if normalization is None:
-        return optax.identity()
-    if normalization == "ns":
-        return scale_by_newton_schulz(ns_steps=ns_steps)
-    if normalization == "l2":
-        return scale_by_function(
-            f=lambda G: G / (jnp.linalg.norm(G, axis=axis, keepdims=True) + eps)
-        )
-    if normalization == "inf":
-        return scale_by_function(
-            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf, axis=axis, keepdims=True) + eps)
-        )
-    raise ValueError(f"invalid normalization type = '{normalization}'.")
-
-
 def mango(
         base_lr: float = 0.05,
         schedule: optax.Schedule | None = None,
@@ -113,6 +88,10 @@ def mango(
     Args:
         
     """
+
+    # Manually specify GPT-2 configs.
+    num_heads = 12
+
     # Gradient preconditioning by grad_squared.
     optim_grad_precond = scale_by_grad_squared(beta=beta2) if beta2 else optax.identity()
 
@@ -123,26 +102,74 @@ def mango(
     optim_offset = scale_by_offset(beta=offset_beta) if offset_beta else optax.identity()
 
     # Advanced normalization based on parameters.
-    def get_normalization(key):
-        normalization = normalizations[key]
-        if normalization is None:
+    def split_vmap(f):
+        """Broadcasts a function f: [d,:] -> [d,:] to a matrix/vector [3nd,:]
+        in a way that first reshapes into [3,n,d,:], then applies f on [d,:],
+        and finally reshape back into [3nd,:].
+        """
+        def split_fn(G):
+            assert G.ndim == 1 or G.ndim == 2
+            assert G.shape[0] % (3 * num_heads) == 0
+            n = num_heads
+            d = G.shape[0] // (3 * num_heads)
+            # Reshape into [3,n,d,:].
+            if G.ndim == 1:
+                G = jnp.reshape(G, (3, n, d))
+            else:
+                G = jnp.reshape(G, (3, n, d, G.shape[1]))
+            # Use nested vmap to broadcast mapping f to the last axes (d,:).
+            G = jax.vmap(jax.vmap(f))(G)
+            # Reshape back into [3nd,:].
+            if G.ndim == 1:
+                G = jnp.reshape(G, (3*n*d,))
+            else:
+                G = jnp.reshape(G, (3*n*d, G.shape[1]))
+            return G
+        return split_fn
+
+    def scale_by_normalization(normalize):
+        if normalize is None:
             return optax.identity()
-        if normalization == "ns":
+        if normalize == "l2":
+            return scale_by_function(
+                f=lambda G: G / (jnp.linalg.norm(G) + eps)
+            )
+        if normalize == "l2_col":
+            return scale_by_function(
+                f=lambda G: G / (jnp.linalg.norm(G, axis=1, keepdims=True) + eps)
+            )
+        if normalize == "l2_split":
+            return scale_by_function(split_vmap(
+                f=lambda G: G / (jnp.linalg.norm(G) + eps)
+            ))
+        if normalize == "inf":
+            return scale_by_function(
+                f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
+            )
+        if normalize == "inf_col":
+            return scale_by_function(
+                f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf, axis=1, keepdims=True) + eps)
+            )
+        if normalize == "inf_split":
+            return scale_by_function(split_vmap(
+                f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
+            ))
+        if normalize == "ns":
             return scale_by_newton_schulz(ns_steps=ns_steps)
-        if normalization == "l2":
-            return scale_by_function(
-                f=lambda G: G / (jnp.linalg.norm(G, axis=axis, keepdims=True) + eps)
-            )
-        if normalization == "inf":
-            return scale_by_function(
-                f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf, axis=axis, keepdims=True) + eps)
-            )
-        raise ValueError(f"invalid normalization type = '{normalization}'.")
+        if normalize == "ns_split":
+            def f(G):
+                G = newton_schulz(G, steps=ns_steps)
+                # Optional upscale by shape (muon line 135),
+                # although it's always 1 for GPT-2 attn layers 
+                # since d=64 << D=768.
+                G = G * max(1, G.shape[0]/G.shape[1])**0.5
+            return scale_by_function(split_vmap(f))
+        raise ValueError(f"invalid normalization type = '{normalize}'.")
 
     if normalizations is None:
         optim_normalization = optax.identity()
     else:
-        transforms = { k: get_normalization(k) for k in mango_gpt_keys }
+        transforms = { k: scale_by_normalization(normalizations[k]) for k in mango_gpt_keys }
         optim_normalization = multi_transform(transforms, mango_label_gpt)
 
     # Advanced learning rate schedules based on parameters.
