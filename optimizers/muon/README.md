@@ -6,3 +6,4 @@
     from optimizers.muon.muon_test import visualize_label_params
     visualize_label_params()
     ```
+- See the summary of gpt2 model and mango label outcome in `gpt2_mango_summary.txt`.
