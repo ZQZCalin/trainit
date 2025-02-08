@@ -29,7 +29,7 @@ normalization_list = [
     "l2",               # l2 norm for vectors or frobenius norm for matrices
     "l2_col",           # column-wise l2 norm for matrices
     "l2_split",         # head-wise l2 (frobenius) norm, for attention weights / bias
-    "inf",              # inf norm for vectors or spectral norm for matrices
+    "inf_",             # inf norm for vectors or spectral norm for matrices
     "inf_col",          # column-wise inf norm for matrices
     "inf_split",        # head-wise inf (spectral) norm, for attention weights / bias
     "ns",               # newton-schulz for matrices
@@ -43,7 +43,7 @@ default_mango_normalizations = {
     "head": "ns",
     "attn_w": "ns_split",
     "attn_b": "l2_split",
-    "vec_w": "inf",
+    "vec_w": "inf_",
     "vec_b": "l2",
 }
 
@@ -144,7 +144,7 @@ def mango(
             return scale_by_function(split_vmap(
                 f=lambda G: G / (jnp.linalg.norm(G) + eps)
             ))
-        if normalize == "inf":
+        if normalize == "inf_":
             return scale_by_function(
                 f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
             )
