@@ -12,7 +12,7 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 import optax
 
-from typing import NamedTuple, Optional, Callable
+from typing import NamedTuple, Optional, Callable, Literal
 from jaxtyping import Array, PyTree
 
 from utils import tree_utils
@@ -134,25 +134,62 @@ def scale_by_grad_squared(
     return optax.GradientTransformation(init_fn, update_fn)
 
 
-class ScaleByNormalizationState(NamedTuple):
-    """scale_by_normalization state. An empty node."""
+class ScaleByFunctionState(NamedTuple):
+    """scale_by_function state. An empty node."""
 
 
-def scale_by_normalization(
-        normalize_fn: Callable[[Array], Array],
+def scale_by_function(
+        f: Callable[[Array], Array],
 ) -> optax.GradientTransformation:
-    """Normalize update per layer."""
+    """Apply mapping f to update per layer."""
 
     def init_fn(params=None):
         del params
-        return ScaleByNormalizationState()
+        return ScaleByFunctionState()
     
     def update_fn(updates, state, params=None):
         del state, params
-        updates = jtu.tree_map(normalize_fn, updates)
-        return updates, ScaleByNormalizationState()
+        updates = jtu.tree_map(f, updates)
+        return updates, ScaleByFunctionState()
     
     return optax.GradientTransformation(init_fn, update_fn)
+
+
+def scale_by_normalization(
+        normalization: Literal["l2", "inf", "ns"] | None,
+        eps: float = 1e-8,
+        axis: int | None = None,
+        ns_steps: int | None = None,
+) -> optax.GradientTransformation:
+    """Normalize update per layer.
+
+    A wrapper function for different normalization methods.
+
+    * NOTE: we do not check dimension for users.
+    
+    Args:
+        normalization:
+            - "l2": l2 norm on vectors and frobenius norm on matrices;
+            - "inf": inf norm on vectors and spectral norm on matrices;
+            - "ns": newton-schulz on matrices only;
+            - None: no normalization at all
+        eps: numerical stability constant
+        axis: specifies which axis to normalize if "l2" or "inf"
+        ns_steps: number of newton-schulz if "ns"
+    """
+    if normalization is None:
+        return optax.identity()
+    if normalization == "ns":
+        return scale_by_newton_schulz(ns_steps=ns_steps)
+    if normalization == "l2":
+        return scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G, axis=axis, keepdims=True) + eps)
+        )
+    if normalization == "inf":
+        return scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf, axis=axis, keepdims=True) + eps)
+        )
+    raise ValueError(f"invalid normalization type = '{normalization}'.")
 
 
 class ScaleByOffsetState(NamedTuple):
@@ -232,6 +269,7 @@ def muon_laprop(
         adam_wd: adam weight decay.
     """
 
+    # General 2d matrices.
     optim_2d = optax.chain(
         scale_by_newton_schulz(ns_steps=ns_steps),
         optax.scale_by_learning_rate(learning_rate),
@@ -240,8 +278,8 @@ def muon_laprop(
     # Embedding layers have shape [V,D] or [L,D],
     # so we normalize along axis=1.
     optim_embedding = optax.chain(
-        scale_by_normalization(
-            normalize_fn=lambda G: G / (jnp.linalg.norm(G, axis=1, keepdims=True) + eps),
+        scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G, axis=1, keepdims=True) + eps),
         ),
         # optax.scale_by_learning_rate(lr_1d),
         # change this to 2d array learning rates
@@ -250,16 +288,16 @@ def muon_laprop(
 
     # Normalize by inf-norm.
     optim_1d_mul = optax.chain(
-        scale_by_normalization(
-            normalize_fn=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps),
+        scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps),
         ),
         optax.scale_by_learning_rate(lr_1d),
     )
 
     # Normalize by l2-norm.
     optim_1d_add = optax.chain(
-        scale_by_normalization(
-            normalize_fn=lambda G: G / (jnp.linalg.norm(G) + eps),
+        scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G) + eps),
         ),
         optax.scale_by_learning_rate(lr_1d),
     )
@@ -278,6 +316,9 @@ def muon_laprop(
         # NOTE: currently offset update is after lr update.
         scale_by_offset(beta=offset_beta) if offset_beta else optax.identity(),
     )
+
+
+
 
 
 def muon_adamw(
