@@ -99,12 +99,12 @@ def wrap_scheduler(
     
     The wrapped schedule takes in `learning_rate` as argument and returns a scalar lr.
     """
-    def wrapper(schedule, count, wandb_log, title, log_callback=True):
+    def wrapper(schedule, count, wandb_log, title):
         if callable(schedule):
             lr = schedule(count)
         else:
             lr = schedule
-        if wandb_log is not None and log_callback:
+        if wandb_log is not None:
             jax.experimental.io_callback(wandb_log, None, {f"lr/{title}": lr}, commit=False)
         return lr
     return jtu.Partial(wrapper, learning_rate, wandb_log=wandb_log, title=schedule_title)
@@ -276,8 +276,8 @@ def init_optimizer(
     def init_mango(config: DictConfig):
         lr_config = OmegaConf.create(config.lr_config)
         lr_config.lr = 1.0
-        base_schedule = wrap_scheduler(
-            init_schedule(lr_config), wandb_log=wandb_log)
+        base_schedule = init_schedule(lr_config)
+        schedule_wrapper = lambda lr: wrap_scheduler(lr, wandb_log=wandb_log)
         if isinstance(config.lrs, DictConfig):
             lrs = OmegaConf.to_container(config.lrs)
         else:
@@ -291,7 +291,8 @@ def init_optimizer(
             eps=config.eps,
             beta2=config.beta2,
             offset_beta=config.offset_beta,
-            normalizations=OmegaConf.to_container(config.normalizations)
+            normalizations=OmegaConf.to_container(config.normalizations),
+            schedule_wrapper=schedule_wrapper
         )
     
     # Initialize base optimizer.
