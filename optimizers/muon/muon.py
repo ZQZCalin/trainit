@@ -87,13 +87,14 @@ def scale_by_muon(
         muon_momentum = jtu.tree_map(
             lambda mu, g: momentum * mu + g, muon_momentum, updates)
 
-        # Orthogonalize momentum matrix.
+        # Apply nesterov's momentum before applying normalization.
         if nesterov:
-            # Apply nesterov's momentum before applying normalization.
             updates = jtu.tree_map(
                 lambda mu, g: momentum * mu + g, muon_momentum, updates)
         else:
             updates = muon_momentum
+
+        # Orthogonalize momentum matrix.
         updates = jtu.tree_map(
             lambda G: newton_schulz(G, steps=ns_steps), updates)
         
@@ -162,3 +163,65 @@ def muon(
             lambda p: "muon" if p.ndim == 2 else "adam", params
         )
     return multi_transform(transforms, label_params)
+
+
+def muon_og(
+        learning_rate: optax.ScalarOrSchedule = 0.05,
+        momentum: float = 0.95,
+        nesterov: bool = True,
+        ns_steps: int = 6,
+        ns_embedding: bool = False,
+        ns_head: bool = False,
+        adam_lr: optax.ScalarOrSchedule = 3e-4,
+        adam_beta1: float = 0.95,
+        adam_beta2: float = 0.95,
+        adam_eps: float = 1e-8,
+        adam_wd: float = 0.0,
+) -> optax.GradientTransformation:
+    """The OG muon optimizer that doesn't apply newton-schulz on embedding nor head layers."""
+    
+    optim_muon = scale_by_muon(
+        learning_rate, momentum, nesterov, ns_steps
+    )
+    optim_momentum = optax.chain(
+        optax.trace(decay=momentum, nesterov=nesterov),
+        optax.scale_by_learning_rate(learning_rate)
+    )
+    optim_adamw = adamw(
+        learning_rate=adam_lr,
+        beta1=adam_beta1,
+        beta2=adam_beta2,
+        eps=adam_eps,
+        weight_decay=adam_wd,
+        use_nesterov=False,
+    )
+    transforms = {
+        "muon": optim_muon,
+        "momentum": optim_momentum,
+        "adamw": optim_adamw,
+    }
+    def label_params(params):
+        def get_layer(path, p):
+            parts = [part.name for part in path if isinstance(part, jtu.GetAttrKey)]
+            # Special ararys.
+            if "token_embedding" in parts or "position_embedding" in parts:
+                return "embedding"
+            if "head" in parts:
+                return "head"
+            # General arrays.
+            if p.ndim == 2:
+                return "mat"
+            if p.ndim == 1:
+                return "vec"
+            raise ValueError(f"cannot categorize parameter: {p}")
+        parse_table = {
+            "embedding": "muon" if ns_embedding else "momentum",
+            "head": "muon" if ns_head else "momentum",
+            "mat": "muon",
+            "vec": "adamw",
+        }
+        def fn(path, p):
+            return parse_table[get_layer(path, p)]
+        return jtu.tree_map_with_path(fn, params) 
+    return multi_transform(transforms, label_params)
+    

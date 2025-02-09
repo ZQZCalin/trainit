@@ -24,7 +24,10 @@ from optimizers.schedule import (
     trapezoid_schedule,
 )
 from optimizers.muon.muon import scale_by_muon
-from optimizers.muon.muon import muon
+from optimizers.muon.muon import (
+    muon,
+    muon_og,
+)
 from optimizers.muon.muon_laprop import (
     muon_laprop,
     muon_adamw,
