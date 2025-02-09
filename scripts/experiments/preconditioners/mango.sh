@@ -130,12 +130,73 @@ mkdir -p $OUTPUT_PATH
 
 # ...
 # name="mango_emb_l2col_lr3e-4"
-# normalization_embedding="null"
+# normalization_embedding="l2_col"
 # lr_embedding=3e-4
 
 # ...
-name="mango_emb_ns"
-normalization_embedding="ns"
+# name="mango_emb_ns"
+# normalization_embedding="ns"
+
+# ...
+# name="mango_best"
+# normalization_mat="ns"
+# normalization_embedding="null"
+# normalization_head="ns"
+# normalization_attn_w="ns_split"
+# normalization_attn_b="l2_split"
+# normalization_vec_w="null"
+# normalization_vec_b="l2"
+
+
+# ========================================================================
+# From now on, we use the optimal normalization config
+# and tune other hyper-parameters, including lr, beta, beta2, offset_beta
+# ========================================================================
+
+normalization_mat="ns"
+normalization_embedding="null"
+normalization_head="ns"
+normalization_attn_w="ns_split"
+normalization_attn_b="l2_split"
+normalization_vec_w="null"
+normalization_vec_b="l2"
+
+# ...
+# name="mango_offset-null"
+# offset_beta=null
+
+# ...
+# name="mango_offset0.95"
+# offset_beta=0.95
+
+# ...
+# name="mango_offset0.9"
+# offset_beta=0.9
+
+# ...
+# name="mango_lr0.03"
+# lrs=0.03
+
+# ...
+# name="mango_lr0.05"
+# lrs=0.05
+
+# ...
+# name="mango_lr0.03_offset0.95"
+# offset_beta=0.95
+# lrs=0.03
+
+# ...
+# name="mango_beta2_null"
+# beta2=null
+
+# ...
+# name="mango_beta2_0.99"
+# beta2=0.99
+
+# ...
+# name="mango_beta2_0.9"
+# beta2=0.9
 
 
 args=(
@@ -156,15 +217,15 @@ args=(
     "optimizer.lr_config.const=$const"
     "optimizer.lr_config.max_steps=$steps"
     # Use this line for global lr.
-    # "optimizer.lrs=$lrs"
+    "optimizer.lrs=$lrs"
     # Use these lines for different lrs.
-    "optimizer.lrs.mat=$lr_mat"
-    "optimizer.lrs.embedding=$lr_embedding"
-    "optimizer.lrs.head=$lr_head"
-    "optimizer.lrs.attn_w=$lr_attn_w"
-    "optimizer.lrs.attn_b=$lr_attn_b"
-    "optimizer.lrs.vec_w=$lr_vec_w"
-    "optimizer.lrs.vec_b=$lr_vec_b"
+    # "optimizer.lrs.mat=$lr_mat"
+    # "optimizer.lrs.embedding=$lr_embedding"
+    # "optimizer.lrs.head=$lr_head"
+    # "optimizer.lrs.attn_w=$lr_attn_w"
+    # "optimizer.lrs.attn_b=$lr_attn_b"
+    # "optimizer.lrs.vec_w=$lr_vec_w"
+    # "optimizer.lrs.vec_b=$lr_vec_b"
     "optimizer.normalizations.mat=$normalization_mat"
     "optimizer.normalizations.embedding=$normalization_embedding"
     "optimizer.normalizations.head=$normalization_head"
