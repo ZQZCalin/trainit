@@ -81,11 +81,17 @@ def mango(
         beta2: float | None = None,
         offset_beta: float | None = None,
         normalizations: Dict[str, str | None] | None = default_mango_normalizations,
+        schedule_wrapper: Callable[[optax.ScalarOrSchedule], optax.ScalarOrSchedule] | None = None,
 ) -> optax.GradientTransformation:
     """Mango (Momentum with Advanced Normalization, Gradient-preconditing and Offset update).
     
     Args:
-        
+        lrs: float if global lr, dict for parameter-specific lrs
+        schedule: optax.Schedule function. 
+            Note: schedule should be an unwrapped function. you can provide additional schedule_wrapper,
+            which wraps the schedule for 2d matrices by default.
+        normalizations: dict for normalization types.
+    Other args should be self-explanatory.
     """
 
     # Manually specify GPT-2 configs.
@@ -178,14 +184,17 @@ def mango(
     # Advanced learning rate schedules based on parameters.
     if isinstance(lrs, float):
         learning_rate = lrs if schedule is None else lambda t: lrs * schedule(t)
+        if schedule_wrapper is not None:
+            learning_rate = schedule_wrapper(learning_rate)
         optim_schedule = optax.scale_by_learning_rate(learning_rate)
     else:
         if schedule is None:
-            lr_transforms = { k: optax.scale_by_learning_rate(lrs[k]) for k in mango_gpt_keys }
+            learning_rates = { k: lrs[k] for k in mango_gpt_keys }
         else:
-            lr_transforms = { k: optax.scale_by_learning_rate(
-                lambda t: lrs[k] * schedule(t, log_callback=(k=="mat"))  # we use a wrapped schedule that logs to wandb
-            ) for k in mango_gpt_keys }
+            learning_rates = { k: lambda t: lrs[k] * schedule(t) for k in mango_gpt_keys }
+        if schedule_wrapper is not None:
+            learning_rates["mat"] = schedule_wrapper(learning_rates["mat"])
+        lr_transforms = { k: optax.scale_by_learning_rate(v) for k,v in learning_rates.items() }
         optim_schedule = multi_transform(lr_transforms, mango_label_gpt)
 
     return optax.chain(
