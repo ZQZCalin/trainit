@@ -37,8 +37,20 @@ mkdir -p $OUTPUT_PATH
 # name="muon_og"
 
 # ...
-name="muon_og_nshead"
-ns_head=True
+# name="muon_og_nshead"
+# ns_head=True
+
+# ...
+# name="muon_og_emb_head_ns"
+# ns_embedding=True
+# ns_head=True
+
+# ...
+# name="muon_og_new"
+
+# ...
+# name="muon_og_nshead_new"
+# ns_head=True
 
 
 args=(
