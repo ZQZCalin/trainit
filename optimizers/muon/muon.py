@@ -215,8 +215,11 @@ def muon_og(
                 return "vec"
             raise ValueError(f"cannot categorize parameter: {p}")
         parse_table = {
-            "embedding": "muon" if ns_embedding else "momentum",
-            "head": "muon" if ns_head else "momentum",
+            # NOTE: we change to use adamw instead of SGDM for all layers which muon is not applied
+            # "embedding": "muon" if ns_embedding else "momentum",
+            # "head": "muon" if ns_head else "momentum",
+            "embedding": "muon" if ns_embedding else "adamw",
+            "head": "muon" if ns_head else "adamw",
             "mat": "muon",
             "vec": "adamw",
         }
