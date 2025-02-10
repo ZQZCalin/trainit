@@ -1,4 +1,4 @@
-name: muon
+name: muon_og
 defaults:
   - lr_config: linear
 lr_config:
