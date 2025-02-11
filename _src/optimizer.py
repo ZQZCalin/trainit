@@ -322,6 +322,28 @@ def init_optimizer(
             )
         return optimizer
     
+    def init_mango_v2(config: DictConfig, num_heads):
+        lr_config = OmegaConf.create(config.lr_config)
+        lr_config.lr = 1.0
+        base_schedule = init_schedule(lr_config)
+        schedule_wrapper = lambda lr, name: wrap_scheduler(lr, wandb_log=wandb_log, schedule_title=name)
+        parse_conf = lambda cfg: cfg if not isinstance(cfg, DictConfig) else OmegaConf.to_container(cfg)
+        return optimizers.mango_v2(
+            lr=parse_conf(config.lr),
+            beta1=parse_conf(config.beta1),
+            beta2=parse_conf(config.beta2),
+            nesterov=parse_conf(config.nesterov),
+            use_adamw=parse_conf(config.use_adamw),
+            normalize=parse_conf(config.normalize),
+            scale_weight=parse_conf(config.scale_weight),
+            eps=config.eps,
+            ns_steps=config.ns_steps,
+            num_heads=num_heads,
+            offset_beta=config.offset_beta,
+            schedule=base_schedule,
+            schedule_wrapper=schedule_wrapper
+        )
+    
     # Initialize base optimizer.
     name = config.optimizer.name
     opt_config = config.optimizer
@@ -351,10 +373,15 @@ def init_optimizer(
         if config.model.name != "gpt":
             raise NotImplementedError(f"mango doesn't support model = '{config.model.name}' now.")
         optimizer = init_mango(opt_config)
+    elif name == "mango_v2":
+        if config.model.name != "gpt":
+            raise NotImplementedError(f"mango_v2 doesn't support model = '{config.model.name}' now.")
+        optimizer = init_mango_v2(opt_config, num_heads=config.model.num_heads)
     elif name == "normalized_sgdm":
         optimizer = init_normalized_sgdm(opt_config)
     else:
         raise ValueError(f"invalid config: optimizer.name = '{name}'.")
+    print(f"\nLoaded optimizer {name}\n")
     
     # Add optional wrappers.
     def wrap_adamw_2dmask(optimizer, config, lr_config):

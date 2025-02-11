@@ -34,7 +34,8 @@ from optimizers.muon.muon_laprop import (
 )
 from optimizers.muon.mango import (
     mango,
-    visualize_norm
+    mango_v2,
+    visualize_norm,
 )
 from optimizers.preconditioners.combine import (
     adamw_2dmask,

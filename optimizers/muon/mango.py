@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 import optax
 
-from typing import NamedTuple, Optional, Callable, Literal, Dict
+from typing import NamedTuple, Optional, Callable, Literal, Dict, Tuple
 from jaxtyping import Array, PyTree
 
 from utils import tree_utils
@@ -280,3 +280,211 @@ def visualize_norm(
         return updates, VisualizeNormState()
     
     return optax.GradientTransformation(init_fn, update_fn)
+
+
+ArrayFn = Callable[[Array], Array]
+
+def split_head(f: ArrayFn, num_heads: int = 1) -> ArrayFn:
+    """Broadcasts a function f: [d,:] -> [d,:] to a matrix/vector [3nd,:]
+    in a way that first reshapes into [3,n,d,:], then applies f on [d,:],
+    and finally reshape back into [3nd,:].
+    """
+    def f_headwise(G):
+        assert G.ndim == 1 or G.ndim == 2
+        assert G.shape[0] % (3 * num_heads) == 0
+        ndim = G.ndim
+        shape = G.shape
+        n = num_heads
+        d = G.shape[0] // (3 * num_heads)
+        # Reshape into [3,n,d,:].
+        if ndim == 1:
+            G = jnp.reshape(G, (3, n, d))
+        else:
+            G = jnp.reshape(G, (3, n, d, shape[1]))
+        # Use nested vmap to broadcast mapping f to the last axes (d,:).
+        G = jax.vmap(jax.vmap(f))(G)
+        # Reshape back into [3nd,:].
+        if ndim == 1:
+            G = jnp.reshape(G, (3*n*d,))
+        else:
+            G = jnp.reshape(G, (3*n*d, shape[1]))
+        return G
+    return f_headwise
+
+
+def scale_by_normalization(
+        normalize: str | None = None,
+        eps: float = 1e-8,
+        ns_steps: int = 6,
+        num_heads: int = 12,
+) -> optax.GradientTransformation:
+    if normalize is None:
+        return optax.identity()
+    if normalize == "l2":
+        return scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G) + eps)
+        )
+    if normalize == "l2_col":
+        return scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G, axis=1, keepdims=True) + eps)
+        )
+    if normalize == "l2_split":
+        return scale_by_function(split_head(
+            f=lambda G: G / (jnp.linalg.norm(G) + eps),
+            num_heads=num_heads
+        ))
+    if normalize == "inf_":
+        return scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
+        )
+    if normalize == "inf_col":
+        return scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf, axis=1, keepdims=True) + eps)
+        )
+    if normalize == "inf_split":
+        return scale_by_function(split_head(
+            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps),
+            num_heads=num_heads
+        ))
+    if normalize == "ns":
+        return scale_by_newton_schulz(ns_steps=ns_steps)
+    if normalize == "ns_split":
+        def f(G):
+            G = newton_schulz(G, steps=ns_steps)
+            # Optional upscale by shape (muon line 135),
+            # although it's always 1 for GPT-2 attn layers 
+            # since d=64 << D=768.
+            G = G * max(1, G.shape[0]/G.shape[1])**0.5
+            return G
+        return scale_by_function(split_head(f, num_heads=num_heads))
+    raise ValueError(f"invalid normalization type = '{normalize}'.")
+
+
+class ScaleByWeightNormState(NamedTuple):
+    """An empty node for scale_by_weight_norm state."""
+
+
+def scale_by_weight_norm(
+        scale_weight: Tuple[str, float] | None = None,
+) -> optax.GradientTransformation:
+    if scale_weight is None:
+        return optax.identity()
+    
+    name, p = scale_weight
+    if name == "l2":
+        scale_fn = lambda u, w: u * jnp.linalg.norm(w)**p
+    if name == "l2_col":
+        scale_fn = lambda u, w: u * jnp.linalg.norm(w, axis=1, keepdims=True)**p
+    if name == "inf_":
+        scale_fn = lambda u, w: u * jnp.linalg.norm(w, ord=jnp.inf)**p
+    if name == "inf_col":
+        scale_fn = lambda u, w: u * jnp.linalg.norm(w, ord=jnp.inf, axis=1, keepdims=True)**p
+    if name == "op":
+        scale_fn = lambda u, w: u * jnp.linalg.norm(w, ord=2)**p
+
+    def init_fn(params=None):
+        del params
+        return ScaleByWeightNormState()
+    
+    def update_fn(updates, state, params):
+        updates = jtu.tree_map(scale_fn, updates, params)
+        return updates, ScaleByWeightNormState()
+
+    return optax.GradientTransformation(init_fn, update_fn)
+
+
+def mango_v2(
+        lr: float | Dict[str, float] = 0.05,
+        beta1: float | Dict[str, float] = 0.95,
+        beta2: float | Dict[str, float | None] | None = None,
+        nesterov: bool | Dict[str, bool] = True,
+        use_adamw: bool | Dict[str, bool] = False,
+        normalize: str | Dict[str, str | None] | None = default_mango_normalizations,
+        scale_weight: Tuple[str, float] | Dict[str, Tuple[str, float] | None] | None = None,
+        eps: float = 1e-8,
+        ns_steps: int = 6,
+        num_heads: int = 12,
+        offset_beta: float | None = None,
+        schedule: optax.Schedule | None = None,
+        schedule_wrapper: Callable[[optax.ScalarOrSchedule, str], optax.ScalarOrSchedule] | None = None,
+        param_labels: Callable[[PyTree], PyTree] | None = mango_label_gpt,
+) -> optax.GradientTransformation:
+    """Mango v2. 
+
+    Extend from base mango optimizer by 
+    - adding LAMB-style weight-norm scaling;
+    - enabling switching between LaProp and Adamw;
+    """
+
+    # Check all dict arguments have the same keys.
+    dict_args = [arg for arg in (lr, beta1, beta2, nesterov, use_adamw, normalize, scale_weight) if isinstance(arg, dict)]
+    if len(dict_args) == 0:
+        param_keys = []
+    else:
+        param_keys = set(dict_args[0].keys())
+    if not all(set(arg.keys()) == param_keys for arg in dict_args):
+        raise ValueError("All dictionary arguments must have the same keys.")
+
+    def mango_component(
+            lr: optax.ScalarOrSchedule,
+            name: str = "",
+            beta1: float = 0.95,
+            beta2: float = 0.95,
+            nesterov: bool = True,
+            use_adamw: bool = False,
+            normalize: str | None = None,
+            scale_weight: Tuple[str, float] | None = None,
+    ):
+        if use_adamw:
+            # Optax implements Nadam based on 
+            # Dozat 2016 https://openreview.net/pdf?id=OM0jvwB8jIp57ZJjtNEZ
+            # with a caveat that nu_hat is not multiplied by beta2.
+            # See further notes in optax implementation.
+            if beta2 is not None:
+                optimizer = optax.scale_by_adam(b1=beta1, b2=beta2, eps=eps, nesterov=nesterov)
+            # If beta2 is None, always use optax.trace regardless of use_adamw
+            else:
+                optimizer = optax.trace(decay=beta1, nesterov=nesterov)
+        else:
+            # Optax.trace uses the conventional mu = mu * beta + g
+            # instead of the average formula, i.e., mu = mu * beta + (1-beta) * g.
+            optimizer = optax.chain(
+                scale_by_grad_squared(beta=beta2) if beta2 else optax.identity(),
+                optax.trace(decay=beta1, nesterov=nesterov)
+            )
+        optimizer = optax.chain(
+            optimizer,
+            scale_by_normalization(normalize, eps=eps, ns_steps=ns_steps, num_heads=num_heads),
+            scale_by_weight_norm(scale_weight),
+            optax.scale_by_learning_rate(schedule_wrapper(lr, name) if schedule_wrapper else lr),
+        )
+        return optimizer
+    
+    # No dictionary argument: global config for all subgroups.
+    if len(param_keys) == 0:
+        optimizer = mango_component(
+            lr=lr, name="mango", beta1=beta1, beta2=beta2, 
+            nesterov=nesterov, use_adamw=use_adamw,
+            normalize=normalize, scale_weight=scale_weight,
+        )
+    else:
+        parse_args = lambda arg, key: arg if not isinstance(arg, dict) else arg[key]
+        transforms = {
+            param: mango_component(
+                lr=parse_args(lr, param),
+                name=param,
+                beta1=parse_args(beta1, param),
+                beta2=parse_args(beta2, param),
+                nesterov=parse_args(nesterov, param),
+                use_adamw=parse_args(use_adamw, param),
+                normalize=parse_args(normalize, param),
+                scale_weight=parse_args(scale_weight, param),
+            ) for param in param_keys
+        }
+        optimizer = multi_transform(transforms, param_labels)
+
+    optimizer = optax.chain(
+        optimizer,
+        scale_by_offset(beta=offset_beta) if offset_beta else optax.identity()
+    )
+    return optimizer
