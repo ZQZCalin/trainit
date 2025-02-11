@@ -198,6 +198,10 @@ normalization_vec_b="l2"
 # name="mango_beta2_0.9"
 # beta2=0.9
 
+# ...
+name="mango_beta1_0.97"
+momentum=0.97
+
 
 args=(
     "logging.wandb_project=$project"
