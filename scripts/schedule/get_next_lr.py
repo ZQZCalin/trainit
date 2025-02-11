@@ -11,6 +11,7 @@ import logging
 import pandas as pd
 import numpy as np
 from typing import Any
+import os
 
 
 # >> Type of smoothing. you can implement your own way of smoothing.
@@ -21,6 +22,7 @@ EMA_WINDOW_SIZE = 10
 # >> Default lrs.
 DEFAULT_LR1 = 0.0
 DEFAULT_LR2 = [1e0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
+# DEFAULT_LR2 = [0.1, 0.01]     # for testing
 
 
 # >> Next lr methods.
@@ -181,6 +183,10 @@ def main():
         nargs="*",
         type=int,
     )
+    parser.add_argument(
+        "--checkpoint_dir",
+        type=str,
+    )
     args = parser.parse_args()
 
     # Fetch losses using WandB API.
@@ -194,7 +200,12 @@ def main():
         # Added an error catcher for any failed runs
         try:
             run = api.run(f"{entity}/{project}/{run_id}")
-            arr.append(get_run_info(run))
+            lr, last_loss = get_run_info(run)
+            # Add a safe-check: check if checkpoint_dir contains
+            # any .ckpt file
+            ckpt_path = os.path.join(args.checkpoint_dir, f"lr2:{lr:.1e}")
+            if any(filename.endswith(".ckpt") for filename in os.listdir(ckpt_path)):
+                arr.append(get_run_info(run))
         except CommError as e:
             logging.info(f"- Update: failed to fetch run {run_id}.")
             logging.error(f"Failed to fetch run {run_id}:\n{e}")

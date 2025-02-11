@@ -31,7 +31,7 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
 
     # Capture the JSON output from the Python script
     #   received_jobs is undefined in segment 1, thus triggers the default_lr functions
-    output=$(python3 scripts/schedule/get_next_lr.py --project $PROJECT --job_ids ${received_jobs[@]})
+    output=$(python3 scripts/schedule/get_next_lr.py --project $PROJECT --job_ids ${received_jobs[@]} --checkpoint_dir "${CHECKPOINT_PATH}/${SEGMENTS[$((i-1))]}-${SEGMENTS[$i]}")
 
     # Extract lr1
     lr1=$(echo "$output" | jq -r '.lr1')
