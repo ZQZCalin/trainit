@@ -365,12 +365,13 @@ class ScaleByWeightNormState(NamedTuple):
 
 
 def scale_by_weight_norm(
-        scale_weight: Tuple[str, float] | None = None,
+        scale_weight: str | None = None,
 ) -> optax.GradientTransformation:
     if scale_weight is None:
         return optax.identity()
     
-    name, p = scale_weight
+    name, p = scale_weight.split("|")
+    p = float(p)
     if name == "l2":
         scale_fn = lambda u, w: u * jnp.linalg.norm(w)**p
     if name == "l2_col":
@@ -414,6 +415,8 @@ def mango_v2(
     Extend from base mango optimizer by 
     - adding LAMB-style weight-norm scaling;
     - enabling switching between LaProp and Adamw;
+
+
     """
 
     # Check all dict arguments have the same keys.
@@ -433,7 +436,7 @@ def mango_v2(
             nesterov: bool = True,
             use_adamw: bool = False,
             normalize: str | None = None,
-            scale_weight: Tuple[str, float] | None = None,
+            scale_weight: str | None = None,
     ):
         if use_adamw:
             # Optax implements Nadam based on 
@@ -452,11 +455,14 @@ def mango_v2(
                 scale_by_grad_squared(beta=beta2) if beta2 else optax.identity(),
                 optax.trace(decay=beta1, nesterov=nesterov)
             )
+        learning_rate = lr if schedule is None else lambda t: lr * schedule(t)
+        if schedule_wrapper:
+            learning_rate = schedule_wrapper(learning_rate, name)
         optimizer = optax.chain(
             optimizer,
             scale_by_normalization(normalize, eps=eps, ns_steps=ns_steps, num_heads=num_heads),
             scale_by_weight_norm(scale_weight),
-            optax.scale_by_learning_rate(schedule_wrapper(lr, name) if schedule_wrapper else lr),
+            optax.scale_by_learning_rate(learning_rate),
         )
         return optimizer
     
