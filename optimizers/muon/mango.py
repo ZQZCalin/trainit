@@ -1,6 +1,7 @@
 """Mango optimizer."""
 
 import jax
+import jax.experimental
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import optax
@@ -204,3 +205,78 @@ def mango(
         optim_schedule,
         optim_offset,
     )
+
+
+class VisualizeNormState(NamedTuple):
+    """An empty node for visualize_norm state."""
+
+
+def visualize_norm(
+        wandb_logger: None = None,
+) -> optax.GradientTransformation:
+    """Visualize norms of gpt2 weights and updates.
+    
+    Does not affect updates.
+    """
+    def parse_path(path, *args):
+        # Parse path list into a single string.
+        parts = []
+        for part in path:
+            if isinstance(part, jtu.GetAttrKey):
+                parts.append(part.name)
+            elif isinstance(part, jtu.SequenceKey):
+                parts[-1] += f"[{part.idx}]"
+        return ".".join(parts)
+    
+    def compute_norms(path: str, arr: Array):
+        norms = {}
+        if arr.ndim == 1:
+            norms.update({
+                "l2": jnp.linalg.norm(arr),
+                "inf": jnp.linalg.norm(arr, ord=jnp.inf),
+                "-inf": jnp.linalg.norm(arr, ord=-jnp.inf),
+            })
+        if arr.ndim == 2:
+            norms.update({
+                "op": jnp.linalg.norm(arr, ord=2),
+                "-op": jnp.linalg.norm(arr, ord=-2),
+            })
+        if "embedding" in path or "head" in path:
+            d = {
+                "l2_row": jnp.linalg.norm(arr, axis=0),     # [768,]
+                "l2_col": jnp.linalg.norm(arr, axis=1),     # [50258,]
+                "inf_row": jnp.linalg.norm(arr, ord=jnp.inf, axis=0),
+                "inf_col": jnp.linalg.norm(arr, ord=jnp.inf, axis=1),
+                "range_row": jnp.linalg.norm(arr, ord=jnp.inf, axis=0) - jnp.linalg.norm(arr, ord=-jnp.inf, axis=0),
+                "range_col": jnp.linalg.norm(arr, ord=jnp.inf, axis=1) - jnp.linalg.norm(arr, ord=-jnp.inf, axis=1),
+            }
+            for k, v in d.items():
+                norms.update({
+                    f"{k}_min": jnp.min(v),
+                    f"{k}_max": jnp.max(v),
+                    f"{k}_mean": jnp.mean(v),
+                    f"{k}_std": jnp.std(v),
+                    f"{k}_len": len(v),
+                })
+        return norms
+    
+    def log_norm(tree: optax.Updates, prefix: str):
+        logs = {}
+        for path, arr in jtu.tree_leaves_with_path(tree):
+            path = parse_path(path)
+            norms = compute_norms(path, arr)
+            for k, v in norms.items():
+                logs.update({ f"{prefix}/{path}/{k}": v })
+        jax.experimental.io_callback(wandb_logger, None, logs, commit=False)
+
+    def init_fn(params=None):
+        del params
+        return VisualizeNormState()
+    
+    def update_fn(updates, state, params):
+        if wandb_logger:
+            log_norm(params, prefix="params_norm")
+            log_norm(updates, prefix="updates_norm")
+        return updates, VisualizeNormState()
+    
+    return optax.GradientTransformation(init_fn, update_fn)

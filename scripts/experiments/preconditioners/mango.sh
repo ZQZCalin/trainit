@@ -199,8 +199,34 @@ normalization_vec_b="l2"
 # beta2=0.9
 
 # ...
-name="mango_beta1_0.97"
-momentum=0.97
+# name="mango_beta1_0.97"
+# momentum=0.97
+
+
+# ========================================================================
+# From now on, we use the optimal hyper-parameters.
+# We re-define all parameters to the optimal value.
+# ========================================================================
+
+lrs=0.01
+
+momentum=0.95
+beta2=0.95
+offset_beta=0.95
+
+normalization_mat="ns"
+normalization_embedding="null"
+normalization_head="ns"
+normalization_attn_w="ns_split"
+normalization_attn_b="l2_split"
+normalization_vec_w="null"
+normalization_vec_b="l2"
+
+
+# ========================================================================
+# Below is submit function. Only change the part related to global
+# vs param-wise learning rate.
+# ========================================================================
 
 
 args=(

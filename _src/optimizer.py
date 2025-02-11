@@ -303,7 +303,7 @@ def init_optimizer(
             lrs = OmegaConf.to_container(config.lrs)
         else:
             lrs = config.lrs
-        return optimizers.mango(
+        optimizer = optimizers.mango(
             lrs=lrs,
             schedule=base_schedule,
             momentum=config.momentum,
@@ -315,6 +315,12 @@ def init_optimizer(
             normalizations=OmegaConf.to_container(config.normalizations),
             schedule_wrapper=schedule_wrapper
         )
+        if config.visualize:
+            optimizer = optax.chain(
+                optimizer,
+                optimizers.visualize_norm(wandb_logger=wandb_log)
+            )
+        return optimizer
     
     # Initialize base optimizer.
     name = config.optimizer.name

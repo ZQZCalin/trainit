@@ -28,3 +28,6 @@ normalizations:
   attn_b: "l2"
   vec_w: "inf_"   # NOTE: it's annoying to make SGE correctly parse a string "inf"; changed to "inf_"
   vec_b: "l2"
+
+# log norms of each layer to wandb
+visualize: False
