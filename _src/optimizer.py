@@ -336,6 +336,7 @@ def init_optimizer(
             use_adamw=parse_conf(config.use_adamw),
             normalize=parse_conf(config.normalize),
             scale_weight=parse_conf(config.scale_weight),
+            scale_power=parse_conf(config.scale_power),
             eps=config.eps,
             ns_steps=config.ns_steps,
             num_heads=num_heads,

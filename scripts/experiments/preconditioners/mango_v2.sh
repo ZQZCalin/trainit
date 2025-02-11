@@ -37,11 +37,12 @@ offset_beta=0.95
 
 
 # ...
+# aka "mango_wnorm_same_p1"
 # name="mango_wnorm_default"
 
 # ...
-# name="mango_wnorm_global_l2_p1"
-# scale_weight="l2|1"
+name="mango_wnorm_global_l2_p1"
+scale_weight="l2"
 
 # ...
 # name="mango_wnorm_global_l2_p0.75"
@@ -54,6 +55,19 @@ offset_beta=0.95
 # ...
 # name="mango_wnorm_global_l2_p0.25"
 # scale_weight="l2|0.25"
+
+# ...
+# p=0.75
+# p=0.5
+# p=0.25
+# name="mango_wnorm_same_p${p}"
+# scale_weight_mat="op|${p}"
+# scale_weight_embedding="null"
+# scale_weight_head="op|${p}"
+# scale_weight_attn_w="op|${p}"
+# scale_weight_attn_b="l2|${p}"
+# scale_weight_vec_w="null"
+# scale_weight_vec_b="l2|${p}"
 
 
 # ========================================================================
@@ -75,6 +89,8 @@ args=(
     "logging.log_callback_data=$log_data"
     "train.max_steps=$steps"
     "dataset.total_batch_size=$batch_size"
+    "experimental=null"
+    "test=null"
     "optimizer=$optimizer"
     # global hyperparameters
     "optimizer.ns_steps=$ns_steps"
@@ -133,7 +149,7 @@ args=(
     "$(parse "optimizer.normalize.att_b" "normalize_att_b")"
     "$(parse "optimizer.normalize.vec_w" "normalize_vec_w")"
     "$(parse "optimizer.normalize.vec_b" "normalize_vec_b")"
-    # scale_weight    
+    # scale_weight
     "$(parse "optimizer.scale_weight.mat" "scale_weight_mat")"
     "$(parse "optimizer.scale_weight.embedding" "scale_weight_embedding")"
     "$(parse "optimizer.scale_weight.head" "scale_weight_head")"
@@ -141,6 +157,14 @@ args=(
     "$(parse "optimizer.scale_weight.att_b" "scale_weight_att_b")"
     "$(parse "optimizer.scale_weight.vec_w" "scale_weight_vec_w")"
     "$(parse "optimizer.scale_weight.vec_b" "scale_weight_vec_b")"
+    # scale_power
+    "$(parse "optimizer.scale_power.mat" "scale_power_mat")"
+    "$(parse "optimizer.scale_power.embedding" "scale_power_embedding")"
+    "$(parse "optimizer.scale_power.head" "scale_power_head")"
+    "$(parse "optimizer.scale_power.att_w" "scale_power_att_w")"
+    "$(parse "optimizer.scale_power.att_b" "scale_power_att_b")"
+    "$(parse "optimizer.scale_power.vec_w" "scale_power_vec_w")"
+    "$(parse "optimizer.scale_power.vec_b" "scale_power_vec_b")"
     # Global configs.
     # If any of the following is defined, it will override 
     # the dictionary-specific definition to a float.

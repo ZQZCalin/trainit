@@ -65,13 +65,22 @@ normalize:
   vec_b: "l2"
 
 scale_weight:
-  mat: "op|1"
+  mat: "op"
   embedding: null
-  head: "op|1"
-  attn_w: "op|1"
-  attn_b: "l2|1"
+  head: "op"
+  attn_w: "op"
+  attn_b: "l2"
   vec_w: null
-  vec_b: "l2|1"
+  vec_b: "l2"
+
+scale_power:
+  mat: 1
+  embedding: 1
+  head: 1
+  attn_w: 1
+  attn_b: 1
+  vec_w: 1
+  vec_b: 1
 
 # log norms of each layer to wandb
 visualize: False

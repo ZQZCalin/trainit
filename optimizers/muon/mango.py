@@ -366,12 +366,12 @@ class ScaleByWeightNormState(NamedTuple):
 
 def scale_by_weight_norm(
         scale_weight: str | None = None,
+        scale_power: float = 1,
 ) -> optax.GradientTransformation:
     if scale_weight is None:
         return optax.identity()
     
-    name, p = scale_weight.split("|")
-    p = float(p)
+    name, p = scale_weight, scale_power
     if name == "l2":
         scale_fn = lambda u, w: u * jnp.linalg.norm(w)**p
     if name == "l2_col":
@@ -401,7 +401,8 @@ def mango_v2(
         nesterov: bool | Dict[str, bool] = True,
         use_adamw: bool | Dict[str, bool] = False,
         normalize: str | Dict[str, str | None] | None = default_mango_normalizations,
-        scale_weight: Tuple[str, float] | Dict[str, Tuple[str, float] | None] | None = None,
+        scale_weight: str | Dict[str, str | None] | None = None,
+        scale_power: float | Dict[str, float] = 1,
         eps: float = 1e-8,
         ns_steps: int = 6,
         num_heads: int = 12,
@@ -420,7 +421,7 @@ def mango_v2(
     """
 
     # Check all dict arguments have the same keys.
-    dict_args = [arg for arg in (lr, beta1, beta2, nesterov, use_adamw, normalize, scale_weight) if isinstance(arg, dict)]
+    dict_args = [arg for arg in (lr, beta1, beta2, nesterov, use_adamw, normalize, scale_weight, scale_power) if isinstance(arg, dict)]
     if len(dict_args) == 0:
         param_keys = []
     else:
@@ -437,6 +438,7 @@ def mango_v2(
             use_adamw: bool = False,
             normalize: str | None = None,
             scale_weight: str | None = None,
+            scale_power: float = 1,
     ):
         if use_adamw:
             # Optax implements Nadam based on 
@@ -461,7 +463,7 @@ def mango_v2(
         optimizer = optax.chain(
             optimizer,
             scale_by_normalization(normalize, eps=eps, ns_steps=ns_steps, num_heads=num_heads),
-            scale_by_weight_norm(scale_weight),
+            scale_by_weight_norm(scale_weight, scale_power),
             optax.scale_by_learning_rate(learning_rate),
         )
         return optimizer
@@ -469,9 +471,15 @@ def mango_v2(
     # No dictionary argument: global config for all subgroups.
     if len(param_keys) == 0:
         optimizer = mango_component(
-            lr=lr, name="mango", beta1=beta1, beta2=beta2, 
-            nesterov=nesterov, use_adamw=use_adamw,
-            normalize=normalize, scale_weight=scale_weight,
+            lr=lr, 
+            name="mango", 
+            beta1=beta1, 
+            beta2=beta2, 
+            nesterov=nesterov, 
+            use_adamw=use_adamw,
+            normalize=normalize, 
+            scale_weight=scale_weight, 
+            scale_power=scale_power
         )
     else:
         parse_args = lambda arg, key: arg if not isinstance(arg, dict) else arg[key]
@@ -485,6 +493,7 @@ def mango_v2(
                 use_adamw=parse_args(use_adamw, param),
                 normalize=parse_args(normalize, param),
                 scale_weight=parse_args(scale_weight, param),
+                scale_power=parse_args(scale_power, param)
             ) for param in param_keys
         }
         optimizer = multi_transform(transforms, param_labels)
