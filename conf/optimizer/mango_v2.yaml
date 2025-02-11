@@ -1,0 +1,77 @@
+name: mango_v2
+defaults:
+  - lr_config: linear
+lr_config:
+  lr: 1.0
+
+ns_steps: 6
+eps: 1e-8
+offset_beta: 0.95
+
+# Configs that enable dictionary type
+
+lr: 
+  mat: 0.01
+  embedding: 0.01
+  head: 0.01
+  attn_w: 0.01
+  attn_b: 0.01
+  vec_w: 0.01
+  vec_b: 0.01
+
+beta1:
+  mat: 0.95
+  embedding: 0.95
+  head: 0.95
+  attn_w: 0.95
+  attn_b: 0.95
+  vec_w: 0.95
+  vec_b: 0.95
+
+beta2:
+  mat: 0.95
+  embedding: 0.95
+  head: 0.95
+  attn_w: 0.95
+  attn_b: 0.95
+  vec_w: 0.95
+  vec_b: 0.95
+
+nesterov:
+  mat: True
+  embedding: True
+  head: True
+  attn_w: True
+  attn_b: True
+  vec_w: True
+  vec_b: True
+
+use_adamw:
+  mat: False
+  embedding: False
+  head: False
+  attn_w: False
+  attn_b: False
+  vec_w: False
+  vec_b: False
+
+normalize:
+  mat: "ns"
+  embedding: null
+  head: "ns"
+  attn_w: "ns"
+  attn_b: "l2"
+  vec_w: null
+  vec_b: "l2"
+
+scale_weight:
+  mat: ["op", 1]
+  embedding: null
+  head: ["op", 1]
+  attn_w: ["op", 1]
+  attn_b: ["l2", 1]
+  vec_w: null
+  vec_b: ["l2", 1]
+
+# log norms of each layer to wandb
+visualize: False
