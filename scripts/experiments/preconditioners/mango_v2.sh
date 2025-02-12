@@ -41,33 +41,49 @@ offset_beta=0.95
 # name="mango_wnorm_default"
 
 # ...
-name="mango_wnorm_global_l2_p1"
-scale_weight="l2"
+# scale_weight="l2"
+# scale_power=1
+# lr=3e-4       # scale by 1/sqrt(d)**p, d=768
+# # scale_power=0.75
+# # lr=8e-4
+# # scale_power=0.5
+# # lr=2e-3
+# # scale_power=0.75
+# # lr=4e-3
+# name="mango_norm_global_${scale_weight}_p${scale_power}_lr${lr}"
 
 # ...
-# name="mango_wnorm_global_l2_p0.75"
-# scale_weight="l2|0.75"
+# # scale_power=1
+# # lr=0.01
+# # lr=1e-3
+# # scale_power=0.75
+# # lr=0.01
+# # lr=2e-3
+# # scale_power=0.5
+# # lr=3e-3
+# scale_power=0.25
+# # lr=0.01
+# lr=6e-3
+# name="mango_norm_same_p${scale_power}_lr${lr}"
 
 # ...
-# name="mango_wnorm_global_l2_p0.5"
-# scale_weight="l2|0.5"
+# use_adamw=True
+# scale_weight=null
+# # lr=0.01
+# # lr=3e-3
+# # lr=1e-3
+# # lr=3e-4
+# # lr=0.03
+# lr=0.1
+# name="mango_adamw_lr${lr}"
 
 # ...
-# name="mango_wnorm_global_l2_p0.25"
-# scale_weight="l2|0.25"
-
-# ...
-# p=0.75
-# p=0.5
-# p=0.25
-# name="mango_wnorm_same_p${p}"
-# scale_weight_mat="op|${p}"
-# scale_weight_embedding="null"
-# scale_weight_head="op|${p}"
-# scale_weight_attn_w="op|${p}"
-# scale_weight_attn_b="l2|${p}"
-# scale_weight_vec_w="null"
-# scale_weight_vec_b="l2|${p}"
+# use_adamw=True
+# scale_weight=null
+# nesterov=False
+# # lr=0.01
+# lr=0.03
+# name="mango_adamw_nones_lr${lr}"
 
 
 # ========================================================================
@@ -175,6 +191,7 @@ args=(
     "$(parse "optimizer.use_adamw" "use_adamw")"
     "$(parse "optimizer.normalize" "normalize")"
     "$(parse "optimizer.scale_weight" "scale_weight")"
+    "$(parse "optimizer.scale_power" "scale_power")"
 )
 
 # python main.py ${args[@]}
