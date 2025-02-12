@@ -151,15 +151,25 @@ def mango(
             return scale_by_function(split_vmap(
                 f=lambda G: G / (jnp.linalg.norm(G) + eps)
             ))
+        # NOTE: Feb.11: the previous implementation is a literal normalization by inf-norm,
+        # and is different from the "project" notion x <- argmax_{\|x\|=1} <x, update>.
+        # The correct implementation would be
+        # - x <- sign(x) for vectors if \|\| is inf-norm
+        # - x <- sign(x) for matrices if \|\| is the max of column-wise inf-norm 
+        #   (which is the same implementation as the vector case!).
+        # - also, head-wise inf-normalization makes no sense now. 
         if normalize == "inf_":
-            return scale_by_function(
-                f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
-            )
+            # return scale_by_function(
+            #     f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
+            # )
+            return scale_by_function(jnp.sign)
         if normalize == "inf_col":
+            raise ValueError("Please use 'inf_' for all normalization.")
             return scale_by_function(
                 f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf, axis=1, keepdims=True) + eps)
             )
         if normalize == "inf_split":
+            raise ValueError("Please use 'inf_' for all normalization.")
             return scale_by_function(split_vmap(
                 f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
             ))
@@ -240,6 +250,7 @@ def visualize_norm(
             norms.update({
                 "op": jnp.linalg.norm(arr, ord=2),
                 "-op": jnp.linalg.norm(arr, ord=-2),
+                "fro": jnp.linalg.norm(arr),
             })
         if "embedding" in path or "head" in path:
             d = {

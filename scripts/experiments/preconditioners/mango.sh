@@ -153,13 +153,13 @@ mkdir -p $OUTPUT_PATH
 # and tune other hyper-parameters, including lr, beta, beta2, offset_beta
 # ========================================================================
 
-normalization_mat="ns"
-normalization_embedding="null"
-normalization_head="ns"
-normalization_attn_w="ns_split"
-normalization_attn_b="l2_split"
-normalization_vec_w="null"
-normalization_vec_b="l2"
+# normalization_mat="ns"
+# normalization_embedding="null"
+# normalization_head="ns"
+# normalization_attn_w="ns_split"
+# normalization_attn_b="l2_split"
+# normalization_vec_w="null"
+# normalization_vec_b="l2"
 
 # ...
 # name="mango_offset-null"
@@ -223,12 +223,27 @@ normalization_vec_w="null"
 normalization_vec_b="l2"
 
 
+# Feb.12: testing the corrected implementation of inf-normalization
+# ...
+# name="mango_emb_inf"
+# normalization_embedding="inf_"
+
+# ...
+# name="mango_vecw_inf"
+# normalization_vec_w="inf_"
+
+# # ...
+# name="mango_emb_vecw_inf"
+# normalization_embedding="inf_"
+# normalization_vec_w="inf_"
+
+
 # ========================================================================
 # Below is submit function. Only change the part related to global
 # vs param-wise learning rate.
 # ========================================================================
 
-
+# project=null
 args=(
     "logging.wandb_project=$project"
     "logging.wandb_name=$name"
@@ -265,6 +280,10 @@ args=(
     "optimizer.normalizations.vec_b=$normalization_vec_b"
 )
 
+# Run locally
+# python main.py ${args[@]}
+
+# Submit to scc
 qsub <<EOF
 #!/bin/bash -l
 
