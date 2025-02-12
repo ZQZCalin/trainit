@@ -20,6 +20,7 @@ from optimizers.muon.base import (
     scale_by_grad_squared,
     scale_by_function,
     scale_by_offset,
+    implicit_gradient_transport,
 )
 
 
@@ -410,6 +411,7 @@ def mango_v2(
         schedule: optax.Schedule | None = None,
         schedule_wrapper: Callable[[optax.ScalarOrSchedule, str], optax.ScalarOrSchedule] | None = None,
         param_labels: Callable[[PyTree], PyTree] | None = mango_label_gpt,
+        igt_scale: float = 0.0,
 ) -> optax.GradientTransformation:
     """Mango v2. 
 
@@ -439,6 +441,8 @@ def mango_v2(
             normalize: str | None = None,
             scale_weight: str | None = None,
             scale_power: float = 1,
+            offset_beta: float = 0.0,
+            igt_scale: float = 0.0,
     ):
         if use_adamw:
             # Optax implements Nadam based on 
@@ -465,6 +469,8 @@ def mango_v2(
             scale_by_normalization(normalize, eps=eps, ns_steps=ns_steps, num_heads=num_heads),
             scale_by_weight_norm(scale_weight, scale_power),
             optax.scale_by_learning_rate(learning_rate),
+            scale_by_offset(beta=offset_beta) if offset_beta else optax.identity(),
+            implicit_gradient_transport(beta=beta1, scale=igt_scale) if igt_scale else optax.identity(),
         )
         return optimizer
     
@@ -479,7 +485,9 @@ def mango_v2(
             use_adamw=use_adamw,
             normalize=normalize, 
             scale_weight=scale_weight, 
-            scale_power=scale_power
+            scale_power=scale_power,
+            offset_beta=offset_beta,
+            igt_scale=igt_scale,
         )
     else:
         parse_args = lambda arg, key: arg if not isinstance(arg, dict) else arg[key]
@@ -493,13 +501,11 @@ def mango_v2(
                 use_adamw=parse_args(use_adamw, param),
                 normalize=parse_args(normalize, param),
                 scale_weight=parse_args(scale_weight, param),
-                scale_power=parse_args(scale_power, param)
+                scale_power=parse_args(scale_power, param),
+                offset_beta=offset_beta,
+                igt_scale=igt_scale,
             ) for param in param_keys
         }
         optimizer = multi_transform(transforms, param_labels)
 
-    optimizer = optax.chain(
-        optimizer,
-        scale_by_offset(beta=offset_beta) if offset_beta else optax.identity()
-    )
     return optimizer
