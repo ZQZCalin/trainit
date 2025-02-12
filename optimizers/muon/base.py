@@ -175,3 +175,63 @@ def scale_by_function(
         return updates, ScaleByFunctionState()
     
     return optax.GradientTransformation(init_fn, update_fn)
+
+
+
+class ImplicitGradientTransportState(NamedTuple):
+    """implicit_gradient_transport state"""
+    prev_updates: optax.Updates
+
+
+def implicit_gradient_transport(
+    beta: float,
+    scale: float=1.0,
+) -> optax.GradientTransformation:
+
+    def init_fn(params: optax.Params):
+        return ImplicitGradientTransportState(
+            prev_updates=jax.tree.map(jnp.zeros_like, params),
+        )
+
+    def update_fn(updates: optax.Updates, state: ImplicitGradientTransportState, param: optax.Params|None = None):
+        """
+        implicit gradient transport works like the following:
+        base algo does:
+        z_{t+1} = z_{t} + updates_t
+
+        Internally, base algo is also going to compute a momentum value:
+        m_{t+1} = m_t * beta + (1-beta) * g_{t+1}
+
+        where g_t is evaluated at the next iterate x_{t+1} (which would be z_{t+1}, except for this transformation).
+
+        We will set:
+        x_{t+1} = z_{t+1} + scale * beta/(1-beta) * (z_{t+1}-z_t)
+
+        Notice that with scale=1, this causes the second order terms in F'(x_{t+1}) - F'(z_{t+1}) to cancel with 
+        the second-order terms in F'(z_{t+1})-F'(z_t) in the formula for m_{t+1}, similar to "leapfrog integration".
+
+        We can reformulate this update as follows:
+
+        x_{t+1} = z_t + updates_t + scale * beta/(1-beta) * updates_t
+                = x_t - scale * beta/(1-beta) * updates_{t-1} + (1+scale* beta/(1-beta)) * updates_t
+                = x_t + updates_t + scale*beta/(1-beta) * (updates_t - updates_{t-1})
+
+        So, our transformation is:
+        updates_t -> updates_t + scale * beta/(1-beta) * (updates_t - updates_{t-1})
+        """
+
+        next_updates = jax.tree.map(
+            lambda u, prev_u: u + scale * beta/(1-beta) * (u - prev_u),
+            updates,
+            state.prev_updates
+        )
+
+        next_state = ImplicitGradientTransportState(
+            prev_updates=updates
+        )
+
+
+        return next_updates, next_state
+
+    return optax.GradientTransformation(init_fn, update_fn)
+    

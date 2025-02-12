@@ -313,7 +313,7 @@ def init_optimizer(
             beta2=config.beta2,
             offset_beta=config.offset_beta,
             normalizations=OmegaConf.to_container(config.normalizations),
-            schedule_wrapper=schedule_wrapper
+            schedule_wrapper=schedule_wrapper,
         )
         if config.visualize:
             optimizer = optax.chain(
@@ -342,7 +342,8 @@ def init_optimizer(
             num_heads=num_heads,
             offset_beta=config.offset_beta,
             schedule=base_schedule,
-            schedule_wrapper=schedule_wrapper
+            schedule_wrapper=schedule_wrapper,
+            igt_scale=config.igt_scale,
         )
     
     # Initialize base optimizer.
