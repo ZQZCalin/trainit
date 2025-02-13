@@ -122,6 +122,7 @@ beta2=0.95
 nesterov=True
 use_adamw=False
 
+# ...
 # scale_power=1
 # lr=0.01
 # # lr=3e-3
@@ -132,6 +133,62 @@ use_adamw=False
 # scale_power=0.5
 # scale_power=0.25
 # name="mango_scale_p${scale_power}_lr${lr}"
+
+# ...
+# scale_weight_mat=null
+# scale_weight_head=null
+# scale_weight_attn_w=null
+
+# scale_power=1
+# lr=0.01
+# # lr=3e-3
+# # lr=1e-3
+# scale_power=0.75
+# scale_power=0.5
+# scale_power=0.25
+# name="mango_only_biasl2_p${scale_power}_lr${lr}"
+
+# ...
+# scale_weight_head=null
+
+# lr=0.01
+# lr=3e-3
+# lr=1e-3
+# # scale_power=1
+# scale_power=0.75
+# name="mango_head_noscale_p${scale_power}_lr${lr}"
+
+# ...
+# normalize_mat="ns"
+# normalize_embedding=null
+# normalize_head="ns"
+# normalize_attn_w="ns"
+# normalize_attn_b="l2"
+# normalize_vec_w=null
+# normalize_vec_b="l2"
+
+# scale_weight_mat="op"
+# scale_weight_embedding=null
+# scale_weight_head="op"
+# scale_weight_attn_w="op"
+# scale_weight_attn_b="l2"
+# scale_weight_vec_w=null
+# scale_weight_vec_b="l2"
+
+# lr_base=0.01
+# lr_base=3e-3
+# lr_head=1e-3
+# lr_head=3e-4
+
+# lr_mat=$lr_base
+# lr_embedding=$lr_base
+# lr_attn_w=$lr_base
+# lr_attn_b=$lr_base
+# lr_vec_w=$lr_base
+# lr_vec_b=$lr_base
+
+# scale_power=1
+name="mango_same_p${scale_power}_lr${lr_base}_lrhead${lr_head}"
 
 
 # ========================================================================
@@ -247,7 +304,7 @@ args=(
 
 # python main.py ${args[@]}
 
-qsub <<EOF
+job_output=$(qsub <<EOF
 #!/bin/bash -l
 
 #$ -pe omp 8
@@ -263,4 +320,11 @@ sleep $(((RANDOM % 1000) / 100))   # Prevents simultaneous reads of loadit datas
 source activate_env.sh
 python main.py ${args[@]}
 EOF
+)
+
+# Save job id and associated name to local .txt
+# This is extremely helpful to manage a bunch of experiments.
+job_id=$(echo "$job_output" | awk '{print $3}')
+echo "job_id: ${job_id} || ${name}" >> "${OUTPUT_PATH}/job_list.txt"
+
 echo "Submitted job: $name"
