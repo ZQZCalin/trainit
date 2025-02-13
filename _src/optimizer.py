@@ -344,6 +344,8 @@ def init_optimizer(
             schedule=base_schedule,
             schedule_wrapper=schedule_wrapper,
             igt_scale=config.igt_scale,
+            scale_clip_low=config.scale_clip_low,
+            scale_clip_high=config.scale_clip_high,
         )
     
     # Initialize base optimizer.

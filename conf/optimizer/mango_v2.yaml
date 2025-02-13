@@ -82,6 +82,9 @@ scale_power:
   vec_w: 1
   vec_b: 1
 
+scale_clip_low: 1.0
+scale_clip_high: null   # null defaults to jnp.inf
+
 igt_scale: 0.0
 
 # log norms of each layer to wandb

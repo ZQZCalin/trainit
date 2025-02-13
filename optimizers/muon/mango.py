@@ -24,6 +24,132 @@ from optimizers.muon.base import (
 )
 
 
+ArrayFn = Callable[[Array], Array]
+
+def split_vmap(f: ArrayFn, num_heads: int = 1) -> ArrayFn:
+    """Broadcasts a function f: [d,:] -> [d,:] to a matrix/vector [3nd,:]
+    in a way that first reshapes into [3,n,d,:], then applies f on [d,:],
+    and finally reshape back into [3nd,:].
+    """
+    def split_fn(G):
+        assert G.ndim == 1 or G.ndim == 2
+        assert G.shape[0] % (3 * num_heads) == 0
+        ndim = G.ndim
+        shape = G.shape
+        n = num_heads
+        d = G.shape[0] // (3 * num_heads)
+        # Reshape into [3,n,d,:].
+        if ndim == 1:
+            G = jnp.reshape(G, (3, n, d))
+        else:
+            G = jnp.reshape(G, (3, n, d, shape[1]))
+        # Use nested vmap to broadcast mapping f to the last axes (d,:).
+        G = jax.vmap(jax.vmap(f))(G)
+        # Reshape back into [3nd,:].
+        if ndim == 1:
+            G = jnp.reshape(G, (3*n*d,))
+        else:
+            G = jnp.reshape(G, (3*n*d, shape[1]))
+        return G
+    return split_fn
+
+
+def scale_by_normalization(
+        normalize: str | None = None,
+        eps: float = 1e-8,
+        ns_steps: int = 6,
+        num_heads: int = 12,
+):
+    if normalize is None:
+        return optax.identity()
+    # normalize = str(normalize)
+    if normalize == "l2":
+        return scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G) + eps)
+        )
+    if normalize == "l2_col":
+        return scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G, axis=1, keepdims=True) + eps)
+        )
+    if normalize == "l2_split":
+        return scale_by_function(split_vmap(
+            f=lambda G: G / (jnp.linalg.norm(G) + eps),
+            num_heads=num_heads,
+        ))
+    # NOTE: Feb.11: the previous implementation is a literal normalization by inf-norm,
+    # and is different from the "project" notion x <- argmax_{\|x\|=1} <x, update>.
+    # The correct implementation would be
+    # - x <- sign(x) for vectors if \|\| is inf-norm
+    # - x <- sign(x) for matrices if \|\| is the max of column-wise inf-norm 
+    #   (which is the same implementation as the vector case!).
+    # - also, head-wise inf-normalization makes no sense now. 
+    if normalize == "inf_":
+        # return scale_by_function(
+        #     f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
+        # )
+        return scale_by_function(jnp.sign)
+    if normalize == "inf_col":
+        raise ValueError("Please use 'inf_' for all normalization.")
+        return scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf, axis=1, keepdims=True) + eps)
+        )
+    if normalize == "inf_split":
+        raise ValueError("Please use 'inf_' for all normalization.")
+        return scale_by_function(split_vmap(
+            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
+        ))
+    if normalize == "ns":
+        return scale_by_newton_schulz(ns_steps=ns_steps)
+    if normalize == "ns_split":
+        def f(G):
+            G = newton_schulz(G, steps=ns_steps)
+            # Optional upscale by shape (muon line 135),
+            # although it's always 1 for GPT-2 attn layers 
+            # since d=64 << D=768.
+            G = G * max(1, G.shape[0]/G.shape[1])**0.5
+            return G
+        return scale_by_function(split_vmap(f, num_heads=num_heads))
+    raise ValueError(f"invalid normalization type = '{normalize}'.")
+
+
+
+
+class ScaleByWeightNormState(NamedTuple):
+    """An empty node for scale_by_weight_norm state."""
+
+
+def scale_by_weight_norm(
+        scale_weight: str | None = None,
+        scale_power: float = 1,
+        clip_low: float = 1.0,
+        clip_high: float = jnp.inf,
+) -> optax.GradientTransformation:
+    if scale_weight is None:
+        return optax.identity()
+    clip = lambda x: jnp.clip(x, min=clip_low, max=clip_high)
+    name, p = scale_weight, scale_power
+    if name == "l2":
+        scale_fn = lambda u, w: u * clip(jnp.linalg.norm(w)**p)
+    if name == "l2_col":
+        scale_fn = lambda u, w: u * clip(jnp.linalg.norm(w, axis=1, keepdims=True)**p)
+    if name == "inf_":
+        scale_fn = lambda u, w: u * clip(jnp.linalg.norm(w, ord=jnp.inf)**p)
+    if name == "inf_col":
+        scale_fn = lambda u, w: u * clip(jnp.linalg.norm(w, ord=jnp.inf, axis=1, keepdims=True)**p)
+    if name == "op":
+        scale_fn = lambda u, w: u * clip(jnp.linalg.norm(w, ord=2)**p)
+
+    def init_fn(params=None):
+        del params
+        return ScaleByWeightNormState()
+    
+    def update_fn(updates, state, params):
+        updates = jtu.tree_map(scale_fn, updates, params)
+        return updates, ScaleByWeightNormState()
+
+    return optax.GradientTransformation(init_fn, update_fn)
+
+
 mango_gpt_keys = ["mat", "embedding", "head", "attn_w", "attn_b", "vec_w", "vec_b"]
 
 
@@ -109,88 +235,10 @@ def mango(
     optim_offset = scale_by_offset(beta=offset_beta) if offset_beta else optax.identity()
 
     # Advanced normalization based on parameters.
-    def split_vmap(f):
-        """Broadcasts a function f: [d,:] -> [d,:] to a matrix/vector [3nd,:]
-        in a way that first reshapes into [3,n,d,:], then applies f on [d,:],
-        and finally reshape back into [3nd,:].
-        """
-        def split_fn(G):
-            assert G.ndim == 1 or G.ndim == 2
-            assert G.shape[0] % (3 * num_heads) == 0
-            ndim = G.ndim
-            shape = G.shape
-            n = num_heads
-            d = G.shape[0] // (3 * num_heads)
-            # Reshape into [3,n,d,:].
-            if ndim == 1:
-                G = jnp.reshape(G, (3, n, d))
-            else:
-                G = jnp.reshape(G, (3, n, d, shape[1]))
-            # Use nested vmap to broadcast mapping f to the last axes (d,:).
-            G = jax.vmap(jax.vmap(f))(G)
-            # Reshape back into [3nd,:].
-            if ndim == 1:
-                G = jnp.reshape(G, (3*n*d,))
-            else:
-                G = jnp.reshape(G, (3*n*d, shape[1]))
-            return G
-        return split_fn
-
-    def scale_by_normalization(normalize):
-        if normalize is None:
-            return optax.identity()
-        # normalize = str(normalize)
-        if normalize == "l2":
-            return scale_by_function(
-                f=lambda G: G / (jnp.linalg.norm(G) + eps)
-            )
-        if normalize == "l2_col":
-            return scale_by_function(
-                f=lambda G: G / (jnp.linalg.norm(G, axis=1, keepdims=True) + eps)
-            )
-        if normalize == "l2_split":
-            return scale_by_function(split_vmap(
-                f=lambda G: G / (jnp.linalg.norm(G) + eps)
-            ))
-        # NOTE: Feb.11: the previous implementation is a literal normalization by inf-norm,
-        # and is different from the "project" notion x <- argmax_{\|x\|=1} <x, update>.
-        # The correct implementation would be
-        # - x <- sign(x) for vectors if \|\| is inf-norm
-        # - x <- sign(x) for matrices if \|\| is the max of column-wise inf-norm 
-        #   (which is the same implementation as the vector case!).
-        # - also, head-wise inf-normalization makes no sense now. 
-        if normalize == "inf_":
-            # return scale_by_function(
-            #     f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
-            # )
-            return scale_by_function(jnp.sign)
-        if normalize == "inf_col":
-            raise ValueError("Please use 'inf_' for all normalization.")
-            return scale_by_function(
-                f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf, axis=1, keepdims=True) + eps)
-            )
-        if normalize == "inf_split":
-            raise ValueError("Please use 'inf_' for all normalization.")
-            return scale_by_function(split_vmap(
-                f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
-            ))
-        if normalize == "ns":
-            return scale_by_newton_schulz(ns_steps=ns_steps)
-        if normalize == "ns_split":
-            def f(G):
-                G = newton_schulz(G, steps=ns_steps)
-                # Optional upscale by shape (muon line 135),
-                # although it's always 1 for GPT-2 attn layers 
-                # since d=64 << D=768.
-                G = G * max(1, G.shape[0]/G.shape[1])**0.5
-                return G
-            return scale_by_function(split_vmap(f))
-        raise ValueError(f"invalid normalization type = '{normalize}'.")
-
     if normalizations is None:
         optim_normalization = optax.identity()
     else:
-        transforms = { k: scale_by_normalization(normalizations[k]) for k in mango_gpt_keys }
+        transforms = { k: scale_by_normalization(normalizations[k], eps=eps, ns_steps=ns_steps, num_heads=num_heads) for k in mango_gpt_keys }
         optim_normalization = multi_transform(transforms, mango_label_gpt)
 
     # Advanced learning rate schedules based on parameters.
@@ -294,118 +342,6 @@ def visualize_norm(
     return optax.GradientTransformation(init_fn, update_fn)
 
 
-ArrayFn = Callable[[Array], Array]
-
-def split_head(f: ArrayFn, num_heads: int = 1) -> ArrayFn:
-    """Broadcasts a function f: [d,:] -> [d,:] to a matrix/vector [3nd,:]
-    in a way that first reshapes into [3,n,d,:], then applies f on [d,:],
-    and finally reshape back into [3nd,:].
-    """
-    def f_headwise(G):
-        assert G.ndim == 1 or G.ndim == 2
-        assert G.shape[0] % (3 * num_heads) == 0
-        ndim = G.ndim
-        shape = G.shape
-        n = num_heads
-        d = G.shape[0] // (3 * num_heads)
-        # Reshape into [3,n,d,:].
-        if ndim == 1:
-            G = jnp.reshape(G, (3, n, d))
-        else:
-            G = jnp.reshape(G, (3, n, d, shape[1]))
-        # Use nested vmap to broadcast mapping f to the last axes (d,:).
-        G = jax.vmap(jax.vmap(f))(G)
-        # Reshape back into [3nd,:].
-        if ndim == 1:
-            G = jnp.reshape(G, (3*n*d,))
-        else:
-            G = jnp.reshape(G, (3*n*d, shape[1]))
-        return G
-    return f_headwise
-
-
-def scale_by_normalization(
-        normalize: str | None = None,
-        eps: float = 1e-8,
-        ns_steps: int = 6,
-        num_heads: int = 12,
-) -> optax.GradientTransformation:
-    if normalize is None:
-        return optax.identity()
-    if normalize == "l2":
-        return scale_by_function(
-            f=lambda G: G / (jnp.linalg.norm(G) + eps)
-        )
-    if normalize == "l2_col":
-        return scale_by_function(
-            f=lambda G: G / (jnp.linalg.norm(G, axis=1, keepdims=True) + eps)
-        )
-    if normalize == "l2_split":
-        return scale_by_function(split_head(
-            f=lambda G: G / (jnp.linalg.norm(G) + eps),
-            num_heads=num_heads
-        ))
-    if normalize == "inf_":
-        return scale_by_function(
-            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
-        )
-    if normalize == "inf_col":
-        return scale_by_function(
-            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf, axis=1, keepdims=True) + eps)
-        )
-    if normalize == "inf_split":
-        return scale_by_function(split_head(
-            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps),
-            num_heads=num_heads
-        ))
-    if normalize == "ns":
-        return scale_by_newton_schulz(ns_steps=ns_steps)
-    if normalize == "ns_split":
-        def f(G):
-            G = newton_schulz(G, steps=ns_steps)
-            # Optional upscale by shape (muon line 135),
-            # although it's always 1 for GPT-2 attn layers 
-            # since d=64 << D=768.
-            G = G * max(1, G.shape[0]/G.shape[1])**0.5
-            return G
-        return scale_by_function(split_head(f, num_heads=num_heads))
-    raise ValueError(f"invalid normalization type = '{normalize}'.")
-
-
-class ScaleByWeightNormState(NamedTuple):
-    """An empty node for scale_by_weight_norm state."""
-
-
-def scale_by_weight_norm(
-        scale_weight: str | None = None,
-        scale_power: float = 1,
-) -> optax.GradientTransformation:
-    if scale_weight is None:
-        return optax.identity()
-    
-    name, p = scale_weight, scale_power
-    if name == "l2":
-        scale_fn = lambda u, w: u * jnp.linalg.norm(w)**p
-    if name == "l2_col":
-        scale_fn = lambda u, w: u * jnp.linalg.norm(w, axis=1, keepdims=True)**p
-    if name == "inf_":
-        scale_fn = lambda u, w: u * jnp.linalg.norm(w, ord=jnp.inf)**p
-    if name == "inf_col":
-        scale_fn = lambda u, w: u * jnp.linalg.norm(w, ord=jnp.inf, axis=1, keepdims=True)**p
-    if name == "op":
-        scale_fn = lambda u, w: u * jnp.linalg.norm(w, ord=2)**p
-
-    def init_fn(params=None):
-        del params
-        return ScaleByWeightNormState()
-    
-    def update_fn(updates, state, params):
-        updates = jtu.tree_map(scale_fn, updates, params)
-        return updates, ScaleByWeightNormState()
-
-    return optax.GradientTransformation(init_fn, update_fn)
-
-
 def mango_v2(
         lr: float | Dict[str, float] = 0.05,
         beta1: float | Dict[str, float] = 0.95,
@@ -423,6 +359,8 @@ def mango_v2(
         schedule_wrapper: Callable[[optax.ScalarOrSchedule, str], optax.ScalarOrSchedule] | None = None,
         param_labels: Callable[[PyTree], PyTree] | None = mango_label_gpt,
         igt_scale: float = 0.0,
+        scale_clip_low: float = 1.0,
+        scale_clip_high: float | None = None,
 ) -> optax.GradientTransformation:
     """Mango v2. 
 
@@ -432,6 +370,9 @@ def mango_v2(
 
 
     """
+
+    if not scale_clip_high:
+        scale_clip_high = jnp.inf
 
     # Check all dict arguments have the same keys.
     dict_args = [arg for arg in (lr, beta1, beta2, nesterov, use_adamw, normalize, scale_weight, scale_power) if isinstance(arg, dict)]
@@ -454,6 +395,8 @@ def mango_v2(
             scale_power: float = 1,
             offset_beta: float = 0.0,
             igt_scale: float = 0.0,
+            scale_clip_low: float = 1.0,
+            scale_clip_high: float = jnp.inf,
     ):
         if use_adamw:
             # Optax implements Nadam based on 
@@ -478,7 +421,7 @@ def mango_v2(
         optimizer = optax.chain(
             optimizer,
             scale_by_normalization(normalize, eps=eps, ns_steps=ns_steps, num_heads=num_heads),
-            scale_by_weight_norm(scale_weight, scale_power),
+            scale_by_weight_norm(scale_weight, scale_power, clip_low=scale_clip_low, clip_high=scale_clip_high),
             optax.scale_by_learning_rate(learning_rate),
             scale_by_offset(beta=offset_beta) if offset_beta else optax.identity(),
             implicit_gradient_transport(beta=beta1, scale=igt_scale) if igt_scale else optax.identity(),
@@ -515,6 +458,8 @@ def mango_v2(
                 scale_power=parse_args(scale_power, param),
                 offset_beta=offset_beta,
                 igt_scale=igt_scale,
+                scale_clip_low=scale_clip_low,
+                scale_clip_high=scale_clip_high,
             ) for param in param_keys
         }
         optimizer = multi_transform(transforms, param_labels)
