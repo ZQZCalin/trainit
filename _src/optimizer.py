@@ -337,6 +337,7 @@ def init_optimizer(
             normalize=parse_conf(config.normalize),
             scale_weight=parse_conf(config.scale_weight),
             scale_power=parse_conf(config.scale_power),
+            scale_dim=parse_conf(config.scale_dim),
             eps=config.eps,
             ns_steps=config.ns_steps,
             num_heads=num_heads,
@@ -346,6 +347,7 @@ def init_optimizer(
             igt_scale=config.igt_scale,
             scale_clip_low=config.scale_clip_low,
             scale_clip_high=config.scale_clip_high,
+            clip_ns=config.clip_ns,
         )
     
     # Initialize base optimizer.

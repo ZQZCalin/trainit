@@ -82,10 +82,23 @@ scale_power:
   vec_w: 1
   vec_b: 1
 
+scale_dim:
+  mat: False
+  embedding: False
+  head: False
+  attn_w: False
+  attn_b: False
+  vec_w: False
+  vec_b: False
+
 scale_clip_low: 1.0
 scale_clip_high: null   # null defaults to jnp.inf
 
 igt_scale: 0.0
+
+# If true, clips max(1, sqrt(d_out/d_in))**0.5 
+# to dimension scaling of NS normalization.
+clip_ns: True
 
 # log norms of each layer to wandb
 visualize: False

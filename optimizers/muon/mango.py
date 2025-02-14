@@ -71,6 +71,10 @@ def scale_by_normalization(
         return scale_by_function(
             f=lambda G: G / (jnp.linalg.norm(G, axis=1, keepdims=True) + eps)
         )
+    if normalize == "l2_row":
+        return scale_by_function(
+            f=lambda G: G / (jnp.linalg.norm(G, axis=0, keepdims=True) + eps)
+        )
     if normalize == "l2_split":
         return scale_by_function(split_vmap(
             f=lambda G: G / (jnp.linalg.norm(G) + eps),
@@ -112,6 +116,124 @@ def scale_by_normalization(
     raise ValueError(f"invalid normalization type = '{normalize}'.")
 
 
+list_of_induced_norms = [
+    "Spectral", "ColNorm", "RowNorm", "Sign", "Euclidean"
+]
+
+
+def norm_pairing(
+        induced_norm: str,
+        dimension_correction: bool = True,
+        *,
+        eps: float = 1e-8,
+        ns_steps: int = 6,
+        transpose: bool = False,
+        clip_ns: bool = True
+) -> Tuple[ArrayFn, ArrayFn]:
+    """Returns a pair of functions (norm_fn, normalize_fn).
+
+    Implements dimension correction based on this paper (Table 2).
+
+    https://arxiv.org/pdf/2502.07529
+    
+    norm_fn: G -> induced operator norm of G
+    normalize_fn: G -> argmax_{|G'|_op} <G',G>
+    """
+    if induced_norm == "Spectral":
+        """Standard spectral norm induced by 2 -> 2.
+        norm: |G|_{Spectral} = sqrt(d_in/d_out) * |A|_{S_inf},
+        normalize: G -> sqrt(d_out/d_in) * Newton-Schulz(G)
+        """
+        def norm_fn(G):
+            assert G.ndim == 2, f"induced norm {induced_norm} requires 2d array."
+            norm = jnp.linalg.norm(G, ord=jnp.inf)
+            if dimension_correction:
+                norm *= (G.shape[1]/G.shape[0])**0.5
+            return norm
+        def normalize_fn(G):
+            assert G.ndim == 2, f"induced norm {induced_norm} requires 2d array."
+            G = newton_schulz(G, steps=ns_steps)
+            # Force to use the same scale as muon if clip_ns = True
+            if clip_ns:
+                G *= max(1, G.shape[0]/G.shape[1])**0.5
+            elif dimension_correction:
+                G *= (G.shape[0]/G.shape[1])**0.5
+            return G
+        
+    if induced_norm == "ColNorm":
+        """Row-max l2 norm induced by 2 -> inf.
+        norm: |G|_{ColNorm} = max( sqrt(1/d_out) * |col_i(A)|_2 )
+        normalize: col(G) -> sqrt(d_out) * col(G)/|col(G)|_2
+        """
+        def norm_fn(G):
+            assert G.ndim == 2, f"induced norm {induced_norm} requires 2d array."
+            if transpose:
+                G = jnp.transpose(G)
+            norm = jnp.max(jnp.linalg.norm(G, axis=0))  # axis=0 broadcasts along column
+            if dimension_correction:
+                norm *= 1 / (G.shape[0])**0.5
+            return norm
+        def normalize_fn(G):
+            assert G.ndim == 2, f"induced norm {induced_norm} requires 2d array."
+            if transpose:
+                G = jnp.transpose(G)
+            G = G / (jnp.linalg.norm(G, axis=0, keepdims=True) + eps)
+            if dimension_correction:
+                G *= (G.shape[0])**0.5
+            if transpose:
+                G = jnp.transpose(G)
+            return G
+        
+    if induced_norm == "RowNorm":
+        """Row-max """
+        def norm_fn(G):
+            assert G.ndim == 2, f"induced norm {induced_norm} requires 2d array."
+            if transpose:
+                G = jnp.transpose(G)
+            norm = jnp.max(jnp.linalg.norm(G, axis=1))  # axis=1 broadcasts along row
+            if dimension_correction:
+                norm *= (G.shape[1])**0.5
+            return norm
+        def normalize_fn(G):
+            assert G.ndim == 2, f"induced norm {induced_norm} requires 2d array."
+            if transpose:
+                G = jnp.transpose(G)
+            G = G / (jnp.linalg.norm(G, axis=1, keepdims=True) + eps)
+            if dimension_correction:
+                G *= (1/G.shape[1])**0.5
+            if transpose:
+                G = jnp.transpose(G)
+            return G
+        
+    if induced_norm == "Sign":
+        """Sign induced by 1 -> inf.
+        norm: |G| = max(G_{ij})
+        normalize: G -> sign(G)
+        """
+        def norm_fn(G):
+            if G.ndim == 1:
+                return jnp.linalg.norm(G, ord=jnp.inf)
+            if G.ndim == 2:
+                return jnp.max(jnp.linalg.norm(G, ord=jnp.inf, axis=0))
+        normalize_fn = jnp.sign
+    
+    if induced_norm == "Euclidean":
+        """Euclidean induced by 2 -> scalar absolute value
+        norm: |G| = sqrt(1/d) * |G|_2 (vector 2 norm)
+        normalize: G -> sqrt(d) * G / |G|_2
+        """
+        def norm_fn(G):
+            assert G.ndim == 1, f"induced norm {induced_norm} requires 1d array."
+            norm = jnp.linalg.norm(G)
+            if dimension_correction:
+                norm *= (1/len(G))**0.5
+            return norm
+        def normalize_fn(G):
+            assert G.ndim == 1, f"induced norm {induced_norm} requires 1d array."
+            G = G / (norm_fn(G) + eps)
+            return G
+        
+    return norm_fn, normalize_fn
 
 
 class ScaleByWeightNormState(NamedTuple):
@@ -147,6 +269,23 @@ def scale_by_weight_norm(
         updates = jtu.tree_map(scale_fn, updates, params)
         return updates, ScaleByWeightNormState()
 
+    return optax.GradientTransformation(init_fn, update_fn)
+
+
+class ScaleByParamFunctionState(NamedTuple):
+    """An empty node for scale_by_param_function state."""
+
+
+def scale_by_param_function(
+        f: Callable[[optax.Updates, optax.Params], optax.Updates]
+) -> optax.GradientTransformation:
+    def init_fn(params):
+        return ScaleByParamFunctionState()
+    
+    def update_fn(updates, state, params):
+        updates = jtu.tree_map(f, updates, params)
+        return updates, ScaleByParamFunctionState()
+    
     return optax.GradientTransformation(init_fn, update_fn)
 
 
@@ -351,6 +490,7 @@ def mango_v2(
         normalize: str | Dict[str, str | None] | None = default_mango_normalizations,
         scale_weight: str | Dict[str, str | None] | None = None,
         scale_power: float | Dict[str, float] = 1,
+        scale_dim: bool | Dict[str, bool] = False,
         eps: float = 1e-8,
         ns_steps: int = 6,
         num_heads: int = 12,
@@ -361,6 +501,7 @@ def mango_v2(
         igt_scale: float = 0.0,
         scale_clip_low: float = 1.0,
         scale_clip_high: float | None = None,
+        clip_ns: bool = True,
 ) -> optax.GradientTransformation:
     """Mango v2. 
 
@@ -393,10 +534,12 @@ def mango_v2(
             normalize: str | None = None,
             scale_weight: str | None = None,
             scale_power: float = 1,
+            scale_dim: bool = False,
             offset_beta: float = 0.0,
             igt_scale: float = 0.0,
             scale_clip_low: float = 1.0,
             scale_clip_high: float = jnp.inf,
+            clip_ns: bool = True,
     ):
         if use_adamw:
             # Optax implements Nadam based on 
@@ -415,13 +558,36 @@ def mango_v2(
                 scale_by_grad_squared(beta=beta2) if beta2 else optax.identity(),
                 optax.trace(decay=beta1, nesterov=nesterov)
             )
+        # Normalization and weight scaling
+        if normalize in list_of_induced_norms:
+            # print(f"{name}/scale_dim={scale_dim}")
+            # print(f"{name}/scale_weight={scale_weight}")
+            norm_fn, normalize_fn = norm_pairing(
+                induced_norm=normalize,
+                dimension_correction=scale_dim,
+                eps=eps,
+                ns_steps=ns_steps,
+                transpose=(name=="embedding"),  # I think the correct thing is to transpose embedding matrix
+                clip_ns=clip_ns,
+            )
+            normalize_and_scale = optax.chain(
+                scale_by_function(normalize_fn),
+                scale_by_param_function(
+                    f=lambda u, w: u * jnp.clip(norm_fn(w)**scale_power, min=scale_clip_low, max=scale_clip_high)
+                ) if scale_weight else optax.identity(),
+            )
+        else:
+            normalize_and_scale = optax.chain(
+                scale_by_normalization(normalize, eps=eps, ns_steps=ns_steps, num_heads=num_heads),
+                scale_by_weight_norm(scale_weight, scale_power, clip_low=scale_clip_low, clip_high=scale_clip_high),
+            )
+        # Learning rate
         learning_rate = lr if schedule is None else lambda t: lr * schedule(t)
         if schedule_wrapper:
             learning_rate = schedule_wrapper(learning_rate, name)
         optimizer = optax.chain(
             optimizer,
-            scale_by_normalization(normalize, eps=eps, ns_steps=ns_steps, num_heads=num_heads),
-            scale_by_weight_norm(scale_weight, scale_power, clip_low=scale_clip_low, clip_high=scale_clip_high),
+            normalize_and_scale,
             optax.scale_by_learning_rate(learning_rate),
             scale_by_offset(beta=offset_beta) if offset_beta else optax.identity(),
             implicit_gradient_transport(beta=beta1, scale=igt_scale) if igt_scale else optax.identity(),
@@ -440,8 +606,12 @@ def mango_v2(
             normalize=normalize, 
             scale_weight=scale_weight, 
             scale_power=scale_power,
+            scale_dim=scale_dim,
             offset_beta=offset_beta,
             igt_scale=igt_scale,
+            scale_clip_low=scale_clip_low,
+            scale_clip_high=scale_clip_high,
+            clip_ns=clip_ns
         )
     else:
         parse_args = lambda arg, key: arg if not isinstance(arg, dict) else arg[key]
@@ -456,10 +626,12 @@ def mango_v2(
                 normalize=parse_args(normalize, param),
                 scale_weight=parse_args(scale_weight, param),
                 scale_power=parse_args(scale_power, param),
+                scale_dim=parse_args(scale_dim, param),
                 offset_beta=offset_beta,
                 igt_scale=igt_scale,
                 scale_clip_low=scale_clip_low,
                 scale_clip_high=scale_clip_high,
+                clip_ns=clip_ns
             ) for param in param_keys
         }
         optimizer = multi_transform(transforms, param_labels)

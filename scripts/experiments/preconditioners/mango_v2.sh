@@ -188,7 +188,60 @@ use_adamw=False
 # lr_vec_b=$lr_base
 
 # scale_power=1
-name="mango_same_p${scale_power}_lr${lr_base}_lrhead${lr_head}"
+# name="mango_same_p${scale_power}_lr${lr_base}_lrhead${lr_head}"
+
+# ...
+lr=0.01
+beta1=0.95
+beta2=0.95
+nesterov=True
+use_adamw=False
+
+# scale_weight=null
+# name="mangov2_baseline"
+
+# ...
+# normalize_head="inf_"
+# name="mango_head_inf"
+
+
+# ...
+normalize_mat="Spectral"
+normalize_attn_w="Spectral"
+normalize_embedding="ColNorm"
+normalize_head="Sign"
+normalize_vec_w="Sign"
+normalize_attn_b="Euclidean"
+normalize_vec_b="Euclidean"
+
+# # scale_weight=True
+# scale_weight=null
+# # scale_dim=True
+# scale_dim=False
+
+# name="mango_lmo_weight_${scale_weight}_dim_${scale_dim}"
+
+# ...
+normalize_embedding=null
+normalize_head="Spectral"
+normalize_vec_w=null
+scale_weight=null
+# scale_dim=False
+# clip_ns=True
+# name="mango_lmo_recover_mango"
+# clip_ns=False
+# name="mango_lmo_ns_noscale"
+scale_dim_mat=True
+scale_dim_attn_w=True
+scale_dim_head=True
+clip_ns=False
+name="mango_lmo_ns_noclip"
+
+# ...
+# scale_weight=null
+# scale_dim=True
+# lr=0.03
+# name="mango_lmo_lr${lr}"
 
 
 # ========================================================================
@@ -220,6 +273,7 @@ args=(
     "optimizer.offset_beta=$offset_beta"
     "optimizer.scale_clip_low=$scale_clip_low"
     "optimizer.scale_clip_high=$scale_clip_high"
+    "$(parse "optimizer.clip_ns" "clip_ns")"
     # lr schedule
     "optimizer/lr_config=$schedule"
     "optimizer.lr_config.warmup=$warmup"
@@ -289,6 +343,14 @@ args=(
     "$(parse "optimizer.scale_power.attn_b" "scale_power_attn_b")"
     "$(parse "optimizer.scale_power.vec_w" "scale_power_vec_w")"
     "$(parse "optimizer.scale_power.vec_b" "scale_power_vec_b")"
+    # scale_dim
+    "$(parse "optimizer.scale_dim.mat" "scale_dim_mat")"
+    "$(parse "optimizer.scale_dim.embedding" "scale_dim_embedding")"
+    "$(parse "optimizer.scale_dim.head" "scale_dim_head")"
+    "$(parse "optimizer.scale_dim.attn_w" "scale_dim_attn_w")"
+    "$(parse "optimizer.scale_dim.attn_b" "scale_dim_attn_b")"
+    "$(parse "optimizer.scale_dim.vec_w" "scale_dim_vec_w")"
+    "$(parse "optimizer.scale_dim.vec_b" "scale_dim_vec_b")"
     # Global configs.
     # If any of the following is defined, it will override 
     # the dictionary-specific definition to a float.
@@ -300,6 +362,7 @@ args=(
     "$(parse "optimizer.normalize" "normalize")"
     "$(parse "optimizer.scale_weight" "scale_weight")"
     "$(parse "optimizer.scale_power" "scale_power")"
+    "$(parse "optimizer.scale_dim" "scale_dim")"
 )
 
 # python main.py ${args[@]}
