@@ -206,13 +206,13 @@ use_adamw=False
 
 
 # ...
-normalize_mat="Spectral"
-normalize_attn_w="Spectral"
-normalize_embedding="ColNorm"
-normalize_head="Sign"
-normalize_vec_w="Sign"
-normalize_attn_b="Euclidean"
-normalize_vec_b="Euclidean"
+# normalize_mat="Spectral"
+# normalize_attn_w="Spectral"
+# normalize_embedding="ColNorm"
+# normalize_head="Sign"
+# normalize_vec_w="Sign"
+# normalize_attn_b="Euclidean"
+# normalize_vec_b="Euclidean"
 
 # # scale_weight=True
 # scale_weight=null
@@ -222,26 +222,48 @@ normalize_vec_b="Euclidean"
 # name="mango_lmo_weight_${scale_weight}_dim_${scale_dim}"
 
 # ...
-normalize_embedding=null
+# normalize_embedding=null
+# normalize_head="Spectral"
+# normalize_vec_w=null
+# scale_weight=null
+# # scale_dim=False
+# # clip_ns=True
+# # name="mango_lmo_recover_mango"
+# # clip_ns=False
+# # name="mango_lmo_ns_noscale"
+# scale_dim_mat=True
+# scale_dim_attn_w=True
+# scale_dim_head=True
+# clip_ns=False
+# name="mango_lmo_ns_noclip"
+
+# ...
+normalize_mat="Spectral"
+normalize_attn_w="Spectral"
 normalize_head="Spectral"
 normalize_vec_w=null
+normalize_attn_b="Euclidean"
+normalize_vec_b="Euclidean"
 scale_weight=null
-# scale_dim=False
-# clip_ns=True
-# name="mango_lmo_recover_mango"
-# clip_ns=False
-# name="mango_lmo_ns_noscale"
-scale_dim_mat=True
-scale_dim_attn_w=True
-scale_dim_head=True
-clip_ns=False
-name="mango_lmo_ns_noclip"
+clip_ns=True
+
+normalize_embedding="ColNorm"
+transpose_embedding=True
+# scale_dim_embedding=False
+# name="mango_emb_l2_nodim"
+# scale_dim_embedding=True
+# name="mango_emb_l2_dim"
+
+normalize_embedding="Sign"
+name="mango_emb_sign"
 
 # ...
 # scale_weight=null
 # scale_dim=True
 # lr=0.03
 # name="mango_lmo_lr${lr}"
+
+
 
 
 # ========================================================================
@@ -274,6 +296,7 @@ args=(
     "optimizer.scale_clip_low=$scale_clip_low"
     "optimizer.scale_clip_high=$scale_clip_high"
     "$(parse "optimizer.clip_ns" "clip_ns")"
+    "$(parse "optimizer.transpose_embedding" "transpose_embedding")"
     # lr schedule
     "optimizer/lr_config=$schedule"
     "optimizer.lr_config.warmup=$warmup"
