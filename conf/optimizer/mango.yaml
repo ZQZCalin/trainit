@@ -22,7 +22,7 @@ lrs:
 
 normalizations:
   mat: "ns"
-  embedding: "l2_col"
+  embedding: "l2_row" #"l2_col" # changed to l2_row after correcting the notion
   head: "ns"
   attn_w: "ns"
   attn_b: "l2"

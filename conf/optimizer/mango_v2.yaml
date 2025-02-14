@@ -100,5 +100,8 @@ igt_scale: 0.0
 # to dimension scaling of NS normalization.
 clip_ns: True
 
+# If true, use sqrt(d); otherwise 
+transpose_embedding: True
+
 # log norms of each layer to wandb
 visualize: False
