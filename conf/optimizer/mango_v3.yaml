@@ -1,0 +1,65 @@
+name: mango_v3
+defaults:
+  - lr_config: linear
+lr_config:
+  lr: 1.0
+
+core:
+  # Define common settings using an anchor
+  _defaults: &defaults
+    lr: 0.01
+    beta1: 0.95
+    beta2: 0.95
+    nesterov: true
+    eps: 1e-8
+    # Normalization
+    normalize: null
+    scale_dim: false
+    scale_dim_transpose: false
+    scale_dim_clip_min: null
+    scale_dim_clip_max: null
+    ns_steps: 6
+    num_heads: 12
+    # Norm scaling
+    scale_norm: null
+    scale_norm_power: 1.0
+    scale_norm_clip_min: 1.0
+    scale_norm_clip_max: null
+    # Others
+    use_adamw: false
+    offset_beta: 0.95   # offset is default turned on
+    igt_scale: 0.0
+
+  # Use the common settings for each layer, and override fields as needed.
+  mat:
+    <<: *defaults
+    normalize: "ns"
+    scale_dim: true
+    scale_dim_clip_min: 1.0
+
+  embedding:
+    <<: *defaults
+    scale_dim_transpose: true
+
+  head:
+    <<: *defaults
+    normalize: "ns"
+    scale_dim: true
+    scale_dim_clip_min: 1.0
+
+  attn_w:
+    <<: *defaults
+    normalize: "ns"
+    scale_dim: true
+    scale_dim_clip_min: 1.0
+
+  attn_b:
+    <<: *defaults
+    normalize: "l2"
+
+  vec_w:
+    <<: *defaults
+
+  vec_b:
+    <<: *defaults
+    normalize: "l2"

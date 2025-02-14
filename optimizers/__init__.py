@@ -35,6 +35,7 @@ from optimizers.muon.muon_laprop import (
 from optimizers.muon.mango import (
     mango,
     mango_v2,
+    mango_v3,
     visualize_norm,
 )
 from optimizers.preconditioners.combine import (

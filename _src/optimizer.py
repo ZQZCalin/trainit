@@ -348,6 +348,16 @@ def init_optimizer(
             scale_clip_low=config.scale_clip_low,
             scale_clip_high=config.scale_clip_high,
             clip_ns=config.clip_ns,
+            transpose_embedding=config.transpose_embedding,
+        )
+    
+    def init_mango_v3(config: DictConfig):
+        lr_config = OmegaConf.create(config.lr_config)
+        lr_config.lr = 1.0
+        schedule = init_schedule(lr_config)
+        return optimizers.mango_v3(
+            config_dict=OmegaConf.to_container(config.core),
+            schedule=schedule,
         )
     
     # Initialize base optimizer.
@@ -383,6 +393,8 @@ def init_optimizer(
         if config.model.name != "gpt":
             raise NotImplementedError(f"mango_v2 doesn't support model = '{config.model.name}' now.")
         optimizer = init_mango_v2(opt_config, num_heads=config.model.num_heads)
+    elif name == "mango_v3":
+        optimizer = init_mango_v3(opt_config)
     elif name == "normalized_sgdm":
         optimizer = init_normalized_sgdm(opt_config)
     else:
