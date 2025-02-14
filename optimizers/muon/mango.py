@@ -59,61 +59,97 @@ def scale_by_normalization(
         eps: float = 1e-8,
         ns_steps: int = 6,
         num_heads: int = 12,
+        scale_dim: bool = False,
+        transpose: bool = False,
+        clip_min: float | None = None,
+        clip_max: float | None = None,
 ):
     if normalize is None:
         return optax.identity()
-    # normalize = str(normalize)
+    
+    if clip_min is None:
+        clip_min = 0.0
+    if clip_max is None:
+        clip_max = jnp.inf
+
+    # Base normalization functions.
+    clip = lambda x: jnp.clip(x, min=clip_min, max=clip_max)
+
+    normalize_l2 = lambda G: G / (jnp.linalg.norm(G) + eps)
+    scale_l2 = lambda G: G * clip(len(G)**0.5)
+
+    normalize_l2_row = lambda G: G / (jnp.linalg.norm(G, axis=1, keepdims=True) + eps)
+    scale_l2_row = lambda G: G * clip((1/G.shape[1])**0.5)
+
+    normalize_l2_col = lambda G: G / (jnp.linalg.norm(G, axis=0, keepdims=True) + eps)
+    scale_l2_col = lambda G: G * clip(G.shape[0]**0.5)
+
+    normalize_ns = lambda G: newton_schulz(G, steps=ns_steps)
+    scale_ns = lambda G: G * clip((G.shape[0]/G.shape[1])**0.5)
+
+    normalize_inf = jnp.sign
+
+    def wrap_normalize_l2(G):
+        assert G.ndim == 1
+        G = normalize_l2(G)
+        if scale_dim:
+            G = scale_l2(G)
+        return G
+
+    def wrap_normalize_l2_row(G):
+        assert G.ndim == 2
+        if transpose:
+            G = jnp.transpose(G)
+        G = normalize_l2_row(G)
+        if scale_dim:
+            G = scale_l2_row(G)
+        if transpose:
+            G = jnp.transpose(G)
+        return G
+    
+    def wrap_normalize_l2_col(G):
+        assert G.ndim == 2
+        if transpose:
+            G = jnp.transpose(G)
+        G = normalize_l2_col(G)
+        if scale_dim:
+            G = scale_l2_col(G)
+        if transpose:
+            G = jnp.transpose(G)
+        return G
+    
+    wrap_normalize_l2_split = split_vmap(wrap_normalize_l2, num_heads=num_heads)
+
+    wrap_normalize_inf = normalize_inf
+
+    def wrap_normalize_ns(G):
+        assert G.ndim == 2
+        G = normalize_ns(G)
+        if scale_dim:
+            G = scale_ns(G)
+        return G
+    
+    wrap_normalize_ns_split = split_vmap(wrap_normalize_ns, num_heads=num_heads)
+
+    # Assign normalize functions.
     if normalize == "l2":
-        return scale_by_function(
-            f=lambda G: G / (jnp.linalg.norm(G) + eps)
-        )
-    if normalize == "l2_col":
-        return scale_by_function(
-            f=lambda G: G / (jnp.linalg.norm(G, axis=1, keepdims=True) + eps)
-        )
-    if normalize == "l2_row":
-        return scale_by_function(
-            f=lambda G: G / (jnp.linalg.norm(G, axis=0, keepdims=True) + eps)
-        )
-    if normalize == "l2_split":
-        return scale_by_function(split_vmap(
-            f=lambda G: G / (jnp.linalg.norm(G) + eps),
-            num_heads=num_heads,
-        ))
-    # NOTE: Feb.11: the previous implementation is a literal normalization by inf-norm,
-    # and is different from the "project" notion x <- argmax_{\|x\|=1} <x, update>.
-    # The correct implementation would be
-    # - x <- sign(x) for vectors if \|\| is inf-norm
-    # - x <- sign(x) for matrices if \|\| is the max of column-wise inf-norm 
-    #   (which is the same implementation as the vector case!).
-    # - also, head-wise inf-normalization makes no sense now. 
-    if normalize == "inf_":
-        # return scale_by_function(
-        #     f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
-        # )
-        return scale_by_function(jnp.sign)
-    if normalize == "inf_col":
-        raise ValueError("Please use 'inf_' for all normalization.")
-        return scale_by_function(
-            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf, axis=1, keepdims=True) + eps)
-        )
-    if normalize == "inf_split":
-        raise ValueError("Please use 'inf_' for all normalization.")
-        return scale_by_function(split_vmap(
-            f=lambda G: G / (jnp.linalg.norm(G, ord=jnp.inf) + eps)
-        ))
-    if normalize == "ns":
-        return scale_by_newton_schulz(ns_steps=ns_steps)
-    if normalize == "ns_split":
-        def f(G):
-            G = newton_schulz(G, steps=ns_steps)
-            # Optional upscale by shape (muon line 135),
-            # although it's always 1 for GPT-2 attn layers 
-            # since d=64 << D=768.
-            G = G * max(1, G.shape[0]/G.shape[1])**0.5
-            return G
-        return scale_by_function(split_vmap(f, num_heads=num_heads))
-    raise ValueError(f"invalid normalization type = '{normalize}'.")
+        normalize_fn = wrap_normalize_l2
+    elif normalize == "l2_row":
+        normalize_fn = wrap_normalize_l2_row
+    elif normalize == "l2_col":
+        normalize_fn = wrap_normalize_l2_col
+    elif normalize == "l2_split":
+        normalize_fn = wrap_normalize_l2_split
+    elif normalize == "inf_":
+        normalize_fn = wrap_normalize_inf
+    elif normalize == "ns":
+        normalize_fn = wrap_normalize_ns
+    elif normalize == "ns_split":
+        normalize_fn = wrap_normalize_ns_split
+    else:
+        raise ValueError(f"invalid normalization type = '{normalize}'.")
+    
+    return scale_by_function(normalize_fn)
 
 
 list_of_induced_norms = [
@@ -502,6 +538,7 @@ def mango_v2(
         scale_clip_low: float = 1.0,
         scale_clip_high: float | None = None,
         clip_ns: bool = True,
+        transpose_embedding: bool = True,
 ) -> optax.GradientTransformation:
     """Mango v2. 
 
@@ -530,16 +567,18 @@ def mango_v2(
             beta1: float = 0.95,
             beta2: float = 0.95,
             nesterov: bool = True,
-            use_adamw: bool = False,
             normalize: str | None = None,
+            scale_dim: bool = False,
+            scale_dim_clip_min: float | None = None,
+            scale_dim_clip_max: float | None = None,
             scale_weight: str | None = None,
             scale_power: float = 1,
-            scale_dim: bool = False,
-            offset_beta: float = 0.0,
-            igt_scale: float = 0.0,
             scale_clip_low: float = 1.0,
             scale_clip_high: float = jnp.inf,
             clip_ns: bool = True,
+            use_adamw: bool = False,
+            offset_beta: float = 0.0,
+            igt_scale: float = 0.0,
     ):
         if use_adamw:
             # Optax implements Nadam based on 
@@ -562,12 +601,13 @@ def mango_v2(
         if normalize in list_of_induced_norms:
             # print(f"{name}/scale_dim={scale_dim}")
             # print(f"{name}/scale_weight={scale_weight}")
+            transpose = (name == "embedding") and transpose_embedding
             norm_fn, normalize_fn = norm_pairing(
                 induced_norm=normalize,
                 dimension_correction=scale_dim,
                 eps=eps,
                 ns_steps=ns_steps,
-                transpose=(name=="embedding"),  # I think the correct thing is to transpose embedding matrix
+                transpose=transpose,  # I think the correct thing is to transpose embedding matrix
                 clip_ns=clip_ns,
             )
             normalize_and_scale = optax.chain(
@@ -578,7 +618,15 @@ def mango_v2(
             )
         else:
             normalize_and_scale = optax.chain(
-                scale_by_normalization(normalize, eps=eps, ns_steps=ns_steps, num_heads=num_heads),
+                scale_by_normalization(
+                    normalize, 
+                    eps=eps, 
+                    ns_steps=ns_steps, 
+                    num_heads=num_heads,
+                    scale_dim=scale_dim,
+                    clip_min=scale_dim_clip_min,
+                    clip_max=scale_dim_clip_max,
+                ),
                 scale_by_weight_norm(scale_weight, scale_power, clip_low=scale_clip_low, clip_high=scale_clip_high),
             )
         # Learning rate
@@ -635,5 +683,102 @@ def mango_v2(
             ) for param in param_keys
         }
         optimizer = multi_transform(transforms, param_labels)
+
+    return optimizer
+
+
+# ========================================================================
+# Unfortunately, mango_v2 becomes too clunky to use / modify.
+# Below implements a cleaner version of mango_v3.
+# ========================================================================
+
+def mango_core(
+        learning_rate: optax.ScalarOrSchedule,
+        beta1: float = 0.95,
+        beta2: float = 0.95,
+        nesterov: bool = True,
+        eps: float = 1e-8,
+        # normalization
+        normalize: str | None = None,
+        scale_dim: bool = False,
+        scale_dim_transpose: bool = False,
+        scale_dim_clip_min: float | None = None,
+        scale_dim_clip_max: float | None = None,
+        ns_steps: int = 6,
+        num_heads: int = 12,
+        # norm scaling
+        scale_norm: str | None = None,
+        scale_norm_power: float = 1.0,
+        scale_norm_clip_min: float | None = 1.0,
+        scale_norm_clip_max: float | None = None,
+        # other tweaks
+        use_adamw: bool = False,
+        offset_beta: float = 0.0,
+        igt_scale: float = 0.0,
+):
+    # Base optimizer: AdamW or LaProp
+    # TODO: include non-diagonal preconditioning like SOAP
+    if not beta2:
+        optim_base = optax.trace(decay=beta1, nesterov=nesterov)
+    else:
+        if use_adamw:
+            # Optax implements Nadam based on 
+            # Dozat 2016 https://openreview.net/pdf?id=OM0jvwB8jIp57ZJjtNEZ
+            # with a caveat that nu_hat is not multiplied by beta2.
+            # See further notes in optax implementation.
+            optim_base = optax.scale_by_adam(b1=beta1, b2=beta2, eps=eps, nesterov=nesterov)
+        else:
+            # Optax.trace uses the conventional mu = mu * beta + g
+            # instead of the average formula, i.e., mu = mu * beta + (1-beta) * g.
+            optim_base = optax.chain(
+                scale_by_grad_squared(beta=beta2, eps=eps),
+                optax.trace(decay=beta1, nesterov=nesterov)
+            )
+    # Normalization layer
+    optim_normalization = scale_by_normalization(
+        normalize, 
+        eps=eps, 
+        ns_steps=ns_steps, 
+        num_heads=num_heads,
+        scale_dim=scale_dim,
+        transpose=scale_dim_transpose,
+        clip_min=scale_dim_clip_min,
+        clip_max=scale_dim_clip_max,
+    )
+    # Norm scaling layer
+    optim_norm_scaling = scale_by_weight_norm(
+        scale_norm, 
+        scale_power=scale_norm_power, 
+        clip_low=scale_norm_clip_min, 
+        clip_high=scale_norm_clip_max,
+    )
+    return optax.chain(
+        optim_base,
+        optim_normalization,
+        optim_norm_scaling,
+        optax.scale_by_learning_rate(learning_rate),
+        scale_by_offset(beta=offset_beta) if offset_beta else optax.identity(),
+        implicit_gradient_transport(beta=beta1, scale=igt_scale) if igt_scale else optax.identity(),
+    )
+
+
+def mango_v3(
+        config_dict: Dict[str, dict],
+        schedule: optax.Schedule,
+        param_labels: Callable[[PyTree], PyTree] | None = mango_label_gpt,
+) -> optax.GradientTransformation:
+    """Mango v3.
+    
+    Cleaner code, easier construction.
+    """
+
+    transforms = {}
+    for param, config in config_dict.items():
+        lr = config.pop("lr")
+        transforms[param] = mango_core(
+            learning_rate=lambda t: lr * schedule(t),
+            **config
+        )
+    optimizer = multi_transform(transforms, param_labels)
 
     return optimizer
