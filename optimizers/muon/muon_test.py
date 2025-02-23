@@ -3,6 +3,7 @@
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
+import jax.random as jr
 import optax
 import equinox as eqx
 from omegaconf import OmegaConf
@@ -12,6 +13,12 @@ from optimizers.muon.muon_laprop import label_gpt, muon_laprop
 from optimizers.muon.mango import mango_label_gpt, mango
 from models import summarize_model_parmas
 from _src import init_language_model
+from optimizers.muon.base import newton_schulz
+from optimizers.muon.muon import (
+    inverse_scale_newton_schulz,
+    inverse_scale_svd,
+)
+import timeit
 
 
 def test_scale_by_muon():
@@ -119,6 +126,30 @@ def test_mango():
         print(f"iter {i+1}\n  >> grads\n", jtu.tree_flatten(grads)[0])
         print(f"  >> updates\n", jtu.tree_flatten(updates)[0])
         print(f"  >> new params\n", jtu.tree_flatten(params)[0])
+
+
+def test_newton_schulz():    
+    num_runs = 10
+    d = 768
+    # G = jnp.eye(d)
+    key, new_key = jr.split(jr.PRNGKey(42))
+    G = jr.normal(key, shape=(3*d,d))
+    def test_func1():
+        newton_schulz(G, steps=5)
+    def test_func2():
+        inverse_scale_newton_schulz(G)
+    def test_func3():
+        inverse_scale_svd(G, k=2.3)
+
+    # Time the functions using timeit
+    time1 = timeit.timeit(test_func1, number=num_runs)
+    time2 = timeit.timeit(test_func2, number=num_runs)
+    time3 = timeit.timeit(test_func3, number=num_runs)
+
+    print(f"func1 average runtime over {num_runs} runs: {time1 / num_runs:.6f} seconds")
+    print(f"func2 average runtime over {num_runs} runs: {time2 / num_runs:.6f} seconds")
+    print(f"func3 average runtime over {num_runs} runs: {time3 / num_runs:.6f} seconds")
+    print(time2/time1-1)
 
 
 if __name__ == "__main__":

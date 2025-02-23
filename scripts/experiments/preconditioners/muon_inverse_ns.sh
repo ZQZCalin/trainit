@@ -1,7 +1,7 @@
 #!/bin/bash
 # Muon baseline.
 
-optimizer=muon_inverse
+optimizer=muon_inverse_ns
 
 # ========================================================================
 # Global Configs.
@@ -18,7 +18,7 @@ warmup=200
 const=null
 
 # Make scc_outputs dir.
-exp_name=muon_inverse
+exp_name=muon_inverse_ns
 BASE_DIR=/projectnb/aclab/qinziz/trainit
 DATE=$(date +"%Y-%m-%d")
 OUTPUT_PATH=$BASE_DIR/scc_outputs/$DATE/$exp_name
@@ -30,39 +30,8 @@ mkdir -p $OUTPUT_PATH
 # Optimizer Configs.
 # ========================================================================
 
-# inverse_k=0.7
-# lrs=(0.03 0.01 3e-3 1e-3 0.1 0.3 1.0)
-# lr=${lrs[5]}
-# name="muon_inverse-k${inverse_k}_lr${lr}"
-
-# inverse_k=1.4
-# lrs=(0.03 0.01 0.1)
-# lr=${lrs[2]}
-# name="muon_inverse-k${inverse_k}_lr${lr}"
-
-# inverse_k=2.3
-# lrs=(0.03 0.01 0.1)
-# lr=${lrs[2]}
-# name="muon_inverse-k${inverse_k}_lr${lr}"
-
-# inverse_k=4.6
-# lrs=(0.03 0.01 0.1)
-# lr=${lrs[2]}
-# name="muon_inverse-k${inverse_k}_lr${lr}"
-
-# scale_rms=True
-# ks=(0.7 1.4 2.3 4.6)
-# inverse_k=${ks[3]}
-# lrs=(0.03 1e-3 3e-3)     # 0.03/sqrt(768) ~= 0.001
-# lr=${lrs[-1]}
-# name="muonrms_inverse-k${inverse_k}_lr${lr}"
-
-# inverse_k=0
-# # lr=0.03
-# # name="muon_inverse-k${inverse_k}_lr${lr}"
-# scale_rms=True
-# lr=1e-3
-# name="muonrms_inverse-k${inverse_k}_lr${lr}"
+lr=1e-3
+name="muon_inverse_ns_lr${lr}"
 
 
 # ========================================================================

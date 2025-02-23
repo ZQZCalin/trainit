@@ -14,7 +14,7 @@ import optax
 
 from typing import NamedTuple
 from jaxtyping import Array, PyTree
-
+from functools import partial
 import warnings
 
 from utils import tree_utils
@@ -159,30 +159,30 @@ def muon(
     """
     if label_params is None:
         label_params = muon_label_params_default    # use default muon partition.
-    if not beta2:
-        optim_muon = scale_by_muon(
-            learning_rate, momentum, nesterov, ns_steps
-        )
-    else:
-        def normalize(G):
-            G = newton_schulz(G, steps=ns_steps)
-            G = G * max(1, G.shape[0]/G.shape[1])**0.5
-            return G
-        optim_muon = optax.trace(decay=momentum, nesterov=nesterov)
-        optim_muon = normalize_with_grad_squared(
-            inner=optim_muon,
-            normalize_fn=normalize,
-            beta=beta2,
-            eps=1e-8, 
-            power_pre=p_pre,
-            power_post=p_post,
-            correct_bias=True,
-            stabilize_postcond=stabilize,
-        )
-        optim_muon = optax.chain(
-            optim_muon,
-            optax.scale_by_learning_rate(learning_rate)
-        )
+    # if not beta2:
+    #     optim_muon = scale_by_muon(
+    #         learning_rate, momentum, nesterov, ns_steps
+    #     )
+    # else:
+    def normalize(G):
+        G = newton_schulz(G, steps=ns_steps)
+        G = G * max(1, G.shape[0]/G.shape[1])**0.5
+        return G
+    optim_muon = optax.trace(decay=momentum, nesterov=nesterov)
+    optim_muon = normalize_with_grad_squared(
+        inner=optim_muon,
+        normalize_fn=normalize,
+        beta=beta2,
+        eps=1e-8, 
+        power_pre=p_pre,
+        power_post=p_post,
+        correct_bias=True,
+        stabilize_postcond=stabilize,
+    )
+    optim_muon = optax.chain(
+        optim_muon,
+        optax.scale_by_learning_rate(learning_rate)
+    )
     optim_adam = adamw(
         learning_rate=adam_lr,
         beta1=adam_beta1,
@@ -342,6 +342,7 @@ def muon_p(
     return optim
 
 
+@partial(jax.jit, static_argnames=("k"))
 def inverse_scale_svd(G, k=0.7):
     """G -> U @ exp( -k*transform(S) ) @ V^T,
     where transform(S) maps min(S) -> 0 and max(S) -> [0,1]
@@ -382,6 +383,102 @@ def muon_inverse(
         
     def normalize(G):
         G = inverse_scale_svd(G, inverse_k)
+        if scale_rms:
+            # explicit RMS normalization
+            G = G * (G.shape[0]*G.shape[1])**0.5 / jnp.linalg.norm(G)
+        else:
+            # default muon scaling
+            G = G * max(1, G.shape[0]/G.shape[1])**0.5
+        return G
+    optim_muon = optax.chain(
+        optax.trace(decay=momentum, nesterov=nesterov),
+        scale_by_function(normalize),
+        optax.scale_by_learning_rate(learning_rate),
+    )
+    optim_adam = adamw(
+        learning_rate=adam_lr,
+        beta1=adam_beta1,
+        beta2=adam_beta2,
+        eps=adam_eps,
+        weight_decay=adam_wd,
+        use_nesterov=False,
+    )
+    transforms = {
+        "muon": optim_muon,
+        "adamw": optim_adam,
+    }
+    optim = multi_transform(transforms, label_params)
+    return optim
+
+
+@partial(jax.jit, static_argnames=())
+def inverse_scale_newton_schulz(G: Array) -> Array:
+    """Approximates exp(-2.3*x) based on
+
+    https://www.desmos.com/calculator/mhlbv7tirz.
+
+    Muon reaches f(x)=0.85 level from x>=0.002, while this function 
+    starts from 0.003.
+
+    More precisely, this function returns G such that
+    G/|G|_2 ~= G'/|G'|_2, where G' is the output of `inverse_scale_svd` with k=2.3
+    """
+    assert G.ndim == 2
+
+    # NOTE: do we need to adapt to bfloat16 as in the OG repo?
+    a1, b1, c1 = (3.1304, -4.0549,  1.8318)
+    a2, b2, c2 = (1.1063, -0.1834, -0.0043)
+    N1, N2 = (5, 4)
+    eps = 1e-7
+
+    X = G
+    if G.shape[0] > G.shape[1]:
+        X = X.T
+
+    X /= (jnp.linalg.norm(X, ord="fro") + eps)
+    def fn1(i, val):
+        X = val
+        A = X @ X.T
+        B = b1 * A + c1 * A @ A
+        return a1 * X + B @ X
+    X1 = jax.lax.fori_loop(
+        0, N1, fn1, X
+    )
+    def fn2(i, val):
+        X = val
+        A = X @ X.T
+        B = b2 * A + c2 * A @ A
+        return a2 * X + B @ X
+    X2 = jax.lax.fori_loop(
+        0, N2, fn2, X
+    )
+    X = X1 - X2
+
+    if G.shape[0] > G.shape[1]:
+        X = X.T
+    return X
+
+
+def muon_inverse_ns(
+        learning_rate: optax.ScalarOrSchedule = 0.05,
+        momentum: float = 0.95,
+        nesterov: bool = True,
+        scale_rms: bool = True,
+        adam_lr: optax.ScalarOrSchedule = 3e-4,
+        adam_beta1: float = 0.95,
+        adam_beta2: float = 0.95,
+        adam_eps: float = 1e-8,
+        adam_wd: float = 0.0,
+        label_params: LabelParamsFn | None = None
+) -> optax.GradientTransformation:
+    """Fast implementation of muon_inverse with k=2.3,
+    while SVD is replaced with newton-schulz type polynomial approximation.
+    """
+    if label_params is None:
+        label_params = muon_label_params_default    # use default muon partition.
+        
+    def normalize(G):
+        G = inverse_scale_newton_schulz(G)
         if scale_rms:
             # explicit RMS normalization
             G = G * (G.shape[0]*G.shape[1])**0.5 / jnp.linalg.norm(G)

@@ -393,6 +393,19 @@ def init_optimizer(
             **OmegaConf.to_container(config.config)
         )
     
+    def init_muon_inverse_ns(config: DictConfig):
+        muon_lr = wrap_scheduler(
+            init_schedule(config.lr_config), wandb_log=wandb_log)
+        adam_lr_config = OmegaConf.create(config.lr_config)     # creates a copy of lr_config
+        adam_lr_config.lr = config.adam_lr
+        adam_lr = wrap_scheduler(
+            init_schedule(adam_lr_config), wandb_log=wandb_log, schedule_title="adam_schedule")
+        return optimizers.muon_inverse_ns(
+            learning_rate=muon_lr,
+            adam_lr=adam_lr,
+            **OmegaConf.to_container(config.config)
+        )
+    
     # Initialize base optimizer.
     name = config.optimizer.name
     opt_config = config.optimizer
@@ -434,6 +447,8 @@ def init_optimizer(
         optimizer = init_muon_p(opt_config)
     elif name =="muon_inverse":
         optimizer = init_muon_inverse(opt_config)
+    elif name =="muon_inverse_ns":
+        optimizer = init_muon_inverse_ns(opt_config)
     else:
         raise ValueError(f"invalid config: optimizer.name = '{name}'.")
     print(f"\nLoaded optimizer {name}\n")

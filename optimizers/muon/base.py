@@ -7,6 +7,7 @@ import optax
 
 from typing import NamedTuple, Callable, Optional
 from jaxtyping import Array, PyTree
+from functools import partial
 
 from utils import tree_utils
 
@@ -14,6 +15,7 @@ from utils import tree_utils
 LabelParamsFn = Callable[..., str]
 
 
+@partial(jax.jit, static_argnames=("steps"))
 def newton_schulz(G: Array, steps: int) -> Array:
     """An approximate Newton-Schulz method.
     
