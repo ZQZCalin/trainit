@@ -30,6 +30,7 @@ from optimizers.muon.muon import (
     muon_p,
     muon_inverse,
     muon_inverse_ns,
+    muon_stable,
 )
 from optimizers.muon.muon_laprop import (
     muon_laprop,

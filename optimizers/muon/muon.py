@@ -12,7 +12,7 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 import optax
 
-from typing import NamedTuple
+from typing import NamedTuple, List, Tuple
 from jaxtyping import Array, PyTree
 from functools import partial
 import warnings
@@ -411,8 +411,34 @@ def muon_inverse(
     return optim
 
 
-@partial(jax.jit, static_argnames=())
-def inverse_scale_newton_schulz(G: Array) -> Array:
+inverse_newton_schulz_constants = {
+    "2.3-0": [
+        (3.1304, -4.0549,  1.8318),
+        (1.1063, -0.1834, -0.0043),
+        (5, 4)
+    ],
+    "4.6-0": [
+        ( 2.7061, -2.9047,  1.1529),
+        (-1.3690,  0.4209,  0.0554),
+        (5, 4)
+    ],
+    "4.6-0.1": [
+        ( 3.1356, -3.2752,  1.1671),
+        (-1.4120,  0.6515, -0.1686),
+        (5, 4)
+    ],
+    "10-0.1": [
+        ( 3.1981, -3.4250,  1.2386),
+        (-1.6111,  0.7298, -0.0578),
+        (5, 4)
+    ]
+}
+
+@partial(jax.jit, static_argnames=("k"))
+def inverse_scale_newton_schulz(
+        G: Array, 
+        k: str="", 
+) -> Array:
     """Approximates exp(-2.3*x) based on
 
     https://www.desmos.com/calculator/mhlbv7tirz.
@@ -426,15 +452,19 @@ def inverse_scale_newton_schulz(G: Array) -> Array:
     assert G.ndim == 2
 
     # NOTE: do we need to adapt to bfloat16 as in the OG repo?
-    a1, b1, c1 = (3.1304, -4.0549,  1.8318)
-    a2, b2, c2 = (1.1063, -0.1834, -0.0043)
-    N1, N2 = (5, 4)
+    if not k:
+        k = "2.3-0"
+    if k in inverse_newton_schulz_constants:
+        (a1, b1, c1), (a2, b2, c2), (N1, N2) = inverse_newton_schulz_constants[k]
+    else:
+        raise ValueError(f"k='{k}' is an invalid argument.")
     eps = 1e-7
 
     X = G
     if G.shape[0] > G.shape[1]:
         X = X.T
 
+    # Initial normalization of X to bound |S|.
     X /= (jnp.linalg.norm(X, ord="fro") + eps)
     def fn1(i, val):
         X = val
@@ -464,6 +494,7 @@ def muon_inverse_ns(
         momentum: float = 0.95,
         nesterov: bool = True,
         scale_rms: bool = True,
+        newton_schulz_k: str = "",
         adam_lr: optax.ScalarOrSchedule = 3e-4,
         adam_beta1: float = 0.95,
         adam_beta2: float = 0.95,
@@ -478,7 +509,162 @@ def muon_inverse_ns(
         label_params = muon_label_params_default    # use default muon partition.
         
     def normalize(G):
-        G = inverse_scale_newton_schulz(G)
+        G = inverse_scale_newton_schulz(G, k=newton_schulz_k)
+        if scale_rms:
+            # explicit RMS normalization
+            G = G * (G.shape[0]*G.shape[1])**0.5 / jnp.linalg.norm(G)
+        else:
+            # default muon scaling
+            G = G * max(1, G.shape[0]/G.shape[1])**0.5
+        return G
+    optim_muon = optax.chain(
+        optax.trace(decay=momentum, nesterov=nesterov),
+        scale_by_function(normalize),
+        optax.scale_by_learning_rate(learning_rate),
+    )
+    optim_adam = adamw(
+        learning_rate=adam_lr,
+        beta1=adam_beta1,
+        beta2=adam_beta2,
+        eps=adam_eps,
+        weight_decay=adam_wd,
+        use_nesterov=False,
+    )
+    transforms = {
+        "muon": optim_muon,
+        "adamw": optim_adam,
+    }
+    optim = multi_transform(transforms, label_params)
+    return optim
+
+
+class NewtonSchulzConfig(NamedTuple):
+    const: Tuple[Tuple[float]]
+    base: float
+    scale: float
+
+
+NEWTON_SCHULZ_COMPONENTS = {
+    "one": NewtonSchulzConfig(
+        const=(
+            (498, -1048, 628),
+            (458, -808, 416),
+            (446, -784, 402),
+            (412, -760, 414),
+            (340, -556, 328),
+            (260, -276, 130),
+        ),
+        base=128,
+        scale=1.5,
+    ),
+}
+
+
+NEWTON_SCHULZ_CONFIGS = {
+    # Stabilized muon constants.
+    "muon": (
+        NEWTON_SCHULZ_COMPONENTS["one"],
+    ),
+    # OG muon constants from Keller Jordan's repo.
+    "muon_OG": (
+        NewtonSchulzConfig(
+            const=(
+                (3.4445, -4.7750,  2.0315),
+            ) * 6,
+            base=1,
+            scale=1,
+        ),
+    ),
+    # https://www.desmos.com/calculator/jbxzf3ovgd
+    "k4.6": (
+        NEWTON_SCHULZ_COMPONENTS["one"],
+        NewtonSchulzConfig(
+            const=(
+                (348, -382, 212),
+                (69, -34, 19.125),
+                (342, -468, 282),
+            ),
+            base=128,
+            scale=-1,
+        ),
+    ),
+    # https://www.desmos.com/calculator/fet7utqjfd
+    "k2.3": (
+        NEWTON_SCHULZ_COMPONENTS["ones"],
+        NewtonSchulzConfig(
+            const=(
+                (96, -88.5, 84.5),
+                (334, -564, 440),
+            ),
+            base=128,
+            scale=-1,
+        )
+    )
+}
+
+
+@partial(jax.jit, static_argnames=("configs",))
+def stable_newton_schulz(
+        G: jnp.ndarray,
+        configs: Tuple[NewtonSchulzConfig, ...] | None = None,
+):
+    """Stabilized newton-schulz approximation.
+    
+    Constants are optimized from 
+    https://gist.github.com/YouJiacheng/393c90cbdc23b09d5688815ba382288b
+    """
+    if configs is None:
+        configs = NEWTON_SCHULZ_CONFIGS["muon"]
+    eps = 1e-7
+    X = G
+    if G.shape[0] > G.shape[1]:
+        X = X.T
+    X /= (jnp.linalg.norm(X, ord="fro") + eps)
+
+    def apply_config(X, conf):
+        const = jnp.array(conf.const, dtype=jnp.bfloat16)
+        N = len(conf.const)
+        
+        def body_fn(i, X):
+            a, b, c = const[i] / conf.base
+            A = X @ X.T
+            B = b * A + c * (A @ A)
+            return a * X + B @ X
+        
+        return conf.scale * jax.lax.fori_loop(0, N, body_fn, X)
+
+    res = jnp.zeros_like(X)
+    for conf in configs:
+        res = res + apply_config(X, conf)
+
+    if G.shape[0] > G.shape[1]:
+        res = res.T
+    return res
+
+
+def muon_stable(
+        learning_rate: optax.ScalarOrSchedule = 0.03,
+        momentum: float = 0.95,
+        nesterov: bool = True,
+        scale_rms: bool = True,
+        ns_name: str = "",
+        adam_lr: optax.ScalarOrSchedule = 0.03,
+        adam_beta1: float = 0.95,
+        adam_beta2: float = 0.95,
+        adam_eps: float = 1e-8,
+        adam_wd: float = 0.0,
+        label_params: LabelParamsFn | None = None
+) -> optax.GradientTransformation:
+    """Muon with general and stabilized Newton-Schulz."""
+    if label_params is None:
+        label_params = muon_label_params_default    # use default muon partition.
+    if not ns_name:
+        ns_name = "muon"
+    if ns_name not in NEWTON_SCHULZ_CONFIGS:
+        raise ValueError(f"cannot find ns_name='{ns_name}' in NEWTON_SCHULZ_CONSTANTS.")
+        
+    def normalize(G):
+        G = stable_newton_schulz(G, configs=tuple(NEWTON_SCHULZ_CONFIGS[ns_name]))
         if scale_rms:
             # explicit RMS normalization
             G = G * (G.shape[0]*G.shape[1])**0.5 / jnp.linalg.norm(G)

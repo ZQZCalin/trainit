@@ -1,7 +1,7 @@
 #!/bin/bash
 # Muon baseline.
 
-optimizer=muon_inverse_ns
+optimizer=muon_stable
 
 # ========================================================================
 # Global Configs.
@@ -18,7 +18,7 @@ warmup=200
 const=null
 
 # Make scc_outputs dir.
-exp_name=muon_inverse_ns
+exp_name=muon_stable
 BASE_DIR=/projectnb/aclab/qinziz/trainit
 DATE=$(date +"%Y-%m-%d")
 OUTPUT_PATH=$BASE_DIR/scc_outputs/$DATE/$exp_name
@@ -30,18 +30,18 @@ mkdir -p $OUTPUT_PATH
 # Optimizer Configs.
 # ========================================================================
 
-# lrs=(1e-3 0.8e-3 1.2e-3 0.5e-3 1.5e-3)
-# lr=${lrs[-1]}
-# name="muon_inverse_ns_lr${lr}"
-
-ks=(
-    "4.6-0.1"
-    "4.6-0"
-    "10-0.1"
+ns_methods=(
+    "muon"
+    "k4.6"
+    "k2.3"
+    "muon_OG"
 )
-newton_schulz_k=${ks[1]}
+ns_name=${ns_methods[-1]}
 lr=1e-3
-name="muon_inverse_ns_${newton_schulz_k}_lr${lr}"
+scale_rms=True
+# lr=0.03
+# scale_rms=False
+name="muon_stable-${ns_name}_rms-${scale_rms}_lr${lr}"
 
 
 # ========================================================================
@@ -80,7 +80,7 @@ optimizer_keys=(
     "nesterov"
     "inverse_k"
     "scale_rms"
-    "newton_schulz_k"
+    "ns_name"
     "adam_beta1"
     "adam_beta2"
     "adam_eps"
