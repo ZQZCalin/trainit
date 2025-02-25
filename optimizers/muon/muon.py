@@ -590,7 +590,7 @@ NEWTON_SCHULZ_CONFIGS = {
     ),
     # https://www.desmos.com/calculator/fet7utqjfd
     "k2.3": (
-        NEWTON_SCHULZ_COMPONENTS["ones"],
+        NEWTON_SCHULZ_COMPONENTS["one"],
         NewtonSchulzConfig(
             const=(
                 (96, -88.5, 84.5),
@@ -598,8 +598,35 @@ NEWTON_SCHULZ_CONFIGS = {
             ),
             base=128,
             scale=-1,
-        )
-    )
+        ),
+    ),
+    # https://www.desmos.com/calculator/xdalx9azcu
+    "k10-b0.01": (
+        NEWTON_SCHULZ_COMPONENTS["one"],
+        NewtonSchulzConfig(
+            const=(
+                (374, -536, 294),
+                (116, -132, 101.5),
+                (374, -620, 456),
+            ),
+            base=128,
+            scale=-1,
+        ),
+    ),
+    # https://www.desmos.com/calculator/7i4clnjhxg
+    "k20-b0.01": (
+        NEWTON_SCHULZ_COMPONENTS["one"],
+        NewtonSchulzConfig(
+            const=(
+                (282, -516, 322),
+                (328, -644, 556),
+                (128, -195, 276),
+                (368, -628, 504),
+            ),
+            base=128,
+            scale=-1,
+        ),
+    ),
 }
 
 

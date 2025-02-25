@@ -32,9 +32,11 @@ mkdir -p $OUTPUT_PATH
 
 ns_methods=(
     "muon"
+    "muon_OG"
     "k4.6"
     "k2.3"
-    "muon_OG"
+    "k10-b0.01"
+    "k20-b0.01"
 )
 ns_name=${ns_methods[-1]}
 lr=1e-3

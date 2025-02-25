@@ -111,9 +111,9 @@ def optimize_w(
 
 def main():
     BASE = 128
-    N = 2
+    N = 4
     w_seq = jnp.array([[3.5, -6.04444444444, 2.84444444444]] * N)
-    k, b = (2.3, 0)
+    k, b = (20, 0.01)
     n = 10000
     verbose = True
     for i in range(5):
