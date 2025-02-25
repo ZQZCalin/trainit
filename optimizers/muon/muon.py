@@ -630,9 +630,10 @@ NEWTON_SCHULZ_CONFIGS = {
 }
 
 
-@partial(jax.jit, static_argnames=("configs",))
+@partial(jax.jit, static_argnames=("configs", "ord"))
 def stable_newton_schulz(
         G: jnp.ndarray,
+        ord: int | str | None = None,
         configs: Tuple[NewtonSchulzConfig, ...] | None = None,
 ):
     """Stabilized newton-schulz approximation.
@@ -646,7 +647,7 @@ def stable_newton_schulz(
     X = G
     if G.shape[0] > G.shape[1]:
         X = X.T
-    X /= (jnp.linalg.norm(X, ord="fro") + eps)
+    X /= (jnp.linalg.norm(X, ord=ord) + eps)
 
     def apply_config(X, conf):
         const = jnp.array(conf.const, dtype=jnp.bfloat16)
@@ -675,6 +676,7 @@ def muon_stable(
         nesterov: bool = True,
         scale_rms: bool = True,
         ns_name: str = "",
+        ns_normalize_ord: int | str | None = None,
         adam_lr: optax.ScalarOrSchedule = 0.03,
         adam_beta1: float = 0.95,
         adam_beta2: float = 0.95,
@@ -691,7 +693,8 @@ def muon_stable(
         raise ValueError(f"cannot find ns_name='{ns_name}' in NEWTON_SCHULZ_CONSTANTS.")
         
     def normalize(G):
-        G = stable_newton_schulz(G, configs=tuple(NEWTON_SCHULZ_CONFIGS[ns_name]))
+        G = stable_newton_schulz(
+            G, ord=ns_normalize_ord, configs=tuple(NEWTON_SCHULZ_CONFIGS[ns_name]))
         if scale_rms:
             # explicit RMS normalization
             G = G * (G.shape[0]*G.shape[1])**0.5 / jnp.linalg.norm(G)

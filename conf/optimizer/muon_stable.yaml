@@ -11,6 +11,7 @@ config:
   nesterov: True
   scale_rms: True
   ns_name: ""
+  ns_normalize_ord: "fro"
 
   adam_beta1: 0.95
   adam_beta2: 0.95

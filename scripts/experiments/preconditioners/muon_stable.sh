@@ -38,12 +38,14 @@ ns_methods=(
     "k10-b0.01"
     "k20-b0.01"
 )
-ns_name=${ns_methods[-1]}
+ns_name=${ns_methods[0]}
 lr=1e-3
 scale_rms=True
 # lr=0.03
 # scale_rms=False
-name="muon_stable-${ns_name}_rms-${scale_rms}_lr${lr}"
+# name="muon_stable-${ns_name}_rms-${scale_rms}_lr${lr}"
+# ns_normalize_ord=2
+# name="muon-stable-${ns_name}_ns-spectral_rms-${scale_rms}_lr${lr}"
 
 
 # ========================================================================
@@ -83,6 +85,7 @@ optimizer_keys=(
     "inverse_k"
     "scale_rms"
     "ns_name"
+    "ns_normalize_ord"
     "adam_beta1"
     "adam_beta2"
     "adam_eps"
