@@ -367,6 +367,7 @@ def muon_inverse(
         nesterov: bool = True,
         inverse_k: float = 0.693,
         ns_steps: int = 6,
+        beta2: float = 0.0,
         scale_rms: bool = False,
         adam_lr: optax.ScalarOrSchedule = 3e-4,
         adam_beta1: float = 0.95,
@@ -390,8 +391,12 @@ def muon_inverse(
             # default muon scaling
             G = G * max(1, G.shape[0]/G.shape[1])**0.5
         return G
+    if beta2:
+        base = optax.scale_by_adam(b1=momentum, b2=beta2, nesterov=nesterov)
+    else:
+        base = optax.trace(decay=momentum, nesterov=nesterov)
     optim_muon = optax.chain(
-        optax.trace(decay=momentum, nesterov=nesterov),
+        base,
         scale_by_function(normalize),
         optax.scale_by_learning_rate(learning_rate),
     )

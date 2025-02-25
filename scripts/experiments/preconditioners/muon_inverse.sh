@@ -64,6 +64,12 @@ mkdir -p $OUTPUT_PATH
 # lr=1e-3
 # name="muonrms_inverse-k${inverse_k}_lr${lr}"
 
+# scale_rms=True
+# inverse_k=2.3
+# beta2_list=(0.95 0.99 0.9)
+# beta2=${beta2_list[2]}
+# lr=1e-3
+# name="precmuonrms_inverse-k${inverse_k}_beta2${beta2}_lr${lr}"
 
 # ========================================================================
 # Submit function.
@@ -102,6 +108,7 @@ optimizer_keys=(
     "inverse_k"
     "scale_rms"
     "ns_steps"
+    "beta2"
     "adam_beta1"
     "adam_beta2"
     "adam_eps"
