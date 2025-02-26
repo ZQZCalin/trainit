@@ -726,3 +726,153 @@ def muon_stable(
     }
     optim = multi_transform(transforms, label_params)
     return optim
+
+# The whole point of the following is to define an efficient
+# yet simple-to-construct wrapper to apply chains of conditionings. 
+class ConditionerInitFn(Protocol):
+    def __call__(self, params: optax.Params) -> optax.OptState:
+        """The `init` function."""
+
+class ConditionerUpdateFn(Protocol):
+    def __call__(
+            self, 
+            updates: optax.Updates, 
+            state: optax.OptState,
+            params: optax.Params | None = None
+    ) -> optax.OptState:
+        """The `update` function."""
+
+class ConditionerConditionFn(Protocol):
+    def __call__(
+            self,
+            updates: optax.Updates,
+            state: optax.OptState,
+            params: optax.Params | None = None
+    ) -> optax.OptState:
+        """The `condition` function."""
+
+class ConditionerTransformation(NamedTuple):
+    """A light modification of optax.GradientTransformation.
+    
+    We assume a conditioner has orthogonal steps of updating
+    state and applying conditioning.
+    """
+    init: ConditionerInitFn
+    update: ConditionerUpdateFn
+    condition: ConditionerConditionFn
+
+
+class ApplyConditioningState(NamedTuple):
+    """apply_conditioning state."""
+    cond_state: optax.OptState
+    inner_states: Tuple[optax.OptState]
+
+
+def apply_conditioning(
+        *args: optax.GradientTransformation | ConditionerTransformation
+) -> optax.GradientTransformation:
+    """A custom `optax.chain` that chains conditioners and optimizers.
+    
+    Unlike `optax.chain`, it uses one single state for all preconditioners.
+    Therefore, we assume all preconditioners share states (e.g., same beta).
+    Otherwise, just simply use `optax.chain`.
+    """
+    if not any(isinstance(tx, ConditionerTransformation) for tx in args):
+        return optax.chain(*args)
+    if all(isinstance(tx, ConditionerTransformation) for tx in args):
+        raise TypeError(f"apply_conditioning cannot have all args as ConditionerTransformation.")
+
+    init_fns = [tx.init for tx in args if isinstance(tx, optax.GradientTransformation)]
+    conditioners = [tx for tx in args if isinstance(tx, ConditionerTransformation)]
+    cond_init_fn, cond_update_fn = conditioners[0].init, conditioners[0].update
+    num_inners = len(init_fns)
+
+    def init_fn(params):
+        return ApplyConditioningState(
+            cond_state=cond_init_fn(params),
+            inner_states=tuple(fn(params) for fn in init_fns),
+        )
+    
+    def update_fn(updates, state, params):
+        """Update_fn works as follows:
+        
+        - Update preconditioner state, then iteratively:
+        - Apply preconditioning to updates, and
+        - call inner optimizer update.
+        """
+        cond_state = state.cond_state
+        inner_states = state.inner_states
+
+        assert len(inner_states) == num_inners
+
+        cond_state = cond_update_fn(updates, cond_state, params)
+        new_states = []
+        inner_idx = 0
+        for tx in args:
+            if isinstance(tx, optax.GradientTransformation):
+                updates, new_s = tx.update(updates, inner_states[inner_idx], params)
+                inner_idx += 1
+                new_states.append(new_s)
+            elif isinstance(tx, ConditionerTransformation):
+                updates = tx.condition(updates, cond_state, params)
+
+        return updates, ApplyConditioningState(
+            cond_state=cond_state,
+            inner_states=tuple(new_states),
+        )
+    return optax.GradientTransformation(init_fn, update_fn)
+
+
+# Below is an example of adamw-style preconditioner.
+class ConditionByGradSquaredState(NamedTuple):
+    """condition_by_grad_squared state."""
+    count: Array
+    grad_squared: optax.Updates
+
+
+def condition_by_grad_squared(
+        beta: float,
+        power: float = 0.5,
+        eps: float = 1e-8,
+        debias: bool = True,
+) -> ConditionerTransformation:
+    """Adamw-style conditioner."""
+    def init_fn(params):
+        return ConditionByGradSquaredState(
+            count=jnp.zeros([], dtype=jnp.int32),
+            grad_squared=tree_utils.zeros_like(params),
+        )
+    
+    def update_fn(updates, state, params=None):
+        del params
+        count_inc = optax.safe_int32_increment(state.count)
+        grad_squared = jtu.tree_map(
+            lambda v, g: v*beta + (1-beta)*g**2, state.grad_squared, updates)
+        return ConditionByGradSquaredState(
+            count=count_inc,
+            grad_squared=grad_squared,
+        )
+    
+    if power == 0.0:
+        _apply_condition = lambda u, v: u
+    elif power == 0.5:
+        _apply_condition = lambda u, v: u / (jnp.sqrt(v) + eps)
+    elif power == 0.25:
+        _apply_condition = lambda u, v: u / (jnp.sqrt(jnp.sqrt(v)) + eps)
+    else:
+        _apply_condition = lambda u, v: u / (jnp.power(v, power) + eps)
+
+    if debias:
+        _bias_correction = lambda v, t: v / (1 - beta**t)
+    else:
+        _bias_correction = lambda v, t: v
+
+    def condition_fn(updates, state, params=None):
+        del params
+        grad_squared = jtu.tree_map(
+            lambda v: _bias_correction(v, state.count), 
+            state.grad_squared)
+        updates = jtu.tree_map(_apply_condition, updates, grad_squared)
+        return updates
+
+    return ConditionerTransformation(init_fn, update_fn, condition_fn)
