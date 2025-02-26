@@ -12,7 +12,7 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 import optax
 
-from typing import NamedTuple, List, Tuple
+from typing import NamedTuple, List, Tuple, Callable, Protocol
 from jaxtyping import Array, PyTree
 from functools import partial
 import warnings
@@ -680,13 +680,24 @@ def muon_stable(
         momentum: float = 0.95,
         nesterov: bool = True,
         scale_rms: bool = True,
+        # Newton-schulz specifications
         ns_name: str = "",
         ns_normalize_ord: int | str | None = None,
+        # Conditioning configs
+        beta2: float = 0.0,
+        precond_power: float = 0.5,
+        precond_eps: float = 1e-8,
+        precond_debias: bool = True,
+        postcond_power: float = 0.0,
+        postcond_eps: float = 1e-8,
+        postcond_debias: bool = True,
+        # Adam backup configs
         adam_lr: optax.ScalarOrSchedule = 0.03,
         adam_beta1: float = 0.95,
         adam_beta2: float = 0.95,
         adam_eps: float = 1e-8,
         adam_wd: float = 0.0,
+        *,
         label_params: LabelParamsFn | None = None
 ) -> optax.GradientTransformation:
     """Muon with general and stabilized Newton-Schulz."""
@@ -696,20 +707,22 @@ def muon_stable(
         ns_name = "muon"
     if ns_name not in NEWTON_SCHULZ_CONFIGS:
         raise ValueError(f"cannot find ns_name='{ns_name}' in NEWTON_SCHULZ_CONSTANTS.")
-        
-    def normalize(G):
-        G = stable_newton_schulz(
-            G, ord=ns_normalize_ord, configs=tuple(NEWTON_SCHULZ_CONFIGS[ns_name]))
-        if scale_rms:
-            # explicit RMS normalization
-            G = G * (G.shape[0]*G.shape[1])**0.5 / jnp.linalg.norm(G)
-        else:
-            # default muon scaling
-            G = G * max(1, G.shape[0]/G.shape[1])**0.5
-        return G
-    optim_muon = optax.chain(
+    
+    normalize_fn = partial(stable_newton_schulz, 
+                           ord=ns_normalize_ord, 
+                           configs=tuple(NEWTON_SCHULZ_CONFIGS[ns_name]))
+    # Explicit RMS norm normalization.
+    update_scale_rms = lambda G: G * (G.shape[0]*G.shape[1])**0.5 / jnp.linalg.norm(G)
+    # Default muon dimension correction.
+    update_scale_dim = lambda G: G * max(1, G.shape[0]/G.shape[1])**0.5
+    update_scale_fn = update_scale_rms if scale_rms else update_scale_dim
+
+    optim_muon = apply_conditioning(
         optax.trace(decay=momentum, nesterov=nesterov),
-        scale_by_function(normalize),
+        condition_by_grad_squared(beta2, power=precond_power, eps=precond_eps, debias=precond_debias),
+        scale_by_function(normalize_fn),
+        condition_by_grad_squared(beta2, power=postcond_power, eps=postcond_eps, debias=postcond_debias),
+        scale_by_function(update_scale_fn),
         optax.scale_by_learning_rate(learning_rate),
     )
     optim_adam = adamw(
@@ -726,6 +739,7 @@ def muon_stable(
     }
     optim = multi_transform(transforms, label_params)
     return optim
+
 
 # The whole point of the following is to define an efficient
 # yet simple-to-construct wrapper to apply chains of conditionings. 

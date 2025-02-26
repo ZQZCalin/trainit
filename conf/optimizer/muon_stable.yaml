@@ -10,8 +10,16 @@ config:
   momentum: 0.95
   nesterov: True
   scale_rms: True
-  ns_name: ""
-  ns_normalize_ord: "fro"
+  ns_name: ""             # use "muon_OG" for default muon Newton-Schulz
+  ns_normalize_ord: "fro" # change to 2 for spectral norm pre-normalization before NS
+
+  beta2: 0.0
+  precond_power: 0.5
+  precond_eps: 1e-8
+  precond_debias: False   # with default scale_rms, debias makes no difference
+  postcond_power: 0.0
+  postcond_eps: 1e-8
+  postcond_debias: False
 
   adam_beta1: 0.95
   adam_beta2: 0.95

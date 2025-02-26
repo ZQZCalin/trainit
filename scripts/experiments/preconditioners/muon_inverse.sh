@@ -67,8 +67,9 @@ mkdir -p $OUTPUT_PATH
 # scale_rms=True
 # inverse_k=2.3
 # beta2_list=(0.95 0.99 0.9)
-# beta2=${beta2_list[2]}
-# lr=1e-3
+# beta2=${beta2_list[0]}
+# lrs=(1e-3 3e-3 3e-4)
+# lr=${lrs[2]}
 # name="precmuonrms_inverse-k${inverse_k}_beta2${beta2}_lr${lr}"
 
 # ========================================================================
