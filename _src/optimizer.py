@@ -419,6 +419,23 @@ def init_optimizer(
             **OmegaConf.to_container(config.config)
         )
     
+    def init_adamw_gpt(config: DictConfig):
+        muon_lr_config = OmegaConf.create(config.lr_config)
+        muon_lr_config.lr = config.muon_lr
+        muon_lr = wrap_scheduler(
+            init_schedule(muon_lr_config), wandb_log=wandb_log)
+        adam_lr_config = OmegaConf.create(config.lr_config)
+        adam_lr_config.lr = config.adam_lr
+        adam_lr = wrap_scheduler(
+            init_schedule(adam_lr_config), wandb_log=wandb_log, schedule_title="adam_schedule")
+        return optimizers.adamw_gpt(
+            learning_rate=muon_lr,
+            adam_lr=adam_lr,
+            **OmegaConf.to_container(config.config),
+            wandb_logger=wandb_log if config.visualize else None,
+        )
+        
+    
     # Initialize base optimizer.
     name = config.optimizer.name
     opt_config = config.optimizer
@@ -458,12 +475,14 @@ def init_optimizer(
         optimizer = init_normalized_sgdm(opt_config)
     elif name == "muon_p":
         optimizer = init_muon_p(opt_config)
-    elif name =="muon_inverse":
+    elif name == "muon_inverse":
         optimizer = init_muon_inverse(opt_config)
-    elif name =="muon_inverse_ns":
+    elif name == "muon_inverse_ns":
         optimizer = init_muon_inverse_ns(opt_config)
-    elif name =="muon_stable":
+    elif name == "muon_stable":
         optimizer = init_muon_stable(opt_config)
+    elif name == "adamw_gpt":
+        optimizer = init_adamw_gpt(opt_config)
     else:
         raise ValueError(f"invalid config: optimizer.name = '{name}'.")
     print(f"\nLoaded optimizer {name}\n")

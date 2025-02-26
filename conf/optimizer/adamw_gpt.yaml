@@ -1,0 +1,17 @@
+name: adamw_gpt
+defaults:
+  - lr_config: linear
+lr_config:
+  lr: 1.0
+
+muon_lr: 1e-3
+adam_lr: 0.03
+
+visualize: true
+
+config:
+  beta1: 0.95
+  beta2: 0.95
+  eps: 1e-8
+  nesterov: true
+  weight_decay: 0.0

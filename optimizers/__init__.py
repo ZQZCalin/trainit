@@ -47,6 +47,6 @@ from optimizers.preconditioners.combine import (
 )
 from optimizers.preconditioners.normalized_sgdm import normalized_sgdm
 from optimizers.optim_test import test_optimizer
-from optimizers.test.adamw import (
-    adamw_visualize
+from optimizers.visualize.adamw import (
+    adamw_gpt,
 )

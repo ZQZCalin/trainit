@@ -12,9 +12,6 @@ import warnings
 
 from utils import tree_utils
 from optimizers.combine import multi_transform
-from optimizers.schedule import get_current_lr
-from optimizers.muon.base import newton_schulz, LabelParamsFn, scale_by_offset
-from optimizers.muon.mango import normalize_with_grad_squared, scale_by_function
 
 
 class VisualizeRmsState(NamedTuple):
@@ -28,6 +25,9 @@ def visualize_rms(
     
     Does not affect updates.
     """
+    if not wandb_logger:
+        return optax.identity()
+    
     def parse_path(path):
         parts = []
         for part in path:
@@ -54,26 +54,58 @@ def visualize_rms(
         return VisualizeRmsState()
     
     def update_fn(updates, state=None, params=None):
-        if wandb_logger is not None:
-            log_norm(updates, prefix="update_RMS")
+        log_norm(updates, prefix="update_RMS")
         return updates, VisualizeRmsState()
     
     return optax.GradientTransformation(init_fn, update_fn)
 
 
-def adamw_visualize(
+def adamw_gpt(
         learning_rate: optax.ScalarOrSchedule,
+        adam_lr: optax.ScalarOrSchedule | None = None,
         beta1: float = 0.9,
         beta2: float = 0.999,
         eps: float = 1e-8,
         nesterov: bool = False,
         weight_decay: float = 0.0,
+        *,
         wandb_logger: Any | None = None,
 ) -> optax.GradientTransformation:
+    """Adam, but with extra layer of visualize for update RMS norm.
+    Also, partitions muon part and adam part separately with different lr.
+    """
+    if adam_lr is None:
+        adam_lr = learning_rate
+
+    base_label = "muon"
+    adam_label = "adam"
+
+    def params_label(params):
+        def parse_path(path, p):
+            parts = [part.name for part in path if isinstance(part, jtu.GetAttrKey)]
+            # Detect embedding layers and head layers
+            if "token_embedding" in parts or "position_embedding" in parts:
+                return adam_label
+            if "head" in parts:
+                return adam_label
+            if p.ndim == 1:
+                return adam_label
+            if p.ndim == 2:
+                return base_label
+            raise ValueError(f"cannot categorize parameter: {p}")
+        return jtu.tree_map_with_path(parse_path, params) 
+    
     return optax.chain(
-        optax.scale_by_adam(
-            b1=beta1, b2=beta2, eps=eps, nesterov=nesterov),
+        multi_transform({
+            base_label: optax.scale_by_adam(
+                b1=beta1, b2=beta2, eps=eps, nesterov=nesterov),
+            adam_label: optax.scale_by_adam(
+                b1=beta1, b2=beta2, eps=eps, nesterov=False),
+        }, params_label),
         visualize_rms(wandb_logger),
         optax.add_decayed_weights(weight_decay),
-        optax.scale_by_learning_rate(learning_rate),
+        multi_transform({
+            base_label: optax.scale_by_learning_rate(learning_rate),
+            adam_label: optax.scale_by_learning_rate(adam_lr),
+        }, params_label),
     )
