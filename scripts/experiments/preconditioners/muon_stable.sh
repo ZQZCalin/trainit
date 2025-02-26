@@ -47,15 +47,24 @@ mkdir -p $OUTPUT_PATH
 # # ns_normalize_ord=2
 # # name="muon-stable-${ns_name}_ns-spectral_rms-${scale_rms}_lr${lr}"
 
-ns_name="muon_OG"
-beta2=0.95
-precond_power=0.5
-postcond_power=0
-scale_rms=True
-lr=1e-3
+# ns_name="muon_OG"
+# beta2=0.95
+# precond_power=0.5
+# postcond_power=0
+# scale_rms=True
+# lr=1e-3
+# # scale_rms=False
+# # lr=0.03
+# name="muon_stable-${ns_name}_rms-${scale_rms}_p${precond_power}-${postcond_power}_lr${lr}"
+
+# ns_name="muon_OG"
+# beta2=0.95
+# precond_power=0.5
+# precond_debias=True
+# postcond_power=0
 # scale_rms=False
 # lr=0.03
-name="muon_stable-${ns_name}_rms-${scale_rms}_p${precond_power}-${postcond_power}_lr${lr}"
+# name="muon_stable_recovers_precmuon_baseline"
 
 # ========================================================================
 # Submit function.
