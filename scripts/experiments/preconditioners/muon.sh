@@ -40,10 +40,11 @@ mkdir -p $OUTPUT_PATH
 # adam_lr=0.03
 # name="muon_lr${lr}_adam-lr${adam_lr}"
 
-# lr=0.05 #0.03
+# lr=0.03
 # adam_lr=0.03
 # beta2=0.95
 # name="precmuon_lr${lr}_adam-lr${adam_lr}"
+# name="precmuon_lr${lr}_adam-lr${adam_lr}_nodebias"
 
 # lr=0.01 #0.03
 # adam_lr=0.03
@@ -184,29 +185,29 @@ for key in "${optimizer_keys[@]}"; do
     args+=( "$(parse "optimizer.${key}" "${key}")" )
 done
 
-python main.py ${args[@]}
-
-# job_output=$(qsub <<EOF
-# #!/bin/bash -l
-
-# #$ -pe omp 8
-# #$ -l gpus=1
-# #$ -l gpu_type=L40S     # Specifies the gpu type.
-# #$ -l h_rt=8:00:00      # Specifies the hard time limit for the job
-# #$ -N "$name".sh
-# #$ -o $OUTPUT_PATH/\$JOB_NAME.o\$JOB_ID     # Escape environment variables with \$
-# #$ -e $OUTPUT_PATH/\$JOB_NAME.e\$JOB_ID
-
-# sleep $(((RANDOM % 1000) / 100))   # Prevents simultaneous reads of loadit dataset
-
-# source activate_env.sh
 # python main.py ${args[@]}
-# EOF
-# )
 
-# # Save job id and associated name to local .txt
-# # This is extremely helpful to manage a bunch of experiments.
-# job_id=$(echo "$job_output" | awk '{print $3}')
-# echo "$(date '+%Y-%m-%d %H:%M:%S') job_id: ${job_id} || ${name}" >> "${OUTPUT_PATH}/job_list.txt"
+job_output=$(qsub <<EOF
+#!/bin/bash -l
 
-# echo "Submitted job: $name"
+#$ -pe omp 8
+#$ -l gpus=1
+#$ -l gpu_type=L40S     # Specifies the gpu type.
+#$ -l h_rt=8:00:00      # Specifies the hard time limit for the job
+#$ -N "$name".sh
+#$ -o $OUTPUT_PATH/\$JOB_NAME.o\$JOB_ID     # Escape environment variables with \$
+#$ -e $OUTPUT_PATH/\$JOB_NAME.e\$JOB_ID
+
+sleep $(((RANDOM % 1000) / 100))   # Prevents simultaneous reads of loadit dataset
+
+source activate_env.sh
+python main.py ${args[@]}
+EOF
+)
+
+# Save job id and associated name to local .txt
+# This is extremely helpful to manage a bunch of experiments.
+job_id=$(echo "$job_output" | awk '{print $3}')
+echo "$(date '+%Y-%m-%d %H:%M:%S') job_id: ${job_id} || ${name}" >> "${OUTPUT_PATH}/job_list.txt"
+
+echo "Submitted job: $name"
