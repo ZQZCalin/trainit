@@ -56,6 +56,9 @@ mkdir -p $OUTPUT_PATH
 # # scale_rms=False
 # # lr=0.03
 # name="muon_stable-${ns_name}_rms-${scale_rms}_p${precond_power}-${postcond_power}_lr${lr}"
+# # const=$warmup
+# # warmup=0
+# # name="muon_stable-${ns_name}_rms-${scale_rms}_p${precond_power}-${postcond_power}_lr${lr}_nowarmup1"
 
 # ns_name="muon_OG"
 # beta2=0.95
