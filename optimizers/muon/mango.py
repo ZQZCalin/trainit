@@ -853,3 +853,102 @@ def mango_v3(
     optimizer = multi_transform(transforms, param_labels)
 
     return optimizer
+
+
+class ScaleByMangoState(NamedTuple):
+    count: Array
+    momentum: optax.Updates
+    grad_squared: optax.Updates
+
+
+def scale_by_mango(
+        beta1: float = 0.95,
+        beta2: float = 0.95,
+        nesterov: bool = True,
+        normalize_fn: callable | None = None,
+        scale_rms: bool = True,
+        eps: float = 1e-8,
+        laprop: bool = False,
+        precond_power: float = 0.5,
+        postcond_power: float = 0.0,
+) -> optax.GradientTransformation:
+    def init_fn(params):
+        return ScaleByMangoState(
+            count=jnp.zeros([], dtype=jnp.int32),
+            momentum=tree_utils.zeros_like(params),
+            grad_squared=tree_utils.zeros_like(params) if beta2 else None,
+        )
+    
+    def jnp_pow(G, power):
+        if power == 0:
+            return G
+        if power == 0.5:
+            return jnp.sqrt(G)
+        if power == 0.25:
+            return jnp.sqrt(jnp.sqrt(G))
+        else:
+            return jnp.pow(G, power)
+        
+    def rms(G):
+        if G.ndim <= 1:
+            return jnp.linalg.norm(G, ord=2) / len(G)**0.5
+        if G.ndim == 2:
+            return jnp.linalg.norm(G, ord="fro") / (G.shape[0]*G.shape[1])**0.5
+    
+    def update_fn(updates, state, params=None):
+        del params
+        count = state.count
+        momentum = state.momentum
+        grad_squared = state.momentum
+
+        # 1. Update preconditioner.
+        if beta2:
+            grad_squared = jtu.tree_map(
+                lambda v, g: v*beta2 + (1-beta2)*g**2, 
+                grad_squared, updates
+            )
+
+        # [Optional] LaProp style pre-conditioning.
+        if beta2 and precond_power and laprop:
+            updates = jtu.tree_map(
+                lambda g, v: g / (jnp_pow(v, precond_power) + eps)
+            )
+        
+        # 2. Update momentum.
+        momentum = jtu.tree_map(
+            lambda m, g: m*beta1 + g,
+        )
+        if nesterov:
+            updates = jtu.tree_map(
+                lambda m, g: m*beta1 + g, momentum, updates)
+        else:
+            updates = momentum
+
+        # 3. Adam-style pre-conditioning.
+        if beta2 and precond_power and not laprop:
+            updates = jtu.tree_map(
+                lambda u, v: u / (jnp_pow(v, precond_power) + eps)
+            )
+
+        # 4. Apply normalization.
+        if normalize_fn:
+            updates = jtu.tree_map(normalize_fn, updates)
+        
+        # 5. Apply post-conditioning.
+        if beta2 and postcond_power:
+            updates = jtu.tree_map(
+                lambda u, v: u / (jnp_pow(v, postcond_power) + eps)
+            )
+        
+        # 6. Apply rms normalizaiton.
+        if scale_rms:
+            updates = jtu.tree_map(
+                lambda u: u / rms(u), updates
+            )
+
+        return updates, ScaleByMangoState(
+            count=optax.safe_int32_increment(count),
+            momentum=momentum,
+            grad_squared=grad_squared,
+        )
+    return optax.GradientTransformation(init_fn, update_fn)
