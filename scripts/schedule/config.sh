@@ -1,7 +1,7 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="linear_grid_trial1"
+NAME="linear_grid_trial1"                                   # CHANGE THIS every experiment
 DESC="
 Experiment description:
 
@@ -9,15 +9,14 @@ Use the grid i/(i+1) for i in [N] as the grid of next_lrs.
 Also use absolute epsilon value eps = 0 (greedy).
 Use 10 segments for convenience (so we don't need to force 
 first seg to 200 steps and divide the rest into n-1 pieces).
-* total_steps = 200 for testing.
-"
+"                                                           # CHANGE THIS every experiment
 
 # =========================================================
 # >>> GLOBAL VARIABLES
 # =========================================================
 
 # root working directory path
-BASE_PATH="/projectnb/aclab/qinziz/trainit"
+BASE_PATH="/projectnb/aclab/qinziz/trainit"                 # CHANGE THIS upon setup
 
 DATE=$(date +"%Y-%m-%d")
 
@@ -47,7 +46,7 @@ CLEAN_CHECKPOINTS=True
 MASTER_HOST=$(hostname -I | awk '{print $1}')
 
 # port number for communication
-PORT=51205
+PORT=51205                                                  # CHANGE THIS if you submit multiple master scripts at a time (not recommended)
 
 # backoff time (in seconds) between listener attempts
 LISTENER_BACKOFF=5
@@ -75,22 +74,24 @@ ENABLE_RETRY=true
 # =========================================================
 
 # maximum number of training steps
-TOTAL_STEPS=2000
+TOTAL_STEPS=2000                                            # CHANGE THIS if needed
 # TOTAL_STEPS=50      # testing
 
 # number of segments
-NUM_SEGMENTS=10
+# NUM_SEGMENTS=10
 # NUM_SEGMENTS=3      # testing
 
-# list of checkpoint iterations
-#   i. you can use evenly distributed segments by changing `num_segments`
-SEGMENTS=( $(seq 0 $((TOTAL_STEPS/NUM_SEGMENTS)) $TOTAL_STEPS) )
-SEGMENTS[-1]=$TOTAL_STEPS           # set last segment to TOTAL_STEPS
+# # list of checkpoint iterations
+# #   i. you can use evenly distributed segments by changing `num_segments`
+# SEGMENTS=( $(seq 0 $((TOTAL_STEPS/NUM_SEGMENTS)) $TOTAL_STEPS) )
+# SEGMENTS[-1]=$TOTAL_STEPS           # set last segment to TOTAL_STEPS
 
 #   ii. alternatively, you can customize unevenly distributed segments
-# SEGMENTS=(0 150 300 500 1000 1500 $TOTAL_STEPS)
+#       please make sure it always starts with (0 200 ...)
+#       below is an example of 3 segments (dividing the rest 1800 steps into 3 segs)
+SEGMENTS=(0 200 800 1400 $TOTAL_STEPS)                      # CHANGE THIS
 #       manually adapt NUM_SEGMENTS
-# NUM_SEGMENTS=$((${#SEGMENTS[@]} - 1))
+NUM_SEGMENTS=$((${#SEGMENTS[@]} - 1))
 
 
 # >>> Other training configs
@@ -112,7 +113,7 @@ NESTEROV=False
 # >>> Logging configs
 
 # wandb project name
-PROJECT="greedy_lr_schedule"
+PROJECT="greedy_lr_schedule"                                # CHANGE THIS if needed
 
 # log additional metrics to wandb
-LOG_CALLBACK_DATA=False      # we don't need to log that
+LOG_CALLBACK_DATA=False      # we don't need to log other metrics in this task

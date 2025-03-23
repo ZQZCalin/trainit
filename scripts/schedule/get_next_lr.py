@@ -26,11 +26,11 @@ EMA_WINDOW_SIZE = 10
 # >> Default lrs (first segment).
 DEFAULT_LR1 = 0.0
 DEFAULT_LR2_DICT = {
-    "log_grid": [1e0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5],    # default log grid
-    "baseline": [1e-3],                                 # hard code first segment to match baseline
-    "test": [0.1, 0.01],                                # for testing
+    "log_grid": [1e0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5],        # default log grid
+    "baseline": [1e-3],                                     # hard code first segment to match baseline
+    "test": [0.1, 0.01],                                    # for testing
 }
-DEFAULT_LR2 = DEFAULT_LR2_DICT["baseline"]              # YOU CAN CHANGE KEY FOR DIFFERENT INITIAL GRIDS
+DEFAULT_LR2 = DEFAULT_LR2_DICT["baseline"]                  # YOU CAN CHANGE KEY FOR DIFFERENT INITIAL GRIDS
 
 
 # >> Next lr methods.
@@ -39,8 +39,8 @@ NEXT_LR1_LIST = [
     "eps_greedy"
 ]
 NEXT_LR1 = NEXT_LR1_LIST[1]
-EPS_GREEDY_VAL = 0.0
-EPS_GREEDY_ABSOLUTE = True              # if true, use absolute eps; otherwise use relative eps
+EPS_GREEDY_VAL = 0.0                                        # CHANGE THIS
+EPS_GREEDY_ABSOLUTE = True                                  # CHANGE THIS; if true, use absolute eps, otherwise use relative eps
 
 NEXT_LR2_LIST = [
     "log",
@@ -49,8 +49,8 @@ NEXT_LR2_LIST = [
 NEXT_LR2 = NEXT_LR2_LIST[1]
 LOG_GRID_MULTI = 2
 LOG_GRID_SIZE = 2       # additional lrs on each side
-LINEAR_GRID_LOWER_SIZE = 10   # SHOULD BE EQUAL TO NUM_SEGS
-LINEAR_GRID_UPPER_COEF = [1, 1.25, 1.5, 2]
+LINEAR_GRID_LOWER_SIZE = 10                                 # CHANGE THIS; should be equal to num_segs
+LINEAR_GRID_UPPER_COEF = [1, 1.25, 1.5, 2]                  # CHANGE THIS if needed
 # LINEAR_GRID_LOWER_SIZE = 3      # testing
 # LINEAR_GRID_UPPER_COEF = [1, 2] # testing
 
