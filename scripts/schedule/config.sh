@@ -1,7 +1,7 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="linear_grid_test3"
+NAME="linear_grid_trial1"
 DESC="
 Experiment description:
 
@@ -75,12 +75,12 @@ ENABLE_RETRY=true
 # =========================================================
 
 # maximum number of training steps
-# TOTAL_STEPS=2000
-TOTAL_STEPS=50      # testing
+TOTAL_STEPS=2000
+# TOTAL_STEPS=50      # testing
 
 # number of segments
-# NUM_SEGMENTS=10
-NUM_SEGMENTS=3      # testing
+NUM_SEGMENTS=10
+# NUM_SEGMENTS=3      # testing
 
 # list of checkpoint iterations
 #   i. you can use evenly distributed segments by changing `num_segments`

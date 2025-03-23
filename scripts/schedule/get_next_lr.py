@@ -51,6 +51,8 @@ LOG_GRID_MULTI = 2
 LOG_GRID_SIZE = 2       # additional lrs on each side
 LINEAR_GRID_LOWER_SIZE = 10   # SHOULD BE EQUAL TO NUM_SEGS
 LINEAR_GRID_UPPER_COEF = [1, 1.25, 1.5, 2]
+# LINEAR_GRID_LOWER_SIZE = 3      # testing
+# LINEAR_GRID_UPPER_COEF = [1, 2] # testing
 
 
 # >> Other global variables
@@ -239,7 +241,7 @@ def main():
             lr, last_loss = get_run_info(run)
             # Add a safe-check: check if checkpoint_dir contains
             # any .ckpt file
-            ckpt_path = os.path.join(args.checkpoint_dir, f"lr2:{lr:.1e}")
+            ckpt_path = os.path.join(args.checkpoint_dir, f"lr2:{lr:.2e}")
             if any(filename.endswith(".ckpt") for filename in os.listdir(ckpt_path)):
                 arr.append(get_run_info(run))
         except CommError as e:

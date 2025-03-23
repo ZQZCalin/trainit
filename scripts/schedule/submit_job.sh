@@ -6,6 +6,7 @@ submit_job() {
     local lr1="$1"
     local lr2="$2"
     local seg="$3"                   # index-0 segment number
+    local resubmit="$4"
 
     local seg_next=$((seg + 1))
     local seg_prev=$((seg - 1))
@@ -14,21 +15,26 @@ submit_job() {
     local start_step=${SEGMENTS[$seg]}
     local end_step=${SEGMENTS[$seg_next]}
 
-    local job_name="seg${seg_print}_lr2_$(printf "%.1e" "$lr2")"
+    local job_name="seg${seg_print}_lr2_$(printf "%.2e" "$lr2")"
     local output_path="${SCC_OUTPUT_PATH}/seg${seg_print}"
     mkdir -p "$output_path"
 
     # Checkpoint variables
-    local save_path="${CHECKPOINT_PATH}/${start_step}-${end_step}/lr2:$(printf "%.1e" "$lr2")"
+    local save_path="${CHECKPOINT_PATH}/${start_step}-${end_step}/lr2:$(printf "%.2e" "$lr2")"
     if (( seg > 0 )); then
         start_step_prev=${SEGMENTS[$seg_prev]}
         load=True
-        load_path="${CHECKPOINT_PATH}/${start_step_prev}-${start_step}/lr2:$(printf "%.1e" "$lr1")"
+        load_path="${CHECKPOINT_PATH}/${start_step_prev}-${start_step}/lr2:$(printf "%.2e" "$lr1")"
         load_file="iter_${start_step}.ckpt"
     else
         load=False
         load_path=""
         load_file=""
+    fi
+
+    # Clear save path (resubmit only)
+    if [[ $resubmit = true && -d $save_path ]]; then
+        rm -rf $save_path
     fi
 
     # Generate random sleep time to prevent race conditions
@@ -61,8 +67,9 @@ echo "\$(date '+%Y-%m-%d %H:%M:%S') - Start training..."
 source activate_env.sh
 python main.py \
     logging.wandb_project=$PROJECT \
-    logging.wandb_name="$NAME_\$JOB_NAME" \
+    logging.wandb_name=\$JOB_NAME \
     logging.wandb_runid=\$JOB_ID \
+    logging.wandb_expname=$NAME \
     logging.log_callback_data=$LOG_CALLBACK_DATA \
     train.max_steps=$TOTAL_STEPS \
     dataset.total_batch_size=$BATCH_SIZE \

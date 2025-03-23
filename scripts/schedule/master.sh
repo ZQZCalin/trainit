@@ -45,7 +45,7 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
     # (Optional) delete checkpoints in other runs
     if (( i > 0 )) && [[ $CLEAN_CHECKPOINTS ]]; then
         prev_checkpoint_path="${CHECKPOINT_PATH}/${SEGMENTS[$((i-1))]}-${SEGMENTS[$i]}"
-        keep_checkpoint="lr2:$(printf "%.1e" "$lr1")"
+        keep_checkpoint="lr2:$(printf "%.2e" "$lr1")"
         
         log_info "Master: cleaning checkpoints other than ${prev_checkpoint_path}/${keep_checkpoint}"
         for sub in "$prev_checkpoint_path"/*; do
@@ -84,7 +84,7 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
     while (( received_acks < expected_acks )); do
         # Parallel submit all jobs
         for lr2 in "${job_queue[@]}"; do
-            submit_job "$lr1" "$lr2" "$i"
+            submit_job "$lr1" "$lr2" "$i" false
         done
         job_queue=()    # make sure only submit once
 
@@ -125,7 +125,8 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
             job_retries[$lr2]=$(( job_retries[$lr2] + 1 ))
             # Re-submit failed jobs if within MAX_RETRIES
             if (( job_retries[$lr2] <= MAX_RETRIES )); then
-                submit_job $lr1 $lr2 $seg
+                # Clean up the checkpoint subdir before resubmitting
+                submit_job $lr1 $lr2 $seg true
             else
                 log_info "(warning) Listener: Segment ${seg} lr1=${lr1} lr2=${lr2} failed ${job_retries[$lr2]} times."
                 ((received_acks++))
