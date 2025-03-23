@@ -40,6 +40,7 @@ submit_job() {
 #!/bin/bash -l
 
 #$ -pe omp 8
+#$ -l h="!scc-506"          # Blacklists bad nodes. Hopefully this should fix the infinite relaunching issue.
 #$ -l gpus=1
 #$ -l gpu_type=$GPU_TYPE
 #$ -l h_rt=$GPU_HOUR

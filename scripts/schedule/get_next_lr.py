@@ -14,24 +14,43 @@ from typing import Any
 import os
 
 
+# =========================================================
+# >>> CONFIGS OF LR MECHANISMS
+# =========================================================
+
 # >> Type of smoothing. you can implement your own way of smoothing.
 SMOOTHING = "EMA"
 EMA_WINDOW_SIZE = 10
 
 
-# >> Default lrs.
+# >> Default lrs (first segment).
 DEFAULT_LR1 = 0.0
-DEFAULT_LR2 = [1e0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5]
-# DEFAULT_LR2 = [0.1, 0.01]     # for testing
+DEFAULT_LR2_DICT = {
+    "log_grid": [1e0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5],    # default log grid
+    "baseline": [1e-3],                                 # hard code first segment to match baseline
+    "test": [0.1, 0.01],                                # for testing
+}
+DEFAULT_LR2 = DEFAULT_LR2_DICT["baseline"]              # YOU CAN CHANGE KEY FOR DIFFERENT INITIAL GRIDS
 
 
 # >> Next lr methods.
-NEXT_LR1 = "eps_greedy"
-EPS_GREEDY_VAL = 0.07
+NEXT_LR1_LIST = [
+    "greedy",
+    "eps_greedy"
+]
+NEXT_LR1 = NEXT_LR1_LIST[1]
+EPS_GREEDY_VAL = 0.0
+EPS_GREEDY_ABSOLUTE = True              # if true, use absolute eps; otherwise use relative eps
 
-NEXT_LR2 = "log"
+NEXT_LR2_LIST = [
+    "log",
+    "linear",
+]
+NEXT_LR2 = NEXT_LR2_LIST[1]
 LOG_GRID_MULTI = 2
 LOG_GRID_SIZE = 2       # additional lrs on each side
+LINEAR_GRID_LOWER_SIZE = 10   # SHOULD BE EQUAL TO NUM_SEGS
+LINEAR_GRID_UPPER_COEF = [1, 1.25, 1.5, 2]
 
 
 # >> Other global variables
@@ -81,7 +100,11 @@ def greedy_lr1(arr: np.ndarray) -> float:
 def eps_greedy_lr1(arr: np.ndarray) -> float:
     """Returns largest lr such that loss <= loss_min + eps."""
     loss_min = np.min(arr[:, 1])
-    arr_filtered = arr[arr[:, 1] <= loss_min + EPS_GREEDY_VAL]
+    if EPS_GREEDY_ABSOLUTE:
+        threshold = loss_min + EPS_GREEDY_VAL
+    else:
+        threshold = loss_min * (1 + EPS_GREEDY_VAL)
+    arr_filtered = arr[arr[:, 1] <= threshold]
     return np.max(arr_filtered[:, 0])
 
 
@@ -114,6 +137,17 @@ def loggrid_lr2(val: float) -> list:
         lr /= LOG_GRID_MULTI
         res.append(lr)
     return sorted(res)
+
+
+def linear_grid_lr2(val: float) -> list:
+    """linear grid of form i/(i+1)."""
+    if val == 0:
+        # Edge case: return a log grid.
+        return [0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0]
+    
+    coefs = [i/(i+1) for i in range(LINEAR_GRID_LOWER_SIZE)]
+    coefs += LINEAR_GRID_UPPER_COEF
+    return sorted([val * coef for coef in coefs])
 
 
 # =========================================================
@@ -166,6 +200,8 @@ def get_next_lrs(arr: np.ndarray) -> tuple[float, list]:
     # Get lr2.
     if NEXT_LR2 == "log":
         lr2_candidates = loggrid_lr2(lr1)
+    if NEXT_LR2 == "linear":
+        lr2_candidates = linear_grid_lr2(lr1)
     # Add your customized methods below.
     else:
         raise ValueError(f"unsupport lr2 mechanism = '{NEXT_LR2}'.")

@@ -1,12 +1,15 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="eps_greedy_0.07"
+NAME="linear_grid_test3"
 DESC="
 Experiment description:
 
-In progress of binary search for an optimal epsilon.
-Epsilon-greedy lr with eps=0.07.
+Use the grid i/(i+1) for i in [N] as the grid of next_lrs.
+Also use absolute epsilon value eps = 0 (greedy).
+Use 10 segments for convenience (so we don't need to force 
+first seg to 200 steps and divide the rest into n-1 pieces).
+* total_steps = 200 for testing.
 "
 
 # =========================================================
@@ -72,10 +75,12 @@ ENABLE_RETRY=true
 # =========================================================
 
 # maximum number of training steps
-TOTAL_STEPS=2000
+# TOTAL_STEPS=2000
+TOTAL_STEPS=50      # testing
 
 # number of segments
-NUM_SEGMENTS=10
+# NUM_SEGMENTS=10
+NUM_SEGMENTS=3      # testing
 
 # list of checkpoint iterations
 #   i. you can use evenly distributed segments by changing `num_segments`
