@@ -115,4 +115,4 @@ NESTEROV=False
 PROJECT="greedy_lr_schedule"
 
 # log additional metrics to wandb
-LOG_CALLBACK_DATA=True
+LOG_CALLBACK_DATA=False      # we don't need to log that
