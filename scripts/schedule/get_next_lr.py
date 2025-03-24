@@ -238,12 +238,8 @@ def main():
         # Added an error catcher for any failed runs
         try:
             run = api.run(f"{entity}/{project}/{run_id}")
-            lr, last_loss = get_run_info(run)
-            # Add a safe-check: check if checkpoint_dir contains
-            # any .ckpt file
-            ckpt_path = os.path.join(args.checkpoint_dir, f"lr2:{lr:.2e}")
-            if any(filename.endswith(".ckpt") for filename in os.listdir(ckpt_path)):
-                arr.append(get_run_info(run))
+            ckpt_path = run.config["checkpoint"]["save_path"]
+            if os.path.isdir(ckpt_path) and any(filename.endswith(".ckpt") for filename in os.listdir(ckpt_path)):
         except CommError as e:
             logging.info(f"- Update: failed to fetch run {run_id}.")
             logging.error(f"Failed to fetch run {run_id}:\n{e}")
