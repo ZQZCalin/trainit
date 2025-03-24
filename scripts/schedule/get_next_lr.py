@@ -39,8 +39,8 @@ NEXT_LR1_LIST = [
     "eps_greedy"
 ]
 NEXT_LR1 = NEXT_LR1_LIST[1]
-EPS_GREEDY_VAL = 0.0                                        # CHANGE THIS
-EPS_GREEDY_ABSOLUTE = True                                  # CHANGE THIS; if true, use absolute eps, otherwise use relative eps
+EPS_GREEDY_VAL = 0.02                                       # CHANGE THIS
+EPS_GREEDY_ABSOLUTE = False                                 # CHANGE THIS; if true, use absolute eps, otherwise use relative eps
 
 NEXT_LR2_LIST = [
     "log",
@@ -99,13 +99,13 @@ def greedy_lr1(arr: np.ndarray) -> float:
     return arr[i, 0]
 
 
-def eps_greedy_lr1(arr: np.ndarray) -> float:
+def eps_greedy_lr1(arr: np.ndarray, initial_loss: float | None = None) -> float:
     """Returns largest lr such that loss <= loss_min + eps."""
     loss_min = np.min(arr[:, 1])
     if EPS_GREEDY_ABSOLUTE:
         threshold = loss_min + EPS_GREEDY_VAL
     else:
-        threshold = loss_min * (1 + EPS_GREEDY_VAL)
+        threshold = loss_min + EPS_GREEDY_VAL * abs(initial_loss - loss_min)
     arr_filtered = arr[arr[:, 1] <= threshold]
     return np.max(arr_filtered[:, 0])
 
@@ -172,29 +172,29 @@ def get_run_info(run: Any) -> tuple[float, float]:
     # Fetch last loss after smoothing
     history = run.scan_history(keys=["loss"])
     losses = [row["loss"] for row in history]
-    last_loss = smoothing(losses)[-1]
-
-    return lr2, last_loss
+    return lr2, smoothing(losses)
 
 
-def get_next_lrs(arr: np.ndarray) -> tuple[float, list]:
+def get_next_lrs(candidates: list) -> tuple[float, list]:
     """Wraps all lr methods.
     
     Args:
-        arr: [n, 2] array, each row is (lr2, last_loss)
+        candidates: list of tuples (lr2, smoothed_losses)
     
     Returns:
         A tuple of (lr1, lr2_candidates)
     """
     # Special case: initialize when arr is empty.
-    if len(arr) == 0:
+    if len(candidates) == 0:
         return get_default_lr1(), get_default_lr2()
     
     # Get lr1.
+    arr = np.array([[lr, losses[-1]] for (lr, losses) in candidates])
     if NEXT_LR1 == "greedy":
         lr1 = greedy_lr1(arr)
     elif NEXT_LR1 == "eps_greedy":
-        lr1 = eps_greedy_lr1(arr)
+        _, losses = candidates[0]
+        lr1 = eps_greedy_lr1(arr, initial_loss=losses[0])
     # Add your customized methods below.
     else:
         raise ValueError(f"unsupport lr1 mechanism = '{NEXT_LR1}'.")
@@ -221,10 +221,6 @@ def main():
         nargs="*",
         type=int,
     )
-    parser.add_argument(
-        "--checkpoint_dir",
-        type=str,
-    )
     args = parser.parse_args()
 
     # Fetch losses using WandB API.
@@ -233,19 +229,21 @@ def main():
     entity = WANDB_ENTITY
     project = args.project
 
-    arr = []
+    candidates = []
     for run_id in args.job_ids:
         # Added an error catcher for any failed runs
         try:
             run = api.run(f"{entity}/{project}/{run_id}")
+            # Add a safe-check: check if ckpt_path contains any .ckpt file
             ckpt_path = run.config["checkpoint"]["save_path"]
             if os.path.isdir(ckpt_path) and any(filename.endswith(".ckpt") for filename in os.listdir(ckpt_path)):
+                candidates.append(get_run_info(run))
         except CommError as e:
             logging.info(f"- Update: failed to fetch run {run_id}.")
             logging.error(f"Failed to fetch run {run_id}:\n{e}")
 
     # Customized method to decide lrs in the next segment.
-    lr1, lr2_candidates = get_next_lrs(np.array(arr))
+    lr1, lr2_candidates = get_next_lrs(candidates)
 
     # Return data as a JSON string
     result = {"lr1": lr1, "lr2_candidates": lr2_candidates}

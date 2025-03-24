@@ -1,14 +1,13 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="linear_grid_trial1"                                   # CHANGE THIS every experiment
+NAME="linear_grid_abs-eps0.07"                                   # CHANGE THIS every experiment
 DESC="
 Experiment description:
 
-Use the grid i/(i+1) for i in [N] as the grid of next_lrs.
-Also use absolute epsilon value eps = 0 (greedy).
-Use 10 segments for convenience (so we don't need to force 
-first seg to 200 steps and divide the rest into n-1 pieces).
+- Linear grid i/(i+1)
+- absolute eps=0.07
+- 10 segs
 "                                                           # CHANGE THIS every experiment
 
 # =========================================================
@@ -78,20 +77,20 @@ TOTAL_STEPS=2000                                            # CHANGE THIS if nee
 # TOTAL_STEPS=50      # testing
 
 # number of segments
-# NUM_SEGMENTS=10
+NUM_SEGMENTS=10
 # NUM_SEGMENTS=3      # testing
 
-# # list of checkpoint iterations
-# #   i. you can use evenly distributed segments by changing `num_segments`
-# SEGMENTS=( $(seq 0 $((TOTAL_STEPS/NUM_SEGMENTS)) $TOTAL_STEPS) )
-# SEGMENTS[-1]=$TOTAL_STEPS           # set last segment to TOTAL_STEPS
+# list of checkpoint iterations
+#   i. you can use evenly distributed segments by changing `num_segments`
+SEGMENTS=( $(seq 0 $((TOTAL_STEPS/NUM_SEGMENTS)) $TOTAL_STEPS) )
+SEGMENTS[-1]=$TOTAL_STEPS           # set last segment to TOTAL_STEPS
 
-#   ii. alternatively, you can customize unevenly distributed segments
-#       please make sure it always starts with (0 200 ...)
-#       below is an example of 3 segments (dividing the rest 1800 steps into 3 segs)
-SEGMENTS=(0 200 800 1400 $TOTAL_STEPS)                      # CHANGE THIS
-#       manually adapt NUM_SEGMENTS
-NUM_SEGMENTS=$((${#SEGMENTS[@]} - 1))
+# #   ii. alternatively, you can customize unevenly distributed segments
+# #       please make sure it always starts with (0 200 ...)
+# #       below is an example of 3 segments (dividing the rest 1800 steps into 3 segs)
+# SEGMENTS=(0 200 800 1400 $TOTAL_STEPS)                      # CHANGE THIS
+# #       manually adapt NUM_SEGMENTS
+# NUM_SEGMENTS=$((${#SEGMENTS[@]} - 1))
 
 
 # >>> Other training configs
