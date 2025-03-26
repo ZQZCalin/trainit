@@ -1,12 +1,12 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="linear_grid_abs-eps0.07"                                   # CHANGE THIS every experiment
+NAME="linear_grid_abs-eps0.015"                                   # CHANGE THIS every experiment
 DESC="
 Experiment description:
 
 - Linear grid i/(i+1)
-- absolute eps=0.07
+- absolute eps=0.015: threshold = loss_min + eps
 - 10 segs
 "                                                           # CHANGE THIS every experiment
 

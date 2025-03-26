@@ -31,7 +31,7 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
 
     # Capture the JSON output from the Python script
     #   received_jobs is undefined in segment 1, thus triggers the default_lr functions
-    output=$(python3 scripts/schedule/get_next_lr.py --project $PROJECT --job_ids ${received_jobs[@]}")
+    output=$(python3 scripts/schedule/get_next_lr.py --project $PROJECT --job_ids ${received_jobs[@]})
 
     # Extract lr1
     lr1=$(echo "$output" | jq -r '.lr1')
@@ -141,3 +141,5 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
     # End of segment
     log_info "Master: Segment $((i+1))/${NUM_SEGMENTS} completed." && echo ""
 done
+
+# TODO: process the last segment; fetch optimal runs and locally merge into one plot of loss and lr schedule
