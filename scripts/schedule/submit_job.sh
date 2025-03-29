@@ -39,7 +39,7 @@ submit_job() {
 
     # Generate random sleep time to prevent race conditions
     local rand_int=$(((RANDOM % 6000)))
-    local sleep_time=$(echo "scale=3; ($rand_int/100)" | bc)
+    local sleep_time=$(echo "scale=3; ($rand_int/300)" | bc)
 
     # Submit training script
     qsub <<EOF
