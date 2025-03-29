@@ -1,13 +1,11 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="linear_grid_abs-eps0.015"                                   # CHANGE THIS every experiment
+NAME="test_new_script1"                                   # CHANGE THIS every experiment
 DESC="
 Experiment description:
 
-- Linear grid i/(i+1)
-- absolute eps=0.015: threshold = loss_min + eps
-- 10 segs
+testing new script: trial 1
 "                                                           # CHANGE THIS every experiment
 
 # =========================================================
@@ -74,11 +72,11 @@ ENABLE_RETRY=true
 
 # maximum number of training steps
 TOTAL_STEPS=2000                                            # CHANGE THIS if needed
-# TOTAL_STEPS=50      # testing
+TOTAL_STEPS=50      # testing
 
 # number of segments
 NUM_SEGMENTS=10
-# NUM_SEGMENTS=3      # testing
+NUM_SEGMENTS=3      # testing
 
 # list of checkpoint iterations
 #   i. you can use evenly distributed segments by changing `num_segments`
