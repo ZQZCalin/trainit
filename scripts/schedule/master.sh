@@ -12,50 +12,23 @@ source scripts/schedule/submit_job.sh
 # Create temporary folder for system files.
 mkdir -p "${SCC_OUTPUT_PATH}/tmp"
 
-
 echo "Running experiment ${NAME}." && echo "${DESC}"
-
 echo "master host ip: ${MASTER_HOST}; port number: ${PORT}"
+
+# Initialize learning rates.
+output=$(python3 scripts/schedule/get_next_lr.py \
+    --project $PROJECT --job_ids ${received_jobs[@]} --seg 0 --num_segs ${NUM_SEGMENTS})
+
+lr1=$(echo "$output" | jq -r '.lr1')
+mapfile -t lr2_candidates < <(echo "$output" | jq -r '.lr2_candidates[]')
+
+log_info "[Update]: Initialize lr1=${lr1}, lr2_candidates=(${lr2_candidates[@]}) for segment 1."
 
 # Master thread
 for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
     # Start of segment
     printf '=%.0s' {1..100} && printf "\n"
-    log_info "Master: Training segment $((i+1)) from iteration ${SEGMENTS[$i]} to ${SEGMENTS[$((i+1))]}..."
-
-
-    # ====================================================================
-    # Initialize / Update learning rates
-    # ====================================================================
-    log_info "Update: computing lr1 and lr2_candidates..."
-
-    # Capture the JSON output from the Python script
-    #   received_jobs is undefined in segment 1, thus triggers the default_lr functions
-    output=$(python3 scripts/schedule/get_next_lr.py --project $PROJECT --job_ids ${received_jobs[@]})
-
-    # Extract lr1
-    lr1=$(echo "$output" | jq -r '.lr1')
-
-    # Extract the list into a Bash array
-    # This uses `jq` to output each element on a new line, then reads them into an array
-    mapfile -t lr2_candidates < <(echo "$output" | jq -r '.lr2_candidates[]')
-
-    log_info "Update: lr1=${lr1}, lr2_candidates=(${lr2_candidates[@]}) for segment $((i+1))."
-
-    # (Optional) delete checkpoints in other runs
-    if (( i > 0 )) && [[ $CLEAN_CHECKPOINTS ]]; then
-        prev_checkpoint_path="${CHECKPOINT_PATH}/${SEGMENTS[$((i-1))]}-${SEGMENTS[$i]}"
-        keep_checkpoint="lr2:$(printf "%.2e" "$lr1")"
-        
-        log_info "Master: cleaning checkpoints other than ${prev_checkpoint_path}/${keep_checkpoint}"
-        for sub in "$prev_checkpoint_path"/*; do
-            # Check if it's a directory and not the one we want to keep
-            if [[ -d "$sub" && "$(basename "$sub")" != "$keep_checkpoint" ]]; then
-                rm -rf "$sub"
-            fi
-        done
-    fi
-
+    log_info "[Master]: Training segment $((i+1)) from iteration ${SEGMENTS[$i]} to ${SEGMENTS[$((i+1))]}..."
 
     # ====================================================================
     # Submit GPU jobs and track with a listener
@@ -66,7 +39,7 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
     expected_acks=${#lr2_candidates[@]}
     # expected_acks=1     # uncomment for test purpose
 
-    log_info "Listener: Waiting for ${expected_acks} ACKs on port ${PORT}..."
+    log_info "[Listener]: Waiting for ${expected_acks} ACKs on port ${PORT}..."
 
     received_acks=0
     received_jobs=()
@@ -92,7 +65,7 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
         current_time=$(date +%s)
         elapsed=$(( current_time-start_time ))
         if (( elapsed >= MAX_LISTEN_TIME )); then
-            log_info "Listener: Timeout reached after ${elapsed} seconds. Exiting loop."
+            log_info "[Listener]: Timeout reached after ${elapsed} seconds. Exiting loop."
             break
         fi
 
@@ -107,15 +80,15 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
         if [[ "$ack" == "" ]]; then
             :   # do nothing if receiving empty message
         elif [[ "$ack" != "ACK" ]]; then
-            log_info "Listener: Unexpected message: ${msg}"
+            log_info "[Listener]: Unexpected message: ${msg}"
         elif [[ "$state" -eq 0 ]]; then
             # Increment received_acks
             ((received_acks++))
             # Store job id
             received_jobs+=($job_id)
-            log_info "Listener: Received ACK ${#received_jobs[@]}/${expected_acks} from job ID ${job_id}"
+            log_info "[Listener]: Received ACK ${#received_jobs[@]}/${expected_acks} from job ID ${job_id}"
         else
-            log_info "Listener: Job ${job_id} failed, resubmitting..."
+            log_info "[Listener]: Job ${job_id} failed, resubmitting..."
             # submit_job() creates a temperary config file for resubmission
             # Load these configs and resubmit
             temp_job_config="${SCC_OUTPUT_PATH}/tmp/${job_id}.json"
@@ -128,18 +101,60 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
                 # Clean up the checkpoint subdir before resubmitting
                 submit_job $lr1 $lr2 $seg true
             else
-                log_info "(warning) Listener: Segment ${seg} lr1=${lr1} lr2=${lr2} failed ${job_retries[$lr2]} times."
+                log_info "(warning) [Listener]: Segment ${seg} lr1=${lr1} lr2=${lr2} failed ${job_retries[$lr2]} times."
                 ((received_acks++))
             fi
         fi
     done
 
-    log_info "Listener: ${received_acks} / ${expected_acks} ACKs received from jobs (${received_jobs[@]})."
+    log_info "[Listener]: ${received_acks} / ${expected_acks} ACKs received from jobs (${received_jobs[@]})."
+
+    
+    # ====================================================================
+    # Initialize / Update learning rates
+    # ====================================================================
+    log_info "[Update]: computing lr1 and lr2_candidates..."
+
+    # Capture the JSON output from the Python script
+    #   received_jobs is undefined in segment 1, thus triggers the default_lr functions
+    output=$(python3 scripts/schedule/get_next_lr.py \
+        --project $PROJECT --job_ids ${received_jobs[@]} --seg $((i+1)) --num_segs ${NUM_SEGMENTS})
+
+    # If get_next_lr.py returns an error state, exit the main script.
+    if [ $? -ne 0 ]; then
+        log_info "[Master]: Having a critical error, exiting..."
+        exit 1
+    fi
+
+    # Extract lr1
+    lr1=$(echo "$output" | jq -r '.lr1')
+
+    # Extract the list into a Bash array
+    # This uses `jq` to output each element on a new line, then reads them into an array
+    mapfile -t lr2_candidates < <(echo "$output" | jq -r '.lr2_candidates[]')
+
+    log_info "[Update]: lr1=${lr1}, lr2_candidates=(${lr2_candidates[@]}) for segment $((i+2))."
+
+    # (Optional) delete checkpoints in other runs
+    if [[ $CLEAN_CHECKPOINTS ]]; then
+        prev_checkpoint_path="${CHECKPOINT_PATH}/${SEGMENTS[$i]}-${SEGMENTS[$((i+1))]}"
+        keep_checkpoint="lr2:$(printf "%.2e" "$lr1")"
+        
+        log_info "[Master]: cleaning checkpoints other than ${prev_checkpoint_path}/${keep_checkpoint}"
+        for sub in "$prev_checkpoint_path"/*; do
+            # Check if it's a directory and not the one we want to keep
+            if [[ -d "$sub" && "$(basename "$sub")" != "$keep_checkpoint" ]]; then
+                rm -rf "$sub"
+            fi
+        done
+    fi
 
     # ====================================================================
-
     # End of segment
-    log_info "Master: Segment $((i+1))/${NUM_SEGMENTS} completed." && echo ""
+    log_info "[Master]: Segment $((i+1))/${NUM_SEGMENTS} completed." && echo ""
 done
 
 # TODO: process the last segment; fetch optimal runs and locally merge into one plot of loss and lr schedule
+log_info "[Master]: Summarizing the experiment..."
+python3 scripts/schedule/summarize.py \
+    --name ${NAME} --desc ${DESC} --ckpt ${CHECKPOINT_PATH} --proj ${PROJECT}

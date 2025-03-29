@@ -12,6 +12,7 @@ import pandas as pd
 import numpy as np
 from typing import Any
 import os
+from pathlib import Path
 
 
 # =========================================================
@@ -51,14 +52,16 @@ LOG_GRID_MULTI = 2
 LOG_GRID_SIZE = 2       # additional lrs on each side
 LINEAR_GRID_LOWER_SIZE = 10                                 # CHANGE THIS; should be equal to num_segs
 LINEAR_GRID_UPPER_COEF = [1, 1.25, 1.5, 2]                  # CHANGE THIS if needed
-# LINEAR_GRID_LOWER_SIZE = 3      # testing
-# LINEAR_GRID_UPPER_COEF = [1, 2] # testing
+LINEAR_GRID_LOWER_SIZE = 3      # testing
+LINEAR_GRID_UPPER_COEF = [1, 2] # testing
 
 
 # >> Other global variables
 # Wandb team/organization name.
 WANDB_ENTITY = "optimizedlearning"
 
+# local json name
+DATA_FNAME = "data.json"
 
 # =========================================================
 # >>> SMOOTHING METHODS
@@ -93,21 +96,33 @@ def get_default_lr2() -> list:
 # >>> LR1 NEXT SEGMENT
 # =========================================================
 
-def greedy_lr1(arr: np.ndarray) -> float:
-    """Returns lr with lowest loss value."""
-    i = np.argmin(arr[:, 1])
-    return arr[i, 0]
+def greedy_lr1(losses: np.ndarray) -> int:
+    """Returns the run index corresponding to the lowest last-iterate loss value.
+    
+    Args:
+        losses: [k,n] array of losses of k runs and n iterations.
+    """
+    return np.argmin(losses[:, -1])
 
 
-def eps_greedy_lr1(arr: np.ndarray, initial_loss: float | None = None) -> float:
-    """Returns largest lr such that loss <= loss_min + eps."""
-    loss_min = np.min(arr[:, 1])
+def eps_greedy_lr1(losses: np.ndarray, lrs: np.ndarray) -> int:
+    """Returns the run index corresponding to the 
+    largest lr such that:
+    - loss <= loss_min + eps for absolute eps;
+    - loss <= loss_min * (1+eps) for relative eps.
+    
+    Args:
+        losses: [k,n] array of losses.
+        lrs: [k,] array of lrs.
+    """
+    loss_min = np.min(losses[:, -1])
     if EPS_GREEDY_ABSOLUTE:
         threshold = loss_min + EPS_GREEDY_VAL
     else:
-        threshold = loss_min + EPS_GREEDY_VAL * abs(initial_loss - loss_min)
-    arr_filtered = arr[arr[:, 1] <= threshold]
-    return np.max(arr_filtered[:, 0])
+        threshold = loss_min * (1 + EPS_GREEDY_VAL)
+        # threshold = loss_min + EPS_GREEDY_VAL * abs(initial_loss - loss_min)
+    lrs_filtered = lrs[losses[:, -1] <= threshold]
+    return np.argmax(lrs_filtered)
 
 
 # Customize your own lr mechanism if needed.
@@ -171,34 +186,48 @@ def get_run_info(run: Any) -> tuple[float, float]:
 
     # Fetch last loss after smoothing
     history = run.scan_history(keys=["loss"])
-    losses = [row["loss"] for row in history]
-    return lr2, smoothing(losses)
+    loss = [row["loss"] for row in history]
+    return lr2, smoothing(loss)
 
 
-def get_next_lrs(candidates: list) -> tuple[float, list]:
-    """Wraps all lr methods.
-    
+def get_best_run(candidates: list, use_greedy: bool = False) -> Any:
+    """Given a list of valid runs, return the optimal run.
+
     Args:
-        candidates: list of tuples (lr2, smoothed_losses)
-    
+        candidates: list of wandb runs.
+        use_greedy: defaults to False; if True, use greedy methods..
+
     Returns:
-        A tuple of (lr1, lr2_candidates)
+        optimal run in the last segment.
     """
-    # Special case: initialize when arr is empty.
     if len(candidates) == 0:
-        return get_default_lr1(), get_default_lr2()
+        raise RuntimeError("Candiates cannot be an empty list.")
     
-    # Get lr1.
-    arr = np.array([[lr, losses[-1]] for (lr, losses) in candidates])
-    if NEXT_LR1 == "greedy":
-        lr1 = greedy_lr1(arr)
+    # Get losses and lrs.
+    losses = []
+    lrs = []
+    for run in candidates:
+        lr2, loss = get_run_info(run)
+        losses.append(loss)
+        lrs.append(lr2)
+    losses = np.array(losses)
+    lrs = np.array(lrs)
+    
+    # Wrap methods.
+    if use_greedy or NEXT_LR1 == "greedy":
+        idx = greedy_lr1(losses)
     elif NEXT_LR1 == "eps_greedy":
-        _, losses = candidates[0]
-        lr1 = eps_greedy_lr1(arr, initial_loss=losses[0])
+        idx = eps_greedy_lr1(losses, lrs)
     # Add your customized methods below.
     else:
         raise ValueError(f"unsupport lr1 mechanism = '{NEXT_LR1}'.")
-    
+    return candidates[idx]
+
+
+def get_next_lrs(run: Any) -> tuple[float, list]:
+    """Wrap lr2_candidates methods."""
+    # Get lr1.
+    lr1 = run.config["optimizer"]["lr_config"]["lr2"]
     # Get lr2.
     if NEXT_LR2 == "log":
         lr2_candidates = loggrid_lr2(lr1)
@@ -210,18 +239,49 @@ def get_next_lrs(candidates: list) -> tuple[float, list]:
     return lr1, lr2_candidates
 
 
+def update_local_data(run: Any) -> None:
+    """Store data in this segment locally."""
+    # Fetch data from the new run.
+    keys = ["loss", "accuracy", "iterations", "lr/schedule"]
+    history = run.scan_history(keys=keys)
+    new_data = {key: [row[key] for row in history] for key in keys}
+
+    # Fetch local data.
+    ckpt_path = run.config["checkpoint"]["save_path"]
+    fname = os.path.join(Path(ckpt_path).parent.parent, DATA_FNAME)
+    if os.path.exists(fname):
+        with open(fname, 'r') as f:
+            data = json.load(f)
+    else:
+        # Initialize an empty structure
+        data = {key: [] for key in keys}
+
+    # Update and store new data.
+    for key in keys:
+        data[key] += new_data[key]
+    with open(fname, 'w') as f:
+        json.dump(data, f, indent=2)  # indent=2 for readability
+
+
+def bash_format(lr1, lr2_candidates):
+    """Format wrapper."""
+    result = {"lr1": lr1, "lr2_candidates": lr2_candidates}
+    return json.dumps(result)   # Return data as a JSON string
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--project",
-        type=str,
-    )
-    parser.add_argument(
-        "--job_ids",
-        nargs="*",
-        type=int,
-    )
+    parser.add_argument("--project", type=str)
+    parser.add_argument("--job_ids", nargs="*", type=int)
+    parser.add_argument("--seg", type=int)
+    parser.add_argument("--num_segs", type=int)
     args = parser.parse_args()
+
+    is_first = args.seg == 0
+    is_last  = args.seg == args.num_segs
+
+    if is_first:
+        return bash_format(lr1=get_default_lr1(), lr2=get_default_lr2())
 
     # Fetch losses using WandB API.
     api = wandb.Api()
@@ -237,18 +297,21 @@ def main():
             # Add a safe-check: check if ckpt_path contains any .ckpt file
             ckpt_path = run.config["checkpoint"]["save_path"]
             if os.path.isdir(ckpt_path) and any(filename.endswith(".ckpt") for filename in os.listdir(ckpt_path)):
-                candidates.append(get_run_info(run))
+                candidates.append(run)
         except CommError as e:
             logging.info(f"- Update: failed to fetch run {run_id}.")
             logging.error(f"Failed to fetch run {run_id}:\n{e}")
 
     # Customized method to decide lrs in the next segment.
-    lr1, lr2_candidates = get_next_lrs(candidates)
+    best_run = get_best_run(candidates, use_greedy=is_last)
+    lr1, lr2_candidates = get_next_lrs(best_run)
 
-    # Return data as a JSON string
-    result = {"lr1": lr1, "lr2_candidates": lr2_candidates}
-    print(json.dumps(result))
+    # Store current best loss and lrs locally.
+    update_local_data(best_run)
+
+    return bash_format(lr1, lr2_candidates)
 
 
 if __name__ == "__main__":
-    main()
+    result = main()
+    print(result)
