@@ -1,12 +1,18 @@
 #!/bin/bash -l
 # Master script.
 
+# Load environment
+module load python3/3.10.12
+source env/bin/activate
+
 # Configuration
 source scripts/schedule/config.sh
 # import log_info()
 source scripts/schedule/utils.sh
 # import submit_job()
 source scripts/schedule/submit_job.sh
+# import snapshot()
+source scripts/schedule/snapshot.sh
 
 
 # Create temporary folder for system files.
@@ -14,6 +20,13 @@ mkdir -p "${SCC_OUTPUT_PATH}/tmp"
 
 echo "Running experiment ${NAME}." && echo "${DESC}"
 echo "master host ip: ${MASTER_HOST}; port number: ${PORT}"
+
+# Take a snapshot of experiment configs.
+snapshot_path="${SCC_OUTPUT_PATH}/snapshot.txt"
+if [ ! -f $snapshot_path ]; then
+  snapshot $snapshot_path
+  log_info "[Master]: Save config snapshot to ${snapshot_path}."
+fi
 
 # Initialize learning rates.
 log_info "[Update]: fetching initial lr1 and lr2_candidates..."
