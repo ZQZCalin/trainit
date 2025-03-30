@@ -72,6 +72,7 @@ python main.py \
     logging.wandb_expname=$NAME \
     logging.log_callback_data=$LOG_CALLBACK_DATA \
     train.max_steps=$TOTAL_STEPS \
+    train.use_amp=$USE_AMP \
     dataset.total_batch_size=$BATCH_SIZE \
     random_seed=$RANDOM_SEED \
     optimizer=$OPTIMIZER \
