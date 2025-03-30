@@ -14,8 +14,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--proj", type=str)
     parser.add_argument("--name", type=str)
-    parser.add_argument("--desc", type=str)
     parser.add_argument("--ckpt", type=str)
+    parser.add_argument("--desc", type=str, default="")
     args = parser.parse_args()
 
     fname = os.path.join(args.ckpt, DATA_FNAME)
@@ -24,7 +24,7 @@ def main():
 
     wandb.init(project=args.proj, name=args.name, notes=args.desc)
     for loss, acc, iter, lr in zip(*[data[key] for key in KEYS]):
-        wandb.update({
+        wandb.log({
             "loss": loss,
             "accuracy": acc,
             "lr/schedule": lr,

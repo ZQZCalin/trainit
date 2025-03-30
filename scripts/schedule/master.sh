@@ -16,6 +16,7 @@ echo "Running experiment ${NAME}." && echo "${DESC}"
 echo "master host ip: ${MASTER_HOST}; port number: ${PORT}"
 
 # Initialize learning rates.
+log_info "[Update]: fetching initial lr1 and lr2_candidates..."
 output=$(python3 scripts/schedule/get_next_lr.py \
     --project $PROJECT --job_ids ${received_jobs[@]} --seg 0 --num_segs ${NUM_SEGMENTS})
 
@@ -157,4 +158,4 @@ done
 # TODO: process the last segment; fetch optimal runs and locally merge into one plot of loss and lr schedule
 log_info "[Master]: Summarizing the experiment..."
 python3 scripts/schedule/summarize.py \
-    --name ${NAME} --desc ${DESC} --ckpt ${CHECKPOINT_PATH} --proj ${PROJECT}
+    --name "${NAME}" --desc "${DESC}" --ckpt "${CHECKPOINT_PATH}" --proj "${PROJECT}"

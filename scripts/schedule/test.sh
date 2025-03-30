@@ -1,23 +1,36 @@
 #!/bin/bash
 
 
-seg=0
-lr2=0.1
-val="someVal"
+PROJECT="greedy_lr_schedule"
+NAME="test_new_script1"                                   # CHANGE THIS every experiment
+DESC="
+Experiment description:
 
-my_function() {
-  local param1="$1"
-  local param2="$2"
-  echo "param1=$param1, param2=$param2"
-}
+testing new script: trial 1
+"
+BASE_PATH="/projectnb/aclab/qinziz/trainit"                 # CHANGE THIS upon setup
+CHECKPOINT_PATH="${BASE_PATH}/checkpoint/lr_schedule/${NAME}"
+python3 scripts/schedule/summarize.py \
+  --name ${NAME} --desc "${DESC}" --ckpt ${CHECKPOINT_PATH} --proj ${PROJECT}
 
-# Call with seg first, lr2 second
-my_function "$seg" "$lr2"
-# Outputs: param1=0, param2=0.1
 
-# If reversed:
-my_function "$lr2" "$seg"
-# param1=0.1, param2=0
+# seg=0
+# lr2=0.1
+# val="someVal"
+
+# my_function() {
+#   local param1="$1"
+#   local param2="$2"
+#   echo "param1=$param1, param2=$param2"
+# }
+
+# # Call with seg first, lr2 second
+# my_function "$seg" "$lr2"
+# # Outputs: param1=0, param2=0.1
+
+# # If reversed:
+# my_function "$lr2" "$seg"
+# # param1=0.1, param2=0
 
 
 

@@ -281,7 +281,7 @@ def main():
     is_last  = args.seg == args.num_segs
 
     if is_first:
-        return bash_format(lr1=get_default_lr1(), lr2=get_default_lr2())
+        return bash_format(get_default_lr1(), get_default_lr2())
 
     # Fetch losses using WandB API.
     api = wandb.Api()
