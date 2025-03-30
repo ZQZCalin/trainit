@@ -38,7 +38,7 @@ checkpoint/
 # testing files
 test/
 test_logs/
-test.py
+test.*
 new_test.py
 test_log.txt
 
