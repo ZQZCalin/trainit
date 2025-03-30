@@ -7,12 +7,10 @@ source env/bin/activate
 
 # Configuration
 source scripts/schedule/config.sh
-# import log_info()
+# import log_info(), snapshot()
 source scripts/schedule/utils.sh
 # import submit_job()
 source scripts/schedule/submit_job.sh
-# import snapshot()
-source scripts/schedule/snapshot.sh
 
 
 # Create temporary folder for system files.
