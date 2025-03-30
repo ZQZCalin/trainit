@@ -120,6 +120,11 @@ def train_step(
     return loss, accuracy, log_metrics, train_state
 
 
+# NOTE: to be strict, we should only update train state if gradient is finite.
+# Right now, the first iteration always have grad=inf (for some unknown reason),
+# so training technically starts from iteration 2.
+
+
 def lm_train_loop(
         config: DictConfig,
         train_state: TrainState,

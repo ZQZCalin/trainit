@@ -209,11 +209,18 @@ done
 
 ## Updates
 
+- version 0.0.3:
+    - Blacklists "bad" nodes;
+    - Stores best run of each segment locally and log it at the end of the experiment.
 - version 0.0.2: 
     - Implements the "resubmit upon failure" feature, which triggers if the exit code of the main python script is non-zero;
     - Implements the checkpoint cleaning feature which deletes all checkpoints other than the optimal one.
 
 
+## Caveats
+- To be strict, we should only update train state if gradient is finite. Right now, the first iteration always have grad=inf (for some unknown reason), so training technically starts from iteration 2. However, the required change is non-trivial and we just leave it as is for now. We applied a quick fix: change `count` to `count_inc` in the `adam` optimizer to compensate for this issue.
+
+
 ## Future Features
 
-- Add the `NAME` config to the wandb configuration so that grouping in wandb is easier.
+- (Added in 0.0.3) ~~Add the `NAME` config to the wandb configuration so that grouping in wandb is easier.~~
