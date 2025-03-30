@@ -105,7 +105,7 @@ def wrap_scheduler(
         else:
             lr = schedule
         if wandb_log is not None:
-            jax.experimental.io_callback(wandb_log, None, {f"lr/{title}": lr}, commit=False)
+            jax.experimental.io_callback(wandb_log, None, {f"lr/{title}": lr, "lr/{title}_count": count}, commit=False)
         return lr
     return jtu.Partial(wrapper, learning_rate, wandb_log=wandb_log, title=schedule_title)
 

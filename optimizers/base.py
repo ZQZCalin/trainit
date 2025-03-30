@@ -163,7 +163,9 @@ def adam_base(
                 lambda u, p: u + wd * p, updates, params)
 
         # Apply negative learning rate.
-        eta = schedule.get_current_lr(learning_rate, count)
+        t = count_inc   # for some unknown reason, lr is not computed in the first iter, so we use this dirty trick
+        # t = count     # this should be the correct implementation
+        eta = schedule.get_current_lr(learning_rate, t)
         updates = tree_utils.scalar_dot(updates, -eta)
 
         # Additional logs.
