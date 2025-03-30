@@ -52,8 +52,8 @@ LOG_GRID_MULTI = 2
 LOG_GRID_SIZE = 2       # additional lrs on each side
 LINEAR_GRID_LOWER_SIZE = 10                                 # CHANGE THIS; should be equal to num_segs
 LINEAR_GRID_UPPER_COEF = [1, 1.25, 1.5, 2]                  # CHANGE THIS if needed
-LINEAR_GRID_LOWER_SIZE = 3      # testing
-LINEAR_GRID_UPPER_COEF = [1, 2] # testing
+# LINEAR_GRID_LOWER_SIZE = 2      # testing
+# LINEAR_GRID_UPPER_COEF = [1, 2] # testing
 
 
 # >> Other global variables

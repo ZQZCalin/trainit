@@ -1,11 +1,14 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="test_new_script1"                                   # CHANGE THIS every experiment
+NAME="v3linear-grid_abs-eps0.03"                                   # CHANGE THIS every experiment
 DESC="
 Experiment description:
 
-testing new script: trial 1
+- v0.0.3 auto-scripts;
+- linear grid with 10 lower grids and upper = [1, 1.25, 1.5, 2];
+- eps-greedy with absolute epsilon = 0.03;
+- 2k steps and 10 segments equally divided.
 "                                                           # CHANGE THIS every experiment
 
 # =========================================================
@@ -72,11 +75,11 @@ ENABLE_RETRY=true
 
 # maximum number of training steps
 TOTAL_STEPS=2000                                            # CHANGE THIS if needed
-TOTAL_STEPS=50      # testing
+# TOTAL_STEPS=50      # testing
 
 # number of segments
 NUM_SEGMENTS=10
-NUM_SEGMENTS=3      # testing
+# NUM_SEGMENTS=3      # testing
 
 # list of checkpoint iterations
 #   i. you can use evenly distributed segments by changing `num_segments`
