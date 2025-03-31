@@ -209,6 +209,10 @@ done
 
 ## Updates
 
+- version 0.0.4:
+    - Fixes an issue of `eps_greedy_lr1` in v0.0.3;
+    - Stores a local snapshot of experiment configs;
+    - Adds a resume script.
 - version 0.0.3:
     - Blacklists "bad" nodes;
     - Stores best run of each segment locally and log it at the end of the experiment.

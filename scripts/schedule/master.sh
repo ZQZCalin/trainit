@@ -1,6 +1,8 @@
 #!/bin/bash -l
 # Master script.
 
+# Version 0.0.4.
+
 # Load environment
 module load python3/3.10.12
 source env/bin/activate
