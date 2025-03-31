@@ -121,7 +121,10 @@ def eps_greedy_lr1(losses: np.ndarray, lrs: np.ndarray) -> int:
     else:
         threshold = loss_min * (1 + EPS_GREEDY_VAL)
         # threshold = loss_min + EPS_GREEDY_VAL * abs(initial_loss - loss_min)
-    lrs_filtered = lrs[losses[:, -1] <= threshold]
+    # 03/31: fixed an issue where eps-greedy is not correctly returning the index
+    # of the best run; this only affects runs in v0.0.3.
+    # lrs_filtered = lrs[losses[:, -1] <= threshold]    # wrong implementation
+    lrs_filtered = np.where(losses[:, -1] <= threshold, lrs, -np.inf)
     return np.argmax(lrs_filtered)
 
 
