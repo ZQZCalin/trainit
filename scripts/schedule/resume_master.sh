@@ -1,0 +1,176 @@
+#!/bin/bash -l
+# Resume from master (only used occasionally)
+
+lr1=0.00075
+lr2_candidates=(
+    0.0 
+    0.000375 
+    0.0005 
+    0.0005625000000000001 
+    0.0006000000000000001 
+    0.000625 
+    0.0006428571428571428 
+    0.00065625 
+    0.0006666666666666666 
+    0.000675 
+    0.00075 
+    0.0009375 
+    0.0011250000000000001 
+    0.0015
+)
+
+resume_seg=9
+
+# ========================================================================
+# Resuming
+
+# Load environment
+module load python3/3.10.12
+source env/bin/activate
+
+# Configuration
+source scripts/schedule/config.sh
+# import log_info(), snapshot()
+source scripts/schedule/utils.sh
+# import submit_job()
+source scripts/schedule/submit_job.sh
+
+log_info "[Master]: resuming from segment $((i+1)) with lr1=${lr1}, lr2_candidates=(${lr2_candidates[@]})."
+
+# Master thread
+for (( i=${resume_seg}; i < ${#SEGMENTS[@]}-1; i++ )); do
+    # Start of segment
+    printf '=%.0s' {1..100} && printf "\n"
+    log_info "[Master]: Training segment $((i+1)) from iteration ${SEGMENTS[$i]} to ${SEGMENTS[$((i+1))]}..."
+
+    # ====================================================================
+    # Submit GPU jobs and track with a listener
+    # ====================================================================
+
+    # number of expected ACK tokens, 
+    # equal to number of parallel jobs
+    expected_acks=${#lr2_candidates[@]}
+    # expected_acks=1     # uncomment for test purpose
+
+    log_info "[Listener]: Waiting for ${expected_acks} ACKs on port ${PORT}..."
+
+    received_acks=0
+    received_jobs=()
+    start_time=$(date +%s)
+
+    # Initialize a dictionary to track number of resubmits
+    declare -A job_retries
+    for lr2 in "${lr2_candidates[@]}"; do
+        job_retries[$lr2]=0
+    done
+
+    # a copy of lr2_candidates
+    job_queue=( "${lr2_candidates[@]}" )
+
+    while (( received_acks < expected_acks )); do
+        # Parallel submit all jobs
+        for lr2 in "${job_queue[@]}"; do
+            submit_job "$lr1" "$lr2" "$i" false
+        done
+        job_queue=()    # make sure only submit once
+
+        # Optional timeout mechanism that breaks after a period of time
+        current_time=$(date +%s)
+        elapsed=$(( current_time-start_time ))
+        if (( elapsed >= MAX_LISTEN_TIME )); then
+            log_info "[Listener]: Timeout reached after ${elapsed} seconds. Exiting loop."
+            break
+        fi
+
+        # Listen for one connection and read the incoming message
+        # Attempt every X seconds to enable timeout
+        msg=$(timeout $LISTENER_BACKOFF nc -l $PORT)
+        
+        # Parse the message, expecting format: "ACK <JOB_ID>"
+        # Split message into an array on whitespace
+        read -r ack job_id state <<< "$msg"
+
+        if [[ "$ack" == "" ]]; then
+            :   # do nothing if receiving empty message
+        elif [[ "$ack" != "ACK" ]]; then
+            log_info "[Listener]: Unexpected message: ${msg}"
+        elif [[ "$state" -eq 0 ]]; then
+            # Increment received_acks
+            ((received_acks++))
+            # Store job id
+            received_jobs+=($job_id)
+            log_info "[Listener]: Received ACK ${#received_jobs[@]}/${expected_acks} from job ID ${job_id}"
+        else
+            log_info "[Listener]: Job ${job_id} failed, resubmitting..."
+            # submit_job() creates a temperary config file for resubmission
+            # Load these configs and resubmit
+            temp_job_config="${SCC_OUTPUT_PATH}/tmp/${job_id}.json"
+            lr1=$(jq -r '.lr1' "$temp_job_config")
+            lr2=$(jq -r '.lr2' "$temp_job_config")
+            seg=$(jq -r '.seg' "$temp_job_config")
+            job_retries[$lr2]=$(( job_retries[$lr2] + 1 ))
+            # Re-submit failed jobs if within MAX_RETRIES
+            if (( job_retries[$lr2] <= MAX_RETRIES )); then
+                # Clean up the checkpoint subdir before resubmitting
+                submit_job $lr1 $lr2 $seg true
+            else
+                log_info "(warning) [Listener]: Segment ${seg} lr1=${lr1} lr2=${lr2} failed ${job_retries[$lr2]} times."
+                ((received_acks++))
+            fi
+        fi
+    done
+
+    log_info "[Listener]: ${received_acks} / ${expected_acks} ACKs received from jobs (${received_jobs[@]})."
+
+    
+    # ====================================================================
+    # Initialize / Update learning rates
+    # ====================================================================
+    log_info "[Update]: computing lr1 and lr2_candidates..."
+
+    # (Optional) add a short 10sec sleep for wandb syncing.
+    sleep 10
+
+    # Capture the JSON output from the Python script
+    #   received_jobs is undefined in segment 1, thus triggers the default_lr functions
+    output=$(python3 scripts/schedule/get_next_lr.py \
+        --project $PROJECT --job_ids ${received_jobs[@]} --seg $((i+1)) --num_segs ${NUM_SEGMENTS})
+
+    # If get_next_lr.py returns an error state, exit the main script.
+    if [ $? -ne 0 ]; then
+        log_info "[Master]: Having a critical error, exiting..."
+        exit 1
+    fi
+
+    # Extract lr1
+    lr1=$(echo "$output" | jq -r '.lr1')
+
+    # Extract the list into a Bash array
+    # This uses `jq` to output each element on a new line, then reads them into an array
+    mapfile -t lr2_candidates < <(echo "$output" | jq -r '.lr2_candidates[]')
+
+    log_info "[Update]: lr1=${lr1}, lr2_candidates=(${lr2_candidates[@]}) for segment $((i+2))."
+
+    # (Optional) delete checkpoints in other runs
+    if [[ $CLEAN_CHECKPOINTS ]]; then
+        prev_checkpoint_path="${CHECKPOINT_PATH}/${SEGMENTS[$i]}-${SEGMENTS[$((i+1))]}"
+        keep_checkpoint="lr2:$(printf "%.2e" "$lr1")"
+        
+        log_info "[Master]: cleaning checkpoints other than ${prev_checkpoint_path}/${keep_checkpoint}"
+        for sub in "$prev_checkpoint_path"/*; do
+            # Check if it's a directory and not the one we want to keep
+            if [[ -d "$sub" && "$(basename "$sub")" != "$keep_checkpoint" ]]; then
+                rm -rf "$sub"
+            fi
+        done
+    fi
+
+    # ====================================================================
+    # End of segment
+    log_info "[Master]: Segment $((i+1))/${NUM_SEGMENTS} completed." && echo ""
+done
+
+# TODO: process the last segment; fetch optimal runs and locally merge into one plot of loss and lr schedule
+log_info "[Master]: Summarizing the experiment..."
+python3 scripts/schedule/summarize.py \
+    --name "${NAME}" --desc "${DESC}" --ckpt "${CHECKPOINT_PATH}" --proj "${PROJECT}"
