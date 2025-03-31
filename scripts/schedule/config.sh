@@ -1,15 +1,14 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="v3linear-grid_abs-eps0.015-run3"                                   # CHANGE THIS every experiment
+NAME="v4linear-grid_abs-eps0.015"                                   # CHANGE THIS every experiment
 DESC="
 Experiment description:
 
-- v0.0.3 auto-scripts;
+- version 0.0.4;
 - linear grid with 10 lower grids and upper = [1, 1.25, 1.5, 2];
 - eps-greedy with absolute epsilon = 0.015;
-- 2k steps and 10 segments equally divided;
-- run 3: turn off amp and turn on logging to see whether there's still inf gradients.
+- 2k steps and 10 segments equally divided.
 "                                                           # CHANGE THIS every experiment
 
 # =========================================================
@@ -120,4 +119,4 @@ NESTEROV=False
 PROJECT="greedy_lr_schedule"                                # CHANGE THIS if needed
 
 # log additional metrics to wandb
-LOG_CALLBACK_DATA=True      # we don't need to log other metrics in this task
+LOG_CALLBACK_DATA=False      # we don't need to log other metrics in this task
