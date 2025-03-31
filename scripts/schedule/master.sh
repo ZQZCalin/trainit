@@ -127,6 +127,9 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
     # ====================================================================
     log_info "[Update]: computing lr1 and lr2_candidates..."
 
+    # (Optional) add a short 10sec sleep for wandb syncing.
+    sleep 10
+
     # Capture the JSON output from the Python script
     #   received_jobs is undefined in segment 1, thus triggers the default_lr functions
     output=$(python3 scripts/schedule/get_next_lr.py \
