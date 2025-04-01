@@ -1,13 +1,13 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="v4linear-grid_abs-eps0.015"                                   # CHANGE THIS every experiment
+NAME="v4linear-grid_abs-eps0.0"                                   # CHANGE THIS every experiment
 DESC="
 Experiment description:
 
 - version 0.0.4;
 - linear grid with 10 lower grids and upper = [1, 1.25, 1.5, 2];
-- eps-greedy with absolute epsilon = 0.015;
+- eps-greedy with absolute epsilon = 0.0 (greedy lr);
 - 2k steps and 10 segments equally divided.
 "                                                           # CHANGE THIS every experiment
 

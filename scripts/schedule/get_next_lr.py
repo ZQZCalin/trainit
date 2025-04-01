@@ -40,7 +40,7 @@ NEXT_LR1_LIST = [
     "eps_greedy"
 ]
 NEXT_LR1 = NEXT_LR1_LIST[1]
-EPS_GREEDY_VAL = 0.015                                      # CHANGE THIS
+EPS_GREEDY_VAL = 0.0                                      # CHANGE THIS
 EPS_GREEDY_ABSOLUTE = True                                  # CHANGE THIS; if true, use absolute eps, otherwise use relative eps
 
 NEXT_LR2_LIST = [
