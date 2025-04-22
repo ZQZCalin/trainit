@@ -19,48 +19,80 @@ from pathlib import Path
 # >>> CONFIGS OF LR MECHANISMS
 # =========================================================
 
-# >> Type of smoothing. you can implement your own way of smoothing.
+# ---------------------------------------------------------
+# Type of smoothing. you can implement your own way of smoothing.
+SMOOTHING_LIST = [
+    "EMA",
+]
 SMOOTHING = "EMA"
+assert SMOOTHING in SMOOTHING_LIST
+
+# >> EMA
 EMA_WINDOW_SIZE = 10
 
 
-# >> Default lrs (first segment).
-DEFAULT_LR1 = 0.0
-DEFAULT_LR2_DICT = {
-    "log_grid": [1e0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5],        # default log grid
-    "baseline": [1e-3],                                     # hard code first segment to match baseline
-    "test": [0.1, 0.01],                                    # for testing
-}
-DEFAULT_LR2 = DEFAULT_LR2_DICT["baseline"]                  # YOU CAN CHANGE KEY FOR DIFFERENT INITIAL GRIDS
-DEFAULT_LR2 = [2e-3]  # im too lazy to add it to the dict
+# ---------------------------------------------------------
+# Default lrs (first segment).
+DEFAULT_LR1 = 0.0                                           # we always fix the initial lr1 to 0
 
-# >> Next lr methods.
+DEFAULT_LR2_DICT = {
+    "log_grid": [1e0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5],    # default log grid
+    "baseline": [1e-3],                                 # hard code first segment to match baseline
+    "baseline_better": [2e-3],                          # hard code baseline, but better
+    "test": [0.1, 0.01],                                # for testing
+}
+DEFAULT_LR2_KEY = "baseline_better"                         # specify lr2 for the first segment
+assert DEFAULT_LR2_KEY in DEFAULT_LR2_DICT
+DEFAULT_LR2 = DEFAULT_LR2_DICT[DEFAULT_LR2_KEY]
+
+
+# ---------------------------------------------------------
+# Next lr1 methods.
 NEXT_LR1_LIST = [
     "greedy",
-    "eps_greedy"
+    "eps_greedy",
 ]
-NEXT_LR1 = NEXT_LR1_LIST[1]
+NEXT_LR1 = "eps_greedy"
+assert NEXT_LR1 in NEXT_LR1_LIST
+
+# >> greedy mechanism
+# ...   # it takes no hyper-parameter, so it's empty here
+
+# >> epsilon-greedy mechanism for lr1
 EPS_GREEDY_VAL = 0.030                                      # CHANGE THIS
 EPS_GREEDY_ABSOLUTE = True                                  # CHANGE THIS; if true, use absolute eps, otherwise use relative eps
+EPS_GREEDY_DECAY = False                                    # CHANGE THIS; if true, adds a linear decay to eps.
 
+# >> potentially other mechanism
+# ...
+
+
+# ---------------------------------------------------------
+# Next lr2 methods.
 NEXT_LR2_LIST = [
     "log",
     "linear",
 ]
-NEXT_LR2 = NEXT_LR2_LIST[1]
-LOG_GRID_MULTI = 2
-LOG_GRID_SIZE = 2       # additional lrs on each side
-LINEAR_GRID_LOWER_SIZE = 10                                  # CHANGE THIS; should be equal to num_segs
+NEXT_LR2 = "linear"
+assert NEXT_LR2 in NEXT_LR2_LIST
+
+# >> logarithmic grid for lr2
+LOG_GRID_MULTI = 2                                          # size of logarithmic grids (multiplicative)
+LOG_GRID_SIZE = 2                                           # additional lrs on each side
+
+# >> linear grid for lr2
+LINEAR_GRID_LOWER_SIZE = 10                                 # CHANGE THIS; should be equal to num_segs
 LINEAR_GRID_UPPER_COEF = [1, 1.25, 1.5, 2]                  # CHANGE THIS if needed
 # LINEAR_GRID_LOWER_SIZE = 2      # testing
 # LINEAR_GRID_UPPER_COEF = [1, 2] # testing
 
 
-# >> Other global variables
-# Wandb team/organization name.
+# ---------------------------------------------------------
+# Other global variables
+# >> Wandb team/organization name.
 WANDB_ENTITY = "optimizedlearning"
 
-# local json name
+# >> local json name
 DATA_FNAME = "data.json"
 
 # =========================================================
@@ -100,31 +132,33 @@ def greedy_lr1(losses: np.ndarray) -> int:
     """Returns the run index corresponding to the lowest last-iterate loss value.
     
     Args:
-        losses: [k,n] array of losses of k runs and n iterations.
+        losses: [k,] array of last losses of k runs.
     """
-    return np.argmin(losses[:, -1])
+    return np.argmin(losses)
 
 
-def eps_greedy_lr1(losses: np.ndarray, lrs: np.ndarray) -> int:
+def eps_greedy_lr1(losses: np.ndarray, lrs: np.ndarray, eps: float=0.0, use_abs: bool=True) -> int:
     """Returns the run index corresponding to the 
     largest lr such that:
     - loss <= loss_min + eps for absolute eps;
     - loss <= loss_min * (1+eps) for relative eps.
     
     Args:
-        losses: [k,n] array of losses.
+        losses: [k,] array of last losses.
         lrs: [k,] array of lrs.
+        eps: value of epsilon
+        abs: whether to use absolute or relative eps for threshold.
     """
-    loss_min = np.min(losses[:, -1])
-    if EPS_GREEDY_ABSOLUTE:
-        threshold = loss_min + EPS_GREEDY_VAL
+    loss_min = np.min(losses)
+    if use_abs:
+        threshold = loss_min + eps
     else:
-        threshold = loss_min * (1 + EPS_GREEDY_VAL)
+        threshold = loss_min * (1 + eps)
         # threshold = loss_min + EPS_GREEDY_VAL * abs(initial_loss - loss_min)
     # 03/31: fixed an issue where eps-greedy is not correctly returning the index
     # of the best run; this only affects runs in v0.0.3.
     ## lrs_filtered = lrs[losses[:, -1] <= threshold]    # wrong implementation
-    lrs_filtered = np.where(losses[:, -1] <= threshold, lrs, -np.inf)
+    lrs_filtered = np.where(losses <= threshold, lrs, -np.inf)
     return np.argmax(lrs_filtered)
 
 
@@ -141,10 +175,8 @@ def loggrid_lr2(val: float) -> list:
     """list of lr2 with log-grid search, including 0."""
     # Special case: if val == 0, returns default setting
     if val == 0:
-        res = get_default_lr2()
-        if 0.0 not in res:
-            res.append(0.0)
-        return sorted(res)
+        # Edge case: return a log grid.
+        return [0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0]
     
     # Standard case.
     res = [val, 0.0]
@@ -182,8 +214,8 @@ def smoothing(losses: list) -> list:
     raise ValueError(f"unsupport smoothing = '{SMOOTHING}'.")
 
 
-def get_run_info(run: Any) -> tuple[float, float]:
-    """Extracts (lr, last_loss) from a run with specific id."""
+def get_run_info(run: Any) -> tuple[float, list]:
+    """Extracts (lr, smoothed_losses) from a run with specific id."""
     # Fetch associated lr2.
     lr2 = run.config["optimizer"]["lr_config"]["lr2"]
 
@@ -193,12 +225,12 @@ def get_run_info(run: Any) -> tuple[float, float]:
     return lr2, smoothing(loss)
 
 
-def get_best_run(candidates: list, use_greedy: bool = False) -> Any:
+def get_best_run(candidates: list, seg: int, num_segs: int, use_greedy: bool = False) -> Any:
     """Given a list of valid runs, return the optimal run.
 
     Args:
         candidates: list of wandb runs.
-        use_greedy: defaults to False; if True, use greedy methods..
+        use_greedy: defaults to False; if True, use greedy methods.
 
     Returns:
         optimal run in the last segment.
@@ -207,20 +239,21 @@ def get_best_run(candidates: list, use_greedy: bool = False) -> Any:
         raise RuntimeError("Candiates cannot be an empty list.")
     
     # Get losses and lrs.
-    losses = []
-    lrs = []
-    for run in candidates:
+    last_losses = np.zeros(len(candidates))
+    lrs = np.zeros(len(candidates))
+    for i, run in enumerate(candidates):
         lr2, loss = get_run_info(run)
-        losses.append(loss)
-        lrs.append(lr2)
-    losses = np.array(losses)
-    lrs = np.array(lrs)
+        last_losses[i] = loss[-1]
+        lrs[i] = lr2
     
     # Wrap methods.
     if use_greedy or NEXT_LR1 == "greedy":
-        idx = greedy_lr1(losses)
+        idx = greedy_lr1(last_losses)
     elif NEXT_LR1 == "eps_greedy":
-        idx = eps_greedy_lr1(losses, lrs)
+        eps = EPS_GREEDY_VAL
+        if EPS_GREEDY_DECAY:
+            eps *= (num_segs - seg) / (num_segs - 1)
+        idx = eps_greedy_lr1(last_losses, lrs, eps, EPS_GREEDY_ABSOLUTE)
     # Add your customized methods below.
     else:
         raise ValueError(f"unsupport lr1 mechanism = '{NEXT_LR1}'.")
@@ -276,7 +309,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", type=str)
     parser.add_argument("--job_ids", nargs="*", type=int)
-    parser.add_argument("--seg", type=int)
+    parser.add_argument("--seg", type=int)          # 1-index, except for the initial call where seg=0
     parser.add_argument("--num_segs", type=int)
     args = parser.parse_args()
 
@@ -306,7 +339,7 @@ def main():
             logging.error(f"Failed to fetch run {run_id}:\n{e}")
 
     # Customized method to decide lrs in the next segment.
-    best_run = get_best_run(candidates, use_greedy=is_last)
+    best_run = get_best_run(candidates, seg=args.seg, num_segs=args.num_segs, use_greedy=is_last)
     lr1, lr2_candidates = get_next_lrs(best_run)
 
     # Store current best loss and lrs locally.
