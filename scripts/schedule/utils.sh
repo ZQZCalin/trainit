@@ -3,7 +3,7 @@
 # Log message with timestamp
 log_info() {
     # Use $* to merge all positional arguments
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $*"
+    echo -e "$(date '+%Y-%m-%d %H:%M:%S') - $*"
 }
 
 # Captures config snapshot to destination .txt

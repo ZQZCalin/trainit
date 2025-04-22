@@ -15,18 +15,19 @@ source scripts/schedule/utils.sh
 source scripts/schedule/submit_job.sh
 
 
-# Create temporary folder for system files.
-mkdir -p "${SCC_OUTPUT_PATH}/tmp"
-
-echo "Running experiment ${NAME}." && echo "${DESC}"
-echo "master host ip: ${MASTER_HOST}; port number: ${PORT}"
+# Create target directory and sub-directories.
+mkdir -p "${OUTPUT_PATH}"
+mkdir -p "${SCC_OUTPUT_PATH}"
+mkdir -p "${CHECKPOINT_PATH}"
+echo "timestamp | id | status | lr1 | lr2 | seg" >> "${PROGRESS_PATH}"
 
 # Take a snapshot of experiment configs.
-snapshot_path="${SCC_OUTPUT_PATH}/snapshot.txt"
-if [ ! -f $snapshot_path ]; then
-  snapshot $snapshot_path
-  log_info "[Master]: Save config snapshot to ${snapshot_path}."
+if [ ! -f $SNAPSHOT_PATH ]; then
+  snapshot $SNAPSHOT_PATH
+  log_info "[Master]: Saved experiment snapshot to ${SNAPSHOT_PATH}."
 fi
+
+echo "Running experiment ${NAME}." && echo "${DESC}"
 
 # Initialize learning rates.
 log_info "[Update]: fetching initial lr1 and lr2_candidates..."
@@ -53,7 +54,13 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
     expected_acks=${#lr2_candidates[@]}
     # expected_acks=1     # uncomment for test purpose
 
-    log_info "[Listener]: Waiting for ${expected_acks} ACKs on port ${PORT}..."
+    log_info "[Listener]: Waiting for ${expected_acks} ACKs..."
+    
+    # exec 3< runs the line within <( ... ) in background and streams its output to fd 3,
+    # tail -n0 -F jumps to the current bottom of progress.log and only records new lines to fd 3.
+    # basically, there is a FIFO pipe in background that records all new lines written by workers,
+    # and the pipe is there until this thread is killed or we manually clean fd 3.
+    exec 3< <(tail -n0 -F "$PROGRESS_PATH")
 
     received_acks=0
     received_jobs=()
@@ -68,6 +75,7 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
     # a copy of lr2_candidates
     job_queue=( "${lr2_candidates[@]}" )
 
+    # the main listener loop
     while (( received_acks < expected_acks )); do
         # Parallel submit all jobs
         for lr2 in "${job_queue[@]}"; do
@@ -75,51 +83,44 @@ for (( i=0; i < ${#SEGMENTS[@]}-1; i++ )); do
         done
         job_queue=()    # make sure only submit once
 
-        # Optional timeout mechanism that breaks after a period of time
-        current_time=$(date +%s)
-        elapsed=$(( current_time-start_time ))
-        if (( elapsed >= MAX_LISTEN_TIME )); then
-            log_info "[Listener]: Timeout reached after ${elapsed} seconds. Exiting loop."
-            break
-        fi
+        # [Optional] timeout mechanism that ends the listener after a period of time
+        # if ! read -r -t "$LISTENER_BACKOFF" msg <&3; then
+        #     current_time=$(date +%s)
+        #     elapsed=$(( current_time-start_time ))
+        #     if (( elapsed >= MAX_LISTEN_TIME )); then
+        #         log_info "[Listener]: Timeout reached after ${elapsed} seconds. Exiting loop."
+        #         break
+        #     fi
+        # fi
 
-        # Listen for one connection and read the incoming message
-        # Attempt every X seconds to enable timeout
-        msg=$(timeout $LISTENER_BACKOFF nc -l $PORT)
-        
-        # Parse the message, expecting format: "ACK <JOB_ID>"
-        # Split message into an array on whitespace
-        read -r ack job_id state <<< "$msg"
+        # Read new lines from the background message pipe
+        read -r msg <&3
+        # Parse the log line into fields
+        read -r date time job_id status lr1 lr2 seg <<< "$msg"
 
-        if [[ "$ack" == "" ]]; then
-            :   # do nothing if receiving empty message
-        elif [[ "$ack" != "ACK" ]]; then
-            log_info "[Listener]: Unexpected message: ${msg}"
-        elif [[ "$state" -eq 0 ]]; then
+        log_info "[Listener]: Received ACK from job ID: ${job_id}, seg $((seg+1)), lr1=${lr1}, lr2=${lr2}"
+        if [[ "$status" -eq 0 ]]; then
             # Increment received_acks
             ((received_acks++))
             # Store job id
             received_jobs+=($job_id)
-            log_info "[Listener]: Received ACK ${#received_jobs[@]}/${expected_acks} from job ID ${job_id}"
+            echo "    Job ${job_id} completed, received ${#received_jobs[@]}/${expected_acks} ACKs."
         else
-            log_info "[Listener]: Job ${job_id} failed, resubmitting..."
-            # submit_job() creates a temperary config file for resubmission
-            # Load these configs and resubmit
-            temp_job_config="${SCC_OUTPUT_PATH}/tmp/${job_id}.json"
-            lr1=$(jq -r '.lr1' "$temp_job_config")
-            lr2=$(jq -r '.lr2' "$temp_job_config")
-            seg=$(jq -r '.seg' "$temp_job_config")
+            echo "    Job ${job_id} failed, resubmitting..."
             job_retries[$lr2]=$(( job_retries[$lr2] + 1 ))
             # Re-submit failed jobs if within MAX_RETRIES
             if (( job_retries[$lr2] <= MAX_RETRIES )); then
-                # Clean up the checkpoint subdir before resubmitting
+                # Use resubmit=true tag to clean up the checkpoint subdir before resubmitting
                 submit_job $lr1 $lr2 $seg true
             else
-                log_info "(warning) [Listener]: Segment ${seg} lr1=${lr1} lr2=${lr2} failed ${job_retries[$lr2]} times."
+                log_info "(warning) [Listener]: Segment ${seg} lr1=${lr1} lr2=${lr2} failed ${job_retries[$lr2]} times, giving up on this run."
                 ((received_acks++))
             fi
         fi
     done
+
+    # Manually cleans up the fd 3 pipe
+    exec 3<&-
 
     log_info "[Listener]: ${received_acks} / ${expected_acks} ACKs received from jobs (${received_jobs[@]})."
 

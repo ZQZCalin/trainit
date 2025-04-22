@@ -98,19 +98,14 @@ status=\$?
 
 echo "\$(date '+%Y-%m-%d %H:%M:%S') - Job \$JOB_ID completed with status \$status"
 
-# Create temperary configs for resubmission
-if [[ \$status -ne 0 ]]; then
-    cat <<JSON > "${SCC_OUTPUT_PATH}/tmp/\$JOB_ID.json"
-{
-  "lr1": $lr1,
-  "lr2": $lr2,
-  "seg": $seg
-}
-JSON
-fi
+# Write progress log to progress file (with writing lock)
+log="\$(date '+%Y-%m-%d %H:%M:%S') \$JOB_ID \$status $lr1 $lr2 $seg"
+(
+    flock -x -w 60 200 || { echo "\$(date '+%Y-%m-%d %H:%M:%S') - write error: could not write within 60 seconds" >&2; exit 1; }
+    echo \$log >> $PROGRESS_PATH
+) 200>${PROGRESS_PATH}.lock
 
-# Send ACK token, together with job ID and exit code
-echo "ACK \$JOB_ID \$status" | nc "$MASTER_HOST" "$PORT"
+echo "\$(date '+%Y-%m-%d %H:%M:%S') - Successfully updated log to the progress file."
 EOF
 
     echo "$(date '+%Y-%m-%d %H:%M:%S') - Launcher: Submitted job with lr1=${lr1} lr2=${lr2}."
