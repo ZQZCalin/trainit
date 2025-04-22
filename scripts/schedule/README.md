@@ -209,6 +209,9 @@ done
 
 ## Updates
 
+- version 0.0.5:
+    - Has a major rework of how communication is implemented; 
+    - Switched from TCP ports to local file read/write;
 - version 0.0.4:
     - Fixes an issue of `eps_greedy_lr1` in v0.0.3;
     - Stores a local snapshot of experiment configs;
