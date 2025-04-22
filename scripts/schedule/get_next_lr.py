@@ -32,7 +32,7 @@ DEFAULT_LR2_DICT = {
     "test": [0.1, 0.01],                                    # for testing
 }
 DEFAULT_LR2 = DEFAULT_LR2_DICT["baseline"]                  # YOU CAN CHANGE KEY FOR DIFFERENT INITIAL GRIDS
-
+DEFAULT_LR2 = 2e-3  # im too lazy to add it to the dict
 
 # >> Next lr methods.
 NEXT_LR1_LIST = [
@@ -40,7 +40,7 @@ NEXT_LR1_LIST = [
     "eps_greedy"
 ]
 NEXT_LR1 = NEXT_LR1_LIST[1]
-EPS_GREEDY_VAL = 0.015                                      # CHANGE THIS
+EPS_GREEDY_VAL = 0.030                                      # CHANGE THIS
 EPS_GREEDY_ABSOLUTE = True                                  # CHANGE THIS; if true, use absolute eps, otherwise use relative eps
 
 NEXT_LR2_LIST = [
@@ -50,7 +50,7 @@ NEXT_LR2_LIST = [
 NEXT_LR2 = NEXT_LR2_LIST[1]
 LOG_GRID_MULTI = 2
 LOG_GRID_SIZE = 2       # additional lrs on each side
-LINEAR_GRID_LOWER_SIZE = 6                                  # CHANGE THIS; should be equal to num_segs
+LINEAR_GRID_LOWER_SIZE = 10                                  # CHANGE THIS; should be equal to num_segs
 LINEAR_GRID_UPPER_COEF = [1, 1.25, 1.5, 2]                  # CHANGE THIS if needed
 # LINEAR_GRID_LOWER_SIZE = 2      # testing
 # LINEAR_GRID_UPPER_COEF = [1, 2] # testing

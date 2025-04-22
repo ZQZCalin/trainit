@@ -1,14 +1,16 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="v4seg-7_eps-0.015"                                   # CHANGE THIS every experiment
+NAME="v4_10seg_peak2e-3_eps0.03"                                   # CHANGE THIS every experiment
 DESC="
 Experiment description:
 
 - version 0.0.4;
-- linear grid with 6 lower grids and upper = [1, 1.25, 1.5, 2];
-- eps-greedy with absolute epsilon = 0.015;
-- 2k steps and 6 segments for decaying: (0 200 500 800 1100 1400 1700 2000).
+- 2k steps, 200 steps warmup and 9 decay steps, 
+  for a total of 10 segs (0 200 400 ... 2000);
+- peak lr = 2e-3;
+- linear grid with 10 lower grids and upper = [1, 1.25, 1.5, 2];
+- eps-greedy with absolute epsilon = 0.03;
 "                                                           # CHANGE THIS every experiment
 
 # =========================================================
@@ -46,7 +48,7 @@ CLEAN_CHECKPOINTS=True
 MASTER_HOST=$(hostname -I | awk '{print $1}')
 
 # port number for communication
-PORT=51205                                                  # CHANGE THIS if you submit multiple master scripts at a time (not recommended)
+PORT=60221                                                  # CHANGE THIS if you submit multiple master scripts at a time (not recommended)
 
 # backoff time (in seconds) between listener attempts
 LISTENER_BACKOFF=5
@@ -90,7 +92,7 @@ SEGMENTS[-1]=$TOTAL_STEPS           # set last segment to TOTAL_STEPS
 #       please make sure it always starts with (0 200 ...)
 #       below is an example of 3 segments (dividing the rest 1800 steps into 3 segs)
 # SEGMENTS=(0 200 800 1400 $TOTAL_STEPS)
-SEGMENTS=(0 200 500 800 1100 1400 1700 $TOTAL_STEPS)                      # CHANGE THIS
+SEGMENTS=(0 200 400 600 800 1000 1200 1400 1600 1800 $TOTAL_STEPS)                      # CHANGE THIS
 #       manually adapt NUM_SEGMENTS
 NUM_SEGMENTS=$((${#SEGMENTS[@]} - 1))
 
