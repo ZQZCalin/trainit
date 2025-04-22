@@ -32,7 +32,7 @@ DEFAULT_LR2_DICT = {
     "test": [0.1, 0.01],                                    # for testing
 }
 DEFAULT_LR2 = DEFAULT_LR2_DICT["baseline"]                  # YOU CAN CHANGE KEY FOR DIFFERENT INITIAL GRIDS
-DEFAULT_LR2 = 2e-3  # im too lazy to add it to the dict
+DEFAULT_LR2 = [2e-3]  # im too lazy to add it to the dict
 
 # >> Next lr methods.
 NEXT_LR1_LIST = [
@@ -123,7 +123,7 @@ def eps_greedy_lr1(losses: np.ndarray, lrs: np.ndarray) -> int:
         # threshold = loss_min + EPS_GREEDY_VAL * abs(initial_loss - loss_min)
     # 03/31: fixed an issue where eps-greedy is not correctly returning the index
     # of the best run; this only affects runs in v0.0.3.
-    # lrs_filtered = lrs[losses[:, -1] <= threshold]    # wrong implementation
+    ## lrs_filtered = lrs[losses[:, -1] <= threshold]    # wrong implementation
     lrs_filtered = np.where(losses[:, -1] <= threshold, lrs, -np.inf)
     return np.argmax(lrs_filtered)
 
