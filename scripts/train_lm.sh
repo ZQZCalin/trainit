@@ -172,14 +172,18 @@ nesterov=False
 # warmup=200
 # name=cosine
 
-lrs=(1e-3 1.25e-3 0.8e-3 1.5e-3 0.67e-3 2e-3 0.5e-3 3e-3 0.33e-3 5e-3 0.2e-3)
-
+# lrs=(1e-3 1.25e-3 0.8e-3 1.5e-3 0.67e-3 2e-3 0.5e-3 3e-3 0.33e-3 5e-3 0.2e-3)
+lrs=(1.33e-3 0.75e-3)
 
 for lr in "${lrs[@]}"; do
     schedule=linear
+    # schedule=cosine
     warmup=200
-    wait=1600
-    name="B_trapezoid_lr${lr}"
+    wait=0
+    # wait=1600
+    name="B_linear_lr${lr}"
+    # name="B_trapezoid_lr${lr}"
+    # name="B_cosine_lr${lr}"
     args=(
         "logging.wandb_project=$project"
         "logging.wandb_name=\$JOB_NAME"
