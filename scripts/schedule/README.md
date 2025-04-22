@@ -212,6 +212,8 @@ done
 - version 0.0.5:
     - Has a major rework of how communication is implemented; 
     - Switched from TCP ports to local file read/write;
+    - Merged all outputs into a single subfolder `scheduler_outputs/DATE/NAME`, where scc logs are now under `./scc_outputs/`, checkpoint files are under `./checkpoint`, and other master logs are under `./`;
+    - Improved the formatting of `get_next_lr.py` to be more readable and editable.
 - version 0.0.4:
     - Fixes an issue of `eps_greedy_lr1` in v0.0.3;
     - Stores a local snapshot of experiment configs;
