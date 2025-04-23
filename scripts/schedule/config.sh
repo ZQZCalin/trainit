@@ -14,7 +14,10 @@ Experiment description:
 "                                                           # CHANGE THIS (every experiment)
 
 # in case of duplicate names, add a 6-digit uuid-v4 to name
-NAME+="_$(uuidgen | tr -d '-' | head -c6)"
+# the following definition ensures uuid6 is only defined once (for both scc_submit and master)
+: "${uuid6:=$(uuidgen | tr -d '-' | head -c6)}"
+export uuid6
+NAME+="_${uuid6}"
 
 # =========================================================
 # >>> GLOBAL VARIABLES
