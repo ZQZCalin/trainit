@@ -35,6 +35,8 @@ scc_outputs/
 # checkpoint files
 checkpoint/
 
+scheduler_outputs/
+
 # testing files
 test/
 test_logs/
