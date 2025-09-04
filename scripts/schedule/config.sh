@@ -1,16 +1,16 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="v5_10seg_peak2e-3_eps0.03"                                   # CHANGE THIS (every experiment)
+NAME="v5_4seg_peak2e-3_eps0.24const_grid10"                                   # CHANGE THIS (every experiment)
 DESC="
 Experiment description:
 
 - version 0.0.5;
-- 2k steps, 200 steps warmup and 9 decay steps, 
-  for a total of 10 segs (0 200 400 ... 2000);
+- 2k steps, 200 steps warmup and 3 decay steps, 
+  for a total of 4 segs (0 200 800 1400 2000);
 - peak lr = 2e-3;
 - linear grid with 10 lower grids and upper = [1, 1.25, 1.5, 2];
-- eps-greedy with absolute epsilon = 0.03;
+- eps-greedy with absolute epsilon = 0.24 (constant).
 "                                                           # CHANGE THIS (every experiment)
 
 # in case of duplicate names, add a 6-digit uuid-v4 to name
@@ -28,7 +28,7 @@ BASE_PATH="/projectnb/aclab/qinziz/trainit"                 # CHANGE THIS upon s
 DATE=$(date +"%Y-%m-%d")
 
 # total cpu hour of the master script
-CPU_HOUR="24:00:00"                                         # CHANGE THIS if needed (24 hrs per 20 segs; no more than 72)
+CPU_HOUR="48:00:00"                                         # CHANGE THIS if needed (24 hrs per 20 segs; no more than 72)
 GPU_TYPE="L40S"
 # GPU hour per parallel job
 GPU_HOUR="4:00:00"
@@ -104,7 +104,11 @@ SEGMENTS[-1]=$TOTAL_STEPS           # set last segment to TOTAL_STEPS
 #       please make sure it always starts with (0 200 ...)
 #       below is an example of 3 segments (dividing the rest 1800 steps into 3 segs)
 # SEGMENTS=(0 200 800 1400 $TOTAL_STEPS)
-SEGMENTS=(0 200 400 600 800 1000 1200 1400 1600 1800 $TOTAL_STEPS)                      # CHANGE THIS
+# SEGMENTS=(0 200 400 600 800 1000 1200 1400 1600 1800 $TOTAL_STEPS)                      # CHANGE THIS
+# 20 segs
+# SEGMENTS=(0 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600 1700 1800 1900 $TOTAL_STEPS)
+# 4 segs
+SEGMENTS=(0 200 800 1400 $TOTAL_STEPS)
 #       manually adapt NUM_SEGMENTS
 NUM_SEGMENTS=$((${#SEGMENTS[@]} - 1))
 
