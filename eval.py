@@ -4,9 +4,9 @@
 #   cd /projectnb/aclab/qinziz/trainit
 #   module load python3/3.10.12 cuda/12.2
 #   source /projectnb/aclab/qinziz/trainit/env/bin/activate
-#   dir=ABS/PATH/TO/CKPT/FOLDER
-#   ckpt=CHECKPOINT_model.ckpt
-#   python eval.py --dir $dir --ckpt $ckpt --batch_size 16 2>&1 | tee .log; cat .log
+#   python eval.py --dir ABS/PATH --ckpt XXX.ckpt 2>&1 | tee .log; cat .log
+# 
+# Check argparse for other optional arguments.
 
 
 import torch.nn.functional as F
@@ -104,6 +104,8 @@ def get_dataloader(
         batch_size,
         num_workers,
         use_shift_labels,
+        shuffle_buffer_size,
+        shuffle_seed,
 ):
     collate_fn = DataCollatorForLanguageModeling(
         tokenizer,
@@ -116,6 +118,11 @@ def get_dataloader(
 
     disable_caching()
     columns = list(next(iter(raw_dataset)).keys())
+
+    if shuffle_buffer_size > 0:
+        raw_dataset = raw_dataset.shuffle(
+            buffer_size=shuffle_buffer_size, seed=shuffle_seed,
+        )
 
     raw_dataset = raw_dataset.map(
         lambda examples: tokenizer(
@@ -136,7 +143,7 @@ def get_dataloader(
     return dataloader
 
 
-def init_eval_dataloader(config, eval_batch_size):
+def init_eval_dataloader(config, eval_batch_size, shuffle_buffer_size, shuffle_seed):
     raw_files = {
         "train": "/projectnb/aclab/datasets/pile/raw_data/train/",
         "val": "/projectnb/aclab/datasets/pile/raw_data/val.jsonl",
@@ -152,14 +159,12 @@ def init_eval_dataloader(config, eval_batch_size):
         batch_size=eval_batch_size,
         num_workers=config.dataset.dataloader_workers,
         use_shift_labels=config.dataset.shift_labels,
+        shuffle_buffer_size=shuffle_buffer_size,
+        shuffle_seed=shuffle_seed,
     )
 
     return eval_dataloader
 
-
-# python eval.py \
-#     --ckpt "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-05-04/v5_4seg_peak2e-3_eps0.24const_grid10_0a940a/checkpoint/1400-2000/lr2:7.00e-03" \
-#     2>&1 | tee .log; cat .log
 
 # ==============================================================================
 # Main eval function
@@ -185,6 +190,7 @@ def eval(
         model,
         dataloader,
         loss_fn,
+        max_tokens = 0,
 ):
     eval_step_jit = eqx.filter_jit(
         jtu.Partial(eval_step),
@@ -196,6 +202,10 @@ def eval(
         enumerate(dataloader)
     )
     for idx, batch in pbar:
+        # Hard upper limit on number of eval tokens
+        if max_tokens > 0 and total_tokens >= max_tokens:
+            break
+
         input_ids = jnp.asarray(batch["input_ids"])
         labels = jnp.asarray(batch["labels"])
         batch = (input_ids, labels)
@@ -222,31 +232,29 @@ def main():
     parser.add_argument("--ckpt", type=str, help="checkpoint name")
     parser.add_argument("--cfg", type=str, default="config.yaml")
     parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--max_tokens", type=int, default=0)  # 8192000 = 1024*16*500
+    parser.add_argument("--shuffle_buffer_size", type=int, default=0)
+    parser.add_argument("--shuffle_seed", type=int, default=42)
     args = parser.parse_args()
 
     config = OmegaConf.load(
         os.path.join(args.dir, args.cfg)
     )
-    logger.info(
-        f"""
-        Eval from checkpoint:
-        - path: {args.dir}
-        - checkpoint: {args.ckpt}
-        - config: {args.cfg}
-        """
-    )
+    logger.info(f"Evaluating: {vars(args)}")
     logger.info(
         f"Loaded from checkpoint config: \n{OmegaConf.to_yaml(config)}"
     )
     
-    dataloader = init_eval_dataloader(config, args.batch_size)
-    model = init_model(config, key=jr.PRNGKey(42)) # NOTE@ZQZCalin: dummy random seed
+    dataloader = init_eval_dataloader(
+        config, args.batch_size, args.shuffle_buffer_size, args.shuffle_seed
+    )
+    model = init_model(config, key=jr.PRNGKey(42)) # dummy random seed
     model = serializer.load(
         os.path.join(args.dir, args.ckpt), model
     )
     loss_fn = init_loss_fn(config)
 
-    eval(model, dataloader, loss_fn)
+    eval(model, dataloader, loss_fn, args.max_tokens)
 
 
 

@@ -34,7 +34,7 @@ batch_job/
 
 # output files
 scc_outputs/
-.log
+*.log
 
 # checkpoint files
 checkpoint/
