@@ -3,7 +3,6 @@
 # CHANGE THIS
 BASE_DIR=/projectnb/aclab/qinziz/trainit
 OUTPUT_PATH=$BASE_DIR/test_logs/eval
-
 mkdir -p $OUTPUT_PATH
 
 # CHANGE THIS: a list of string of form "DIR CKPT NAME"
@@ -11,6 +10,7 @@ CKPT_LIST=(
   "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-05-04/v5_4seg_peak2e-3_eps0.24const_grid10_0a940a/checkpoint/1400-2000/lr2:7.00e-03 iter_2000_model.ckpt seg4_lr2e-3_eps0.24"
 )
 
+# NO NEED TO CHANGE BELOW
 submit_eval_job() {
     local dir=$1
     local ckpt=$2
@@ -38,7 +38,6 @@ EOF
     echo "$(date '+%Y-%m-%d %H:%M:%S') job_id: ${job_id} || ${name}" >> "${OUTPUT_PATH}/job_list.txt"
     echo "Submitted job: $job_id $name"
 }
-
 
 # Iterate through the pairs
 for pair in "${CKPT_LIST[@]}"; do
