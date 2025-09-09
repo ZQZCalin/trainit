@@ -3,14 +3,11 @@
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
 NAME="v5_4seg_peak2e-3_eps0.24const_grid10"                                   # CHANGE THIS (every experiment)
 DESC="
-Experiment description:
+Part of steps=10k, segs=50 experiment
 
-- version 0.0.5;
-- 2k steps, 200 steps warmup and 3 decay steps, 
-  for a total of 4 segs (0 200 800 1400 2000);
-- peak lr = 2e-3;
-- linear grid with 10 lower grids and upper = [1, 1.25, 1.5, 2];
-- eps-greedy with absolute epsilon = 0.24 (constant).
+- initial lr = 1e-3
+- grid = (0/1, 1/2, 2/3, ..., 1, 6/5, 5/4, 4/3, 3/2, 2/1)
+- eps = 0.24
 "                                                           # CHANGE THIS (every experiment)
 
 # in case of duplicate names, add a 6-digit uuid-v4 to name
@@ -88,11 +85,11 @@ ENABLE_RETRY=true
 # =========================================================
 
 # maximum number of training steps
-TOTAL_STEPS=2000                                            # CHANGE THIS if needed
+TOTAL_STEPS=10000                                            # CHANGE THIS if needed
 # TOTAL_STEPS=50      # testing
 
 # number of segments
-NUM_SEGMENTS=10
+NUM_SEGMENTS=50
 # NUM_SEGMENTS=3      # testing
 
 # list of checkpoint iterations
@@ -108,7 +105,7 @@ SEGMENTS[-1]=$TOTAL_STEPS           # set last segment to TOTAL_STEPS
 # 20 segs
 # SEGMENTS=(0 200 300 400 500 600 700 800 900 1000 1100 1200 1300 1400 1500 1600 1700 1800 1900 $TOTAL_STEPS)
 # 4 segs
-SEGMENTS=(0 200 800 1400 $TOTAL_STEPS)
+# SEGMENTS=(0 200 800 1400 $TOTAL_STEPS)
 #       manually adapt NUM_SEGMENTS
 NUM_SEGMENTS=$((${#SEGMENTS[@]} - 1))
 

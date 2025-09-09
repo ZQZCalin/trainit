@@ -13,7 +13,7 @@ from typing import List, Tuple
 from jaxtyping import Array
 from omegaconf import DictConfig, ListConfig
 
-import os, logging
+import os, sys, logging
 from tqdm import tqdm
 
 from serialize import serializer
@@ -159,6 +159,8 @@ def lm_train_loop(
     iteration_timing_events = ["iteration", "dataloader", "train_step"]
     time_keeper.mark(start_events=["dataloader", "iteration", "tokens", "samples"])
 
+    initial_loss = None
+
     for it, batch_idx in pbar:
         if it >= num_steps:
             break
@@ -182,17 +184,24 @@ def lm_train_loop(
         loss, accuracy, log_metrics, train_state = train_step_jit(
             train_state, batches, optimizer, loss_fn, logger
         )
+        if not initial_loss:
+            initial_loss = loss
 
         # Auto-terminate if there are too many consecutive nan losses.
         num_nans = train_state.num_nans
         if jnp.isnan(loss):
             if num_nans >= max_nan_loss:
                 logging.info(f"iteration {train_state.iteration}: loss = {loss}, training stopped.")
-                break
+                sys.exit(1)
+                # break
             else:
                 train_state = train_state._replace(num_nans=num_nans+1)
         elif num_nans > 0:
             train_state = train_state._replace(num_nans=0)
+
+        # Additional early stopping policy
+        if loss > initial_loss + 0.5:
+            sys.exit(1)
 
         time_keeper.mark(
             end_events={"train_step": 1},

@@ -41,7 +41,7 @@ DEFAULT_LR2_DICT = {
     "baseline_better": [2e-3],                          # hard code baseline, but better
     "test": [0.1, 0.01],                                # for testing
 }
-DEFAULT_LR2_KEY = "baseline_better"                         # specify lr2 for the first segment
+DEFAULT_LR2_KEY = "baseline"                            # specify lr2 for the first segment
 assert DEFAULT_LR2_KEY in DEFAULT_LR2_DICT
 DEFAULT_LR2 = DEFAULT_LR2_DICT[DEFAULT_LR2_KEY]
 
@@ -81,8 +81,9 @@ LOG_GRID_MULTI = 2                                          # size of logarithmi
 LOG_GRID_SIZE = 2                                           # additional lrs on each side
 
 # >> linear grid for lr2
-LINEAR_GRID_LOWER_SIZE = 10                                 # CHANGE THIS; should be equal to num_segs
-LINEAR_GRID_UPPER_COEF = [1, 1.25, 1.5, 2]                  # CHANGE THIS if needed
+LINEAR_GRID_LOWER_SIZE = 10                                 # CHANGE THIS
+# LINEAR_GRID_UPPER_COEF = [1, 1.25, 1.5, 2]                  # CHANGE THIS if needed
+LINEAR_GRID_UPPER_SIZE = 10
 # LINEAR_GRID_LOWER_SIZE = 2      # testing
 # LINEAR_GRID_UPPER_COEF = [1, 2] # testing
 
@@ -197,8 +198,10 @@ def linear_grid_lr2(val: float) -> list:
         # Edge case: return a log grid.
         return [0, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0]
     
-    coefs = [i/(i+1) for i in range(LINEAR_GRID_LOWER_SIZE)]
-    coefs += LINEAR_GRID_UPPER_COEF
+    coefs = [1.0]
+    coefs += [i/(i+1) for i in range(LINEAR_GRID_LOWER_SIZE)]
+    coefs += [(i+1)/i for i in range(1, LINEAR_GRID_UPPER_SIZE)]
+    # coefs += LINEAR_GRID_UPPER_COEF
     return sorted([val * coef for coef in coefs])
 
 
