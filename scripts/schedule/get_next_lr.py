@@ -59,7 +59,7 @@ assert NEXT_LR1 in NEXT_LR1_LIST
 # ...   # it takes no hyper-parameter, so it's empty here
 
 # >> epsilon-greedy mechanism for lr1
-EPS_GREEDY_VAL = 0.240                                      # CHANGE THIS
+EPS_GREEDY_VAL = 0.000                                      # CHANGE THIS
 EPS_GREEDY_ABSOLUTE = True                                  # CHANGE THIS; if true, use absolute eps, otherwise use relative eps
 EPS_GREEDY_DECAY = False                                     # CHANGE THIS; if true, adds a linear decay to eps.
 
@@ -202,7 +202,9 @@ def linear_grid_lr2(val: float) -> list:
     coefs += [i/(i+1) for i in range(LINEAR_GRID_LOWER_SIZE)]
     coefs += [(i+1)/i for i in range(1, LINEAR_GRID_UPPER_SIZE)]
     # coefs += LINEAR_GRID_UPPER_COEF
-    return sorted([val * coef for coef in coefs])
+    # NOTE@ZQZCalin: always start from the largest lr because larger lr are more likely to fail
+    # and to be re-submitted.
+    return sorted([val * coef for coef in coefs], reverse=True)
 
 
 # =========================================================

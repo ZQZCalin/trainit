@@ -1,13 +1,13 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="v5_4seg_peak2e-3_eps0.24const_grid10"                                   # CHANGE THIS (every experiment)
+NAME="step2k_seg10_lr1e-3_grid20_eps0.0"                                   # CHANGE THIS (every experiment)
 DESC="
-Part of steps=10k, segs=50 experiment
+Part of steps=2k, segs=10 experiment
 
 - initial lr = 1e-3
-- grid = (0/1, 1/2, 2/3, ..., 1, 6/5, 5/4, 4/3, 3/2, 2/1)
-- eps = 0.24
+- 20 grids: (0/1, 1/2, 2/3, ..., 9/10, 1, 10/9, ..., 3/2, 2/1)
+- eps = 0.0
 "                                                           # CHANGE THIS (every experiment)
 
 # in case of duplicate names, add a 6-digit uuid-v4 to name
@@ -85,11 +85,11 @@ ENABLE_RETRY=true
 # =========================================================
 
 # maximum number of training steps
-TOTAL_STEPS=10000                                            # CHANGE THIS if needed
+TOTAL_STEPS=2000                                            # CHANGE THIS if needed
 # TOTAL_STEPS=50      # testing
 
 # number of segments
-NUM_SEGMENTS=50
+NUM_SEGMENTS=10
 # NUM_SEGMENTS=3      # testing
 
 # list of checkpoint iterations

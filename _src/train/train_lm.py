@@ -135,6 +135,7 @@ def lm_train_loop(
         time_keeper: TimeKeeper,
         wandb_logger: RateLimitedWandbLog,
         max_nan_loss: int = 5,
+        max_loss_blow_ups: int = 3,
 ) -> TrainState:
     """The main train loop that handles training, logging, and checkpointing."""
     num_steps = config.train.max_steps
@@ -159,7 +160,8 @@ def lm_train_loop(
     iteration_timing_events = ["iteration", "dataloader", "train_step"]
     time_keeper.mark(start_events=["dataloader", "iteration", "tokens", "samples"])
 
-    initial_loss = None
+    # NOTE@ZQZCalin: a temporary soln
+    num_loss_blow_ups = 0
 
     for it, batch_idx in pbar:
         if it >= num_steps:
@@ -184,14 +186,30 @@ def lm_train_loop(
         loss, accuracy, log_metrics, train_state = train_step_jit(
             train_state, batches, optimizer, loss_fn, logger
         )
-        if not initial_loss:
-            initial_loss = loss
+
+        time_keeper.mark(
+            end_events={"train_step": 1},
+        )
+
+        # Update loss and accuracy.
+        if running_loss == 0:
+            running_loss = loss
+        else:
+            running_loss = beta * running_loss + (1.0 - beta) * loss
+        total_tokens += tokens
+        running_accuracy = beta * running_accuracy + (1 - beta) * accuracy
+        pbar.set_description(
+            f"train iter: {it}, tokens: {total_tokens}, loss: {loss:.2f}, accuracy: {accuracy:.4f}, running_loss: {running_loss/(1.0-beta**(it+1)):.2f}, running_accuracy: {running_accuracy/(1.0-beta**(it+1)):.4f}"
+        )
 
         # Auto-terminate if there are too many consecutive nan losses.
         num_nans = train_state.num_nans
         if jnp.isnan(loss):
             if num_nans >= max_nan_loss:
-                logging.info(f"iteration {train_state.iteration}: loss = {loss}, training stopped.")
+                logging.info(
+                    f"iteration {train_state.iteration}: loss = {loss} \
+                        for more than {max_nan_loss} iters, training stopped."
+                )
                 sys.exit(1)
                 # break
             else:
@@ -200,20 +218,19 @@ def lm_train_loop(
             train_state = train_state._replace(num_nans=0)
 
         # Additional early stopping policy
-        if loss > initial_loss + 0.5:
-            sys.exit(1)
-
-        time_keeper.mark(
-            end_events={"train_step": 1},
-        )
-
-        # Update loss and accuracy.
-        running_loss = beta * running_loss + (1.0 - beta) * loss
-        total_tokens += tokens
-        running_accuracy = beta * running_accuracy + (1 - beta) * accuracy
-        pbar.set_description(
-            f"train iter: {it}, tokens: {total_tokens}, loss: {loss:.2f}, accuracy: {accuracy:.4f}, running_loss: {running_loss/(1.0-beta**(it+1)):.2f}, running_accuracy: {running_accuracy/(1.0-beta**(it+1)):.4f}"
-        )
+        _tolerance = 0.5
+        if loss > running_loss + _tolerance:
+            if num_loss_blow_ups >= max_loss_blow_ups:
+                logging.info(
+                    f"iteration {train_state.iteration}: \
+                        loss = {loss} > running_loss = {running_loss} + eps = {_tolerance} \
+                        for more than {max_loss_blow_ups} iters, training stopped."
+                )
+                sys.exit(1)
+            else:
+                num_loss_blow_ups += 1
+        else:
+            num_loss_blow_ups = 0
 
         # ======================================================================
         # BELOW UPDATES ADDITIONAL LOG MESSAGES...
