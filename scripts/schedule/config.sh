@@ -1,13 +1,13 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="step2k_seg10_lr1e-3_grid20_eps0.0"                                   # CHANGE THIS (every experiment)
+NAME="step2k_seg10_lr1e-3_grid20_eps0.48"                                   # CHANGE THIS (every experiment)
 DESC="
 Part of steps=2k, segs=10 experiment
 
 - initial lr = 1e-3
 - 20 grids: (0/1, 1/2, 2/3, ..., 9/10, 1, 10/9, ..., 3/2, 2/1)
-- eps = 0.0
+- eps = 0.48
 "                                                           # CHANGE THIS (every experiment)
 
 # in case of duplicate names, add a 6-digit uuid-v4 to name

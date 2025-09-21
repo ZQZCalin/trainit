@@ -59,7 +59,7 @@ assert NEXT_LR1 in NEXT_LR1_LIST
 # ...   # it takes no hyper-parameter, so it's empty here
 
 # >> epsilon-greedy mechanism for lr1
-EPS_GREEDY_VAL = 0.000                                      # CHANGE THIS
+EPS_GREEDY_VAL = 0.480                                      # CHANGE THIS
 EPS_GREEDY_ABSOLUTE = True                                  # CHANGE THIS; if true, use absolute eps, otherwise use relative eps
 EPS_GREEDY_DECAY = False                                     # CHANGE THIS; if true, adds a linear decay to eps.
 
