@@ -2,12 +2,23 @@
 
 # CHANGE THIS
 BASE_DIR=/projectnb/aclab/qinziz/trainit
-OUTPUT_PATH=$BASE_DIR/test_logs/eval
+DATE=$(date +"%Y-%m-%d")
+OUTPUT_PATH=$BASE_DIR/scheduler_outputs/$DATE/eval_2
 mkdir -p $OUTPUT_PATH
 
 # CHANGE THIS: a list of string of form "DIR CKPT NAME"
 CKPT_LIST=(
-  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-05-04/v5_4seg_peak2e-3_eps0.24const_grid10_0a940a/checkpoint/1400-2000/lr2:7.00e-03 iter_2000_model.ckpt seg4_lr2e-3_eps0.24"
+    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-12/step2k_seg4_lr1e-3_grid20_eps0.0_70e394/checkpoint/1500-2000/lr2:1.00e-04 iter_2000_model.ckpt step2k_seg4_lr1e-3_grid20_eps0.0"
+    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-11/step2k_seg4_lr1e-3_grid20_eps0.06_09278e/checkpoint/1500-2000/lr2:0.00e+00 iter_2000_model.ckpt step2k_seg4_lr1e-3_grid20_eps0.06"
+    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-12/step2k_seg4_lr1e-3_grid20_eps0.12_b147e3/checkpoint/1500-2000/lr2:0.00e+00 iter_2000_model.ckpt step2k_seg4_lr1e-3_grid20_eps0.12"
+    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-13/step2k_seg4_lr1e-3_grid20_eps0.24_f01f5d/checkpoint/1500-2000/lr2:0.00e+00 iter_2000_model.ckpt step2k_seg4_lr1e-3_grid20_eps0.24"
+    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-19/step2k_seg10_lr1e-3_grid20_eps0.0_9e290b/checkpoint/1800-2000/lr2:5.40e-05 iter_2000_model.ckpt step2k_seg10_lr1e-3_grid20_eps0.0"
+    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-14/step2k_seg10_lr1e-3_grid20_eps0.06_1df4fd/checkpoint/1800-2000/lr2:0.00e+00 iter_2000_model.ckpt step2k_seg10_lr1e-3_grid20_eps0.06"
+    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-15/step2k_seg10_lr1e-3_grid20_eps0.12_b66742/checkpoint/1800-2000/lr2:0.00e+00 iter_2000_model.ckpt step2k_seg10_lr1e-3_grid20_eps0.12"
+    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-16/step2k_seg10_lr1e-3_grid20_eps0.24_96bb10/checkpoint/1800-2000/lr2:0.00e+00 iter_2000_model.ckpt step2k_seg10_lr1e-3_grid20_eps0.24"
+    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-16/step2k_seg10_lr1e-3_grid20_eps0.24decay_d0f502/checkpoint/1800-2000/lr2:0.00e+00 iter_2000_model.ckpt step2k_seg10_lr1e-3_grid20_eps0.24decay"
+    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-17/step2k_seg10_lr1e-3_grid20_eps0.48decay_15be1a/checkpoint/1800-2000/lr2:0.00e+00 iter_2000_model.ckpt step2k_seg10_lr1e-3_grid20_eps0.48decay"
+    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-18/step2k_seg10_lr1e-3_grid20_eps0.96decay_71b436/checkpoint/1800-2000/lr2:0.00e+00 iter_2000_model.ckpt step2k_seg10_lr1e-3_grid20_eps0.96decay"
 )
 
 # NO NEED TO CHANGE BELOW
