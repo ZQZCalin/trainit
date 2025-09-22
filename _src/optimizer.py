@@ -74,6 +74,13 @@ def init_schedule(lr_config: DictConfig) -> optax.ScalarOrSchedule:
             transition_begin=config.start_steps,    # NOTE: for now, we still need to specify the start iteration in config.
         )
         return learning_rate
+    
+    def init_quadratic_lr(config):
+        learning_rate = optimizers.quadratic_schedule(
+            peak_value=config.lr,
+            total_steps=config.max_steps,
+        )
+        return learning_rate
 
     if lr_config.schedule == "constant":
         learning_rate = init_constant_lr(lr_config)
@@ -85,6 +92,8 @@ def init_schedule(lr_config: DictConfig) -> optax.ScalarOrSchedule:
         learning_rate = init_trapezoid_lr(lr_config)
     elif lr_config.schedule == "piecewise_linear":
         learning_rate = init_piecewise_linear_lr(lr_config)
+    elif lr_config.schedule == "quadratic":
+        learning_rate = init_quadratic_lr(lr_config)
     else:
         raise ValueError(f"schedule type {lr_config.schedule} is not supported.")
     return learning_rate

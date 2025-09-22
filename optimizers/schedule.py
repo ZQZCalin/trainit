@@ -2,6 +2,7 @@
 
 import optax
 from jaxtyping import Array
+import jax.numpy as jnp
 
 
 def get_current_lr(
@@ -154,3 +155,23 @@ def trapezoid_schedule(
         )
     ]
     return optax.join_schedules(schedules, [warmup_steps, total_steps - decay_steps])
+
+
+def quadratic_schedule(
+        peak_value: float,
+        total_steps: int,
+) -> optax.Schedule:
+    """Downwards parabola schedule.
+
+    Args:
+        peak_value: highest lr
+        total_steps: total number of steps
+    """
+    assert total_steps > 0, f"total_steps must be > 0, got {total_steps}."
+    a = total_steps / 2
+    def schedule(count: Array) -> Array:
+        t = count.astype(jnp.float32)
+        lr = 1 - (t/a - 1)**2
+        lr = jnp.clip(lr, min=0.0) * peak_value
+        return lr.astype(jnp.float32)
+    return schedule

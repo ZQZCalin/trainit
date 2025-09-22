@@ -1,0 +1,3 @@
+schedule: quadratic
+lr: null
+max_steps: null
