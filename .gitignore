@@ -58,3 +58,9 @@ trainer.py
 # requirements.txt
 test_data.jsonl
 loadit_iterator.py
+
+
+*.ckpt 
+*.png
+*.jpg
+*.jpeg
