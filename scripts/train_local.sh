@@ -1,17 +1,18 @@
 #!/bin/bash
 
 # Usage:
-#   cd /projectnb/aclab/qinziz/trainit/scripts
+#   cd /projectnb/aclab/qinziz/trainit/
 #   module load python3/3.10.12 cuda/12.2
 #   source /projectnb/aclab/qinziz/trainit/env/bin/activate
-#   bash train_local.sh
+#   bash scripts/train_local.sh
 
 #-------------------------------------------------------------------------
 # Some global variables and the `submit_job()` function
 
 BASE_DIR=/projectnb/aclab/qinziz/trainit
                                 # change to your path here; you can just copy from your config.sh
-EXP=baseline_step2k_quadratic   # experiment name; you can change if you want
+EXP=local_test   
+                                # experiment name; you can change if you want
 PROJECT=greedy_lr_schedule      # change to your wandb project name
 TOTAL_STEPS=2000                # maximum number of training steps
 lrs=(1e-1 3.33e-2 1e-2 3.33e-3 1e-3 3.33e-4 1e-4 3.33e-5 1e-5)  # log grid of LRs
@@ -73,7 +74,7 @@ args=(
 )
 # schedule configs
 args+=(
-    "optimizer/lr_config=quadratic"
+    "optimizer/lr_config=semi_local"
     "optimizer.lr_config.lr=$lr"
     "optimizer.lr_config.max_steps=$TOTAL_STEPS"
 )

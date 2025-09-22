@@ -175,3 +175,56 @@ def quadratic_schedule(
         lr = jnp.clip(lr, min=0.0) * peak_value
         return lr.astype(jnp.float32)
     return schedule
+
+
+def semi_local_schedule(
+        peak_value: float,
+        total_steps: int,
+) -> optax.Schedule:
+    """Scaling of semi-local search optimal schedule.
+
+    Checkpoint:
+    /projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-17/step2k_seg10_lr1e-3_grid20_eps0.48decay_15be1a
+
+    Args:
+        peak_value: highest lr
+        total_steps: total number of steps
+    """
+    checkpoints = [
+        (0, 0.0),
+        (1, 0.1),
+        (2, 0.2),
+        (3, 0.4),
+        (4, 0.8),
+        (5, 1.0),
+        (6, 1.0),
+        (7, 6/7),
+        (8, 4/7),
+        (9, 2/7),
+        (10, 0.0),
+    ]
+    schedules = []
+    for i, (_, value) in enumerate(checkpoints[:-1]):
+        _, next_value = checkpoints[i+1]
+        schedules.append(
+            optax.linear_schedule(
+                init_value=value,
+                end_value=next_value,
+                transition_steps=1,
+            )
+        )
+    boundaries = [step for step, _ in checkpoints]
+    boundaries = boundaries[1:-1]
+    base_schedule = optax.join_schedules(schedules, boundaries)
+
+    def schedule(count: Array) -> Array:
+        lr = base_schedule(10*count/total_steps) * peak_value
+        return lr
+    return schedule
+
+
+if __name__ == "__main__":
+    # testing
+    schedule = semi_local_schedule(peak_value=2.0, total_steps=30)
+    for t in range(-3, 23):
+        print(t, schedule(jnp.array(t)))

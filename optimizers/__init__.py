@@ -23,6 +23,7 @@ from optimizers.schedule import (
     warmup_const_linear_decay_schedule,
     trapezoid_schedule,
     quadratic_schedule,
+    semi_local_schedule,
 )
 from optimizers.muon.muon import scale_by_muon
 from optimizers.muon.muon import (
