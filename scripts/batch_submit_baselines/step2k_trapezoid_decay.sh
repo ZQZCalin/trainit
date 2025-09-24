@@ -1,21 +1,19 @@
 #!/bin/bash
 
 # Usage:
-#   cd /projectnb/aclab/qinziz/trainit/
-#   module load python3/3.10.12 cuda/12.2
-#   source /projectnb/aclab/qinziz/trainit/env/bin/activate
-#   bash scripts/batch_submit_baselines/step2k_quadratic_lr.sh
+#   bash /projectnb/aclab/qinziz/trainit/scripts/batch_submit_baselines/step2k_trapezoid_decay.sh
 
 #-------------------------------------------------------------------------
 # Some global variables and the `submit_job()` function
 
 BASE_DIR=/projectnb/aclab/qinziz/trainit
                                 # change to your path here; you can just copy from your config.sh
-EXP=baseline_step2k_quadratic   # experiment name; you can change if you want
+EXP=baseline_step2k_trapezoid_decay   
+                                # experiment name; you can change if you want
 PROJECT=greedy_lr_schedule      # change to your wandb project name
 TOTAL_STEPS=2000                # maximum number of training steps
-lrs=(1.0 3.33e-1 1e-1 3.33e-2 1e-2 3.33e-3 1e-3 3.33e-4 1e-4 3.33e-5 1e-5)  # log grid of LRs
-# lrs=(1e-4)
+# lrs=(1.0 3.33e-1 1e-1 3.33e-2 1e-2 3.33e-3 1e-3 3.33e-4 1e-4 3.33e-5 1e-5)  # log grid of LRs
+decays=(0 100 200 500 1000)
 
 
 #-------------------------------------------------------------------------
@@ -83,8 +81,12 @@ LOG_CALLBACK_DATA=False
 # random seed
 SEED=42
 
-for lr in "${lrs[@]}"; do
-    name="lr_${lr}"                                     # ONLY CHANGE args IF NECESSARY
+# LR schedule
+LR=1e-3
+WARMUP=200
+
+for decay in "${decays[@]}"; do
+    name="decay_${decay}"                                     # ONLY CHANGE args IF NECESSARY
     runid="$(uuidgen)"
     save_path="${OUTPUT_PATH}/${name}/checkpoint"
     args=(
@@ -108,8 +110,10 @@ for lr in "${lrs[@]}"; do
     )
     # schedule configs
     args+=(
-        "optimizer/lr_config=quadratic"
-        "optimizer.lr_config.lr=$lr"
+        "optimizer/lr_config=trapezoid"
+        "optimizer.lr_config.lr=$LR"
+        "optimizer.lr_config.warmup=$WARMUP"
+        "optimizer.lr_config.decay=$decay"
         "optimizer.lr_config.max_steps=$TOTAL_STEPS"
     )
     submit_job $name $runid ${args[@]}

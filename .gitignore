@@ -64,3 +64,4 @@ loadit_iterator.py
 *.png
 *.jpg
 *.jpeg
+*.json

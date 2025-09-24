@@ -1,21 +1,19 @@
 #!/bin/bash
 
 # Usage:
-#   cd /projectnb/aclab/qinziz/trainit/
-#   module load python3/3.10.12 cuda/12.2
-#   source /projectnb/aclab/qinziz/trainit/env/bin/activate
-#   bash scripts/batch_submit_baselines/step2k_quadratic_lr.sh
+#   bash /projectnb/aclab/qinziz/trainit/scripts/batch_submit_baselines/step2k_trapezoid_lr.sh
 
 #-------------------------------------------------------------------------
 # Some global variables and the `submit_job()` function
 
 BASE_DIR=/projectnb/aclab/qinziz/trainit
                                 # change to your path here; you can just copy from your config.sh
-EXP=baseline_step2k_quadratic   # experiment name; you can change if you want
+EXP=baseline_step2k_trapezoid
+                                # experiment name; you can change if you want
 PROJECT=greedy_lr_schedule      # change to your wandb project name
 TOTAL_STEPS=2000                # maximum number of training steps
-lrs=(1.0 3.33e-1 1e-1 3.33e-2 1e-2 3.33e-3 1e-3 3.33e-4 1e-4 3.33e-5 1e-5)  # log grid of LRs
-# lrs=(1e-4)
+# lrs=(1.0 3.33e-1 1e-1 3.33e-2 1e-2 3.33e-3 1e-3 3.33e-4 1e-4 3.33e-5 1e-5)  # log grid of LRs
+lrs=(3.33e-3)
 
 
 #-------------------------------------------------------------------------
@@ -83,6 +81,10 @@ LOG_CALLBACK_DATA=False
 # random seed
 SEED=42
 
+# LR schedule
+WARMUP=200
+DECAY=200
+
 for lr in "${lrs[@]}"; do
     name="lr_${lr}"                                     # ONLY CHANGE args IF NECESSARY
     runid="$(uuidgen)"
@@ -108,8 +110,10 @@ for lr in "${lrs[@]}"; do
     )
     # schedule configs
     args+=(
-        "optimizer/lr_config=quadratic"
+        "optimizer/lr_config=trapezoid"
         "optimizer.lr_config.lr=$lr"
+        "optimizer.lr_config.warmup=$WARMUP"
+        "optimizer.lr_config.decay=$DECAY"
         "optimizer.lr_config.max_steps=$TOTAL_STEPS"
     )
     submit_job $name $runid ${args[@]}
