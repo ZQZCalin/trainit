@@ -10,7 +10,7 @@ from wandb.errors import CommError
 import logging
 import pandas as pd
 import numpy as np
-from typing import Any
+from typing import Any, Callable
 import os
 from pathlib import Path
 
@@ -42,7 +42,7 @@ DEFAULT_LR2_DICT = {
     "test": [0.1, 0.01],                                # for testing
     "multi_grid": [1e-2, 3.33e-3, 1e-3, 3.33e-4, 1e-4]
 }
-DEFAULT_LR2_KEY = "log_grid"                            # specify lr2 for the first segment
+DEFAULT_LR2_KEY = "baseline"                            # specify lr2 for the first segment
 assert DEFAULT_LR2_KEY in DEFAULT_LR2_DICT
 DEFAULT_LR2 = DEFAULT_LR2_DICT[DEFAULT_LR2_KEY]
 
@@ -52,8 +52,10 @@ DEFAULT_LR2 = DEFAULT_LR2_DICT[DEFAULT_LR2_KEY]
 NEXT_LR1_LIST = [
     "greedy",
     "eps_greedy",
+    "greedy_with_reg",
 ]
-NEXT_LR1 = "eps_greedy"
+# NEXT_LR1 = "eps_greedy"
+NEXT_LR1 = "greedy_with_reg"
 assert NEXT_LR1 in NEXT_LR1_LIST
 
 # >> greedy mechanism
@@ -63,6 +65,11 @@ assert NEXT_LR1 in NEXT_LR1_LIST
 EPS_GREEDY_VAL = 0.480                                      # CHANGE THIS
 EPS_GREEDY_ABSOLUTE = True                                  # CHANGE THIS; if true, use absolute eps, otherwise use relative eps
 EPS_GREEDY_DECAY = False                                     # CHANGE THIS; if true, adds a linear decay to eps.
+
+# >> greedy with regularization
+GREEDY_REG_FN = "tanh"
+GREEDY_REG_LAM = 0.50           # max range of regularization
+GREEDY_REG_TANH_K = 2.0         # tanh: k in tanh(-k*x)
 
 # >> potentially other mechanism
 # ...
@@ -164,6 +171,38 @@ def eps_greedy_lr1(losses: np.ndarray, lrs: np.ndarray, eps: float=0.0, use_abs:
     return np.argmax(lrs_filtered)
 
 
+RegFn = Callable[[np.ndarray], np.ndarray]
+
+def tanh_reg_fn_wrapper(lam: float, k: float) -> RegFn:
+    def tanh_reg_fn(lrs: np.ndarray) -> np.ndarray:
+        x = np.asarray(lrs, dtype=np.float32)
+
+        # 1. transformation into -1/x + 1 (0<x<1); x - 1 (x>1)
+        res = np.full_like(x, -np.inf)
+        ind_left = (x > 0) & (x < 1)
+        ind_right = (x >= 1)
+        res[ind_left] = 1.0 - 1.0 / x[ind_left]
+        res[ind_right] = x[ind_right] - 1.0
+
+        # 2. tanh function
+        res = (lam/2) * np.tanh(-k * res)
+        return res
+    return tanh_reg_fn
+
+
+def greedy_with_lr_reg(losses: np.ndarray, lr_ratios: np.ndarray, reg_fn: RegFn) -> int:
+    """Returns the run index that is
+        argmin ell + R(eta)
+    
+    Args:
+        losses: [k,] array of last losses.
+        lr_ratios: [k,] array of lr2/lr1.
+        reg_fn: callable: [learning rate] -> regularization value
+    """
+    losses_reg = losses + reg_fn(lr_ratios)
+    return np.argmin(losses_reg)
+
+
 # Customize your own lr mechanism if needed.
 def customized_lr1(arr: np.ndarray) -> float:
     raise NotImplementedError
@@ -252,14 +291,26 @@ def get_best_run(candidates: list, seg: int, num_segs: int, use_greedy: bool = F
         last_losses[i] = loss[-1]
         lrs[i] = lr2
     
+    lr1 = candidates[0].config["optimizer"]["lr_config"]["lr1"]
+    
     # Wrap methods.
-    if use_greedy or NEXT_LR1 == "greedy":
+    if use_greedy or NEXT_LR1 == "greedy" or lr1 == 0:
         idx = greedy_lr1(last_losses)
     elif NEXT_LR1 == "eps_greedy":
         eps = EPS_GREEDY_VAL
         if EPS_GREEDY_DECAY:
             eps *= (num_segs - seg) / (num_segs - 1)
         idx = eps_greedy_lr1(last_losses, lrs, eps, EPS_GREEDY_ABSOLUTE)
+    elif NEXT_LR1 == "greedy_with_reg":
+        if GREEDY_REG_FN == "tanh":
+            reg_fn = tanh_reg_fn_wrapper(
+                lam=GREEDY_REG_LAM * (num_segs - seg) / (num_segs - 1),
+                k=GREEDY_REG_TANH_K,
+            )
+        else:
+            raise ValueError(f"unsupported reg fn: '{GREEDY_REG_FN}'.")
+        lr_ratios = [lr2/lr1 for lr2 in lrs]
+        idx = greedy_with_lr_reg(last_losses, lr_ratios, reg_fn)
     # Add your customized methods below.
     else:
         raise ValueError(f"unsupport lr1 mechanism = '{NEXT_LR1}'.")
