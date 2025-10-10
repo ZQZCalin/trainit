@@ -100,12 +100,11 @@ echo "\$(date '+%Y-%m-%d %H:%M:%S') - Job \$JOB_ID completed with status \$statu
 
 # Write progress log to progress file (with writing lock)
 log="\$(date '+%Y-%m-%d %H:%M:%S') \$JOB_ID \$status $lr1 $lr2 $seg"
-printf '%s\n' "\$log" >> $PROGRESS_PATH
-# Changed from flock and lock to printf for atomic one line writing
-# (
-#     flock -x -w 60 200 || { echo "\$(date '+%Y-%m-%d %H:%M:%S') - write error: could not write within 60 seconds" >&2; exit 1; }
-#     echo \$log >> $PROGRESS_PATH
-# ) 200>${PROGRESS_PATH}.lock
+# printf '%s\n' "\$log" >> $PROGRESS_PATH
+(
+    flock -w 60 9 || { echo "\$(date '+%Y-%m-%d %H:%M:%S') - write error at ${job_name}" >&2; exit 1; }
+    printf '%s\n' "\$log" >> "$PROGRESS_PATH"
+) 9>"${PROGRESS_PATH}.lock"
 
 echo "\$(date '+%Y-%m-%d %H:%M:%S') - Successfully updated log to the progress file."
 EOF

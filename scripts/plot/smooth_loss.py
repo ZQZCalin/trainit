@@ -167,10 +167,17 @@ checkpoint_runs = {
     "baseline_step10k_semi_local_lr1e-4":    SmoothConfig(func=load_wandb, steps=10000, path="/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-22/baseline_step10k_semi_local/lr_1e-4"),
 }
 
+new_runs = {
+    "semi_local_step10k_eps0.12": SmoothConfig(func=load_json, steps=10000, path="/projectnb/aclab/qinziz/trainit/scripts/plot/local_data/semi-local_step10k_eps0.12"),
+    "semi_local_step10k_eps0.24": SmoothConfig(func=load_json, steps=10000, path="/projectnb/aclab/qinziz/trainit/scripts/plot/local_data/semi-local_step10k_eps0.24"),
+}
+
 
 if __name__ == "__main__":
-    runs = checkpoint_runs
-    path = "checkpoint_smooth.json"
+    # runs = checkpoint_runs
+    # path = "checkpoint_smooth.json"
+    runs = new_runs
+    path = "checkpoint_smooth_new.json"
 
     check_path(runs)
     main(runs, save_path=path)

@@ -179,7 +179,7 @@ def plot_losses_and_schedules(
 
 
 if __name__ == "__main__":
-    BLUE = 0            # trapezoid
+    BLUE = 0            # WSD
     RED = 3             # semi-local decay
     ORANGE = 1          # semi-local const
     GREEN = 2           # local
@@ -190,7 +190,7 @@ if __name__ == "__main__":
 
     runs = {
         "intro": {
-            "trapezoid": ((BLUE,_,_),  load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
+            "WSD": ((BLUE,_,_),  load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
             "cosine":    (_,     load_wandb, "optimizedlearning/test3/097e95e1-a4e2-400c-8fd3-7a5305b5316e"),
             "semi-local":((RED,_,_),   load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-17/step2k_seg10_lr1e-3_grid20_eps0.48decay_15be1a"),
             "local":     ((GREEN,_,_), load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-19/step2k_seg10_lr1e-3_grid20_eps0.0_9e290b"),
@@ -224,14 +224,14 @@ if __name__ == "__main__":
             "eps=0.48":  ( _,    load_json, "/projectnb/aclab/alee12/trainit3/trainit_project/trainit/scheduler_outputs/2025-09-19/seg20_2k_eps0.48_11daa5"),
         },
         "local_suboptimal": {
-            "trapezoid":     ((BLUE,_,_),  load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
+            "WSD":      ((BLUE,_,_),  load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
             # "cosine":      (_,    load_wandb, "optimizedlearning/test3/097e95e1-a4e2-400c-8fd3-7a5305b5316e"),
-            "local (seg=4)": ((GREEN, LIGHT, "-."), load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-12/step2k_seg4_lr1e-3_grid20_eps0.0_70e394"),
-            "local (seg=10)":((GREEN,_,_), load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-19/step2k_seg10_lr1e-3_grid20_eps0.0_9e290b"),
-            "local (seg=20)":((GREEN, DARK, "--"), load_json,  "/projectnb/aclab/alee12/trainit3/trainit_project/trainit/scheduler_outputs/2025-09-22/seg20_2k_eps0_417bb2"),
+            "seg=4":    ((GREEN, LIGHT, "-."), load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-12/step2k_seg4_lr1e-3_grid20_eps0.0_70e394"),
+            "seg=10":   ((GREEN,_,_), load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-19/step2k_seg10_lr1e-3_grid20_eps0.0_9e290b"),
+            "seg=20":   ((GREEN, DARK, "--"), load_json,  "/projectnb/aclab/alee12/trainit3/trainit_project/trainit/scheduler_outputs/2025-09-22/seg20_2k_eps0_417bb2"),
         },
         "seg10_tune_eps": {
-            "trapezoid": ((BLUE,_,_), load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
+            "WSD": ((BLUE,_,_), load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
             "eps=0.0":   ( _,   load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-19/step2k_seg10_lr1e-3_grid20_eps0.0_9e290b"),
             "eps=0.06":  ( _,   load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-14/step2k_seg10_lr1e-3_grid20_eps0.06_1df4fd"),
             "eps=0.12":  ( _,   load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-15/step2k_seg10_lr1e-3_grid20_eps0.12_b66742"),
@@ -239,30 +239,30 @@ if __name__ == "__main__":
             "eps=0.48":  ( _,   load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-21/step2k_seg10_lr1e-3_grid20_eps0.48_f3f724"),
         },
         "seg10_eps_decay": {
-            "trapezoid":         ((BLUE,_,_),   load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
+            "WSD":         ((BLUE,_,_),   load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
             "eps=0.12 (const)":  ((ORANGE,_,_), load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-15/step2k_seg10_lr1e-3_grid20_eps0.12_b66742"),
             "eps=0.48 (decay)":  ((RED,_,_),    load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-17/step2k_seg10_lr1e-3_grid20_eps0.48decay_15be1a"),
         },
         "semi_local_segments": {
-            "trapezoid": ((BLUE,_,_),   load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
-            "4 segs":    ((ORANGE, LIGHT, "-."), load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-13/step2k_seg4_lr1e-3_grid20_eps0.24_f01f5d"),
-            "10 segs":   ((ORANGE,_,_), load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-15/step2k_seg10_lr1e-3_grid20_eps0.12_b66742"),
-            "20 segs":   ((ORANGE, DARK, "--"), load_json,  "/projectnb/aclab/alee12/trainit3/trainit_project/trainit/scheduler_outputs/2025-09-19/seg20_2k_eps0.48_11daa5"),
+            "WSD": ((BLUE,_,_),   load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
+            "seg=4":    ((ORANGE, LIGHT, "-."), load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-13/step2k_seg4_lr1e-3_grid20_eps0.24_f01f5d"),
+            "seg=10":   ((ORANGE,_,_), load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-15/step2k_seg10_lr1e-3_grid20_eps0.12_b66742"),
+            "seg=20":   ((ORANGE, DARK, "--"), load_json,  "/projectnb/aclab/alee12/trainit3/trainit_project/trainit/scheduler_outputs/2025-09-19/seg20_2k_eps0.48_11daa5"),
         },
         "inspired_schedules": {
-            "trapezoid":  ((BLUE,_,_),   load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
+            "WSD":  ((BLUE,_,_),   load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
             "semi-local": ((RED,_,_),    load_json,  "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-17/step2k_seg10_lr1e-3_grid20_eps0.48decay_15be1a"),
             "quadratic":  ((GREEN,_,_), load_wandb, "optimizedlearning/greedy_lr_schedule/fb34fbd5-4fbc-4cd4-b30b-5e9e259c65b5"),
             "triangle":   ((PURPLE,_,_),      load_wandb, "optimizedlearning/greedy_lr_schedule/2c0eacdb-1e41-4ff8-912c-0cca0c81a54c"),
         },
         "semi_local_steps10k": {
-            "trapezoid":              ((BLUE,_,_), load_json,  "/projectnb/aclab/qinziz/trainit/scripts/plot/local_data/baseline_step10k_trapezoid_lr3.33e-4"),
+            "WSD":              ((BLUE,_,_), load_json,  "/projectnb/aclab/qinziz/trainit/scripts/plot/local_data/baseline_step10k_trapezoid_lr3.33e-4"),
             "semi-local (2ksteps)":   ((RED,_,_),  load_wandb, "optimizedlearning/greedy_lr_schedule/9e378f19-099a-4c85-a441-d22f02052ac7"),
             "semi-local (eps=0.12)":  ( _,   load_json,  "/projectnb/aclab/qinziz/trainit/scripts/plot/local_data/semi-local_step10k_eps0.12"),
             "semi-local (eps=0.24)":  ( _,   load_json,  "/projectnb/aclab/qinziz/trainit/scripts/plot/local_data/semi-local_step10k_eps0.24"),
         },
         "seg20_tune_eps": {
-            "trapezoid":         ((BLUE,_,_),   load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
+            "WSD":         ((BLUE,_,_),   load_wandb, "optimizedlearning/test3/d2a77cfe-d24d-4f0a-95e5-61f50aca514f"),
             "eps=0.0":   ( _,    load_json, "/projectnb/aclab/alee12/trainit3/trainit_project/trainit/scheduler_outputs/2025-09-22/seg20_2k_eps0_417bb2"),
             "eps=0.015": ( _,    load_json, "/projectnb/aclab/alee12/trainit3/trainit_project/trainit/scheduler_outputs/2025-09-21/seg20_2k_eps0.015_7804b1"),
             "eps=0.03":  ( _,    load_json, "/projectnb/aclab/alee12/trainit3/trainit_project/trainit/scheduler_outputs/2025-09-20/seg20_2k_eps0.03_20e645"),
@@ -273,27 +273,30 @@ if __name__ == "__main__":
         },
     }
 
-    # name = "intro"
-    # baseline = None
-    # save_path = f"{name}.png"
-    # fig, _ = plot_losses_and_schedules(runs[name], loss_sigma=20, baseline=baseline)
-    # fig.savefig(f"results/{save_path}", dpi=300, bbox_inches="tight")
+    folder = "new_results"
 
     # for name in [
-    #     "seg20_tune_eps"
-    #     # "local_suboptimal", "seg10_tune_eps", "seg10_eps_decay",
-    #     # "semi_local_segments", "inspired_schedules", "semi_local_steps10k",
+    #     "intro", "seg10", "seg4", "seg10_decay", "seg20"
     # ]:
-    #     baseline = "trapezoid"
-    #     save_path = f"{name}_baseline.png"
+    #     baseline = None
+    #     save_path = f"{name}.png"
     #     fig, _ = plot_losses_and_schedules(runs[name], loss_sigma=20, baseline=baseline)
-    #     fig.savefig(f"results/{save_path}", dpi=300, bbox_inches="tight")
+    #     fig.savefig(f"{folder}/{save_path}", dpi=300, bbox_inches="tight")
 
     for name in [
-        "local_suboptimal", "seg10_tune_eps", "seg10_eps_decay",
+        "local_suboptimal", "seg10_tune_eps", "seg10_eps_decay", "seg20_tune_eps",
         "semi_local_segments", "inspired_schedules", "semi_local_steps10k",
     ]:
-        baseline = "trapezoid"
-        save_path = f"{name}_baseline_logscale.png"
-        fig, _ = plot_losses_and_schedules(runs[name], loss_sigma=20, baseline=baseline, log_scale=True)
-        fig.savefig(f"results/{save_path}", dpi=300, bbox_inches="tight")
+        baseline = "WSD"
+        save_path = f"{name}_baseline.png"
+        fig, _ = plot_losses_and_schedules(runs[name], loss_sigma=20, baseline=baseline)
+        fig.savefig(f"{folder}/{save_path}", dpi=300, bbox_inches="tight")
+
+    # for name in [
+    #     "local_suboptimal", "seg10_tune_eps", "seg10_eps_decay",
+    #     "semi_local_segments", "inspired_schedules", "semi_local_steps10k",
+    # ]:
+    #     baseline = "WSD"
+    #     save_path = f"{name}_baseline_logscale.png"
+    #     fig, _ = plot_losses_and_schedules(runs[name], loss_sigma=20, baseline=baseline, log_scale=True)
+    #     fig.savefig(f"{folder}/{save_path}", dpi=300, bbox_inches="tight")

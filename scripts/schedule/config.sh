@@ -1,13 +1,15 @@
 # Static configuration variables
 
 # PLEASE USE A NEW NAME FOR EVERY NEW EXPERIMENT!
-NAME="step2k_seg10_lr1e-3_grid20_eps0.48"                                   # CHANGE THIS (every experiment)
+NAME="step2k_seg20_lr1e-3_grid20_eps0.48"                                   # CHANGE THIS (every experiment)
 DESC="
-Part of steps=2k, segs=10 experiment
+Part of steps=2k, segs=20 experiment
 
 - initial lr = 1e-3
 - 20 grids: (0/1, 1/2, 2/3, ..., 9/10, 1, 10/9, ..., 3/2, 2/1)
 - eps = 0.48
+- 20 equally spaced segments (100 step per seg)
+- initial lr2 using log grid (1e0, ..., 1e-5)
 "                                                           # CHANGE THIS (every experiment)
 
 # in case of duplicate names, add a 6-digit uuid-v4 to name
@@ -89,7 +91,7 @@ TOTAL_STEPS=2000                                            # CHANGE THIS if nee
 # TOTAL_STEPS=50      # testing
 
 # number of segments
-NUM_SEGMENTS=10
+NUM_SEGMENTS=20
 # NUM_SEGMENTS=3      # testing
 
 # list of checkpoint iterations

@@ -39,9 +39,13 @@ mkdir -p $OUTPUT_PATH
 #     "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-22/baseline_step10k_semi_local/lr_3.33e-4/checkpoint iter_10000_model.ckpt baseline_step10k_semi_local_lr3.33e-4"
 #     "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-22/baseline_step10k_semi_local/lr_1e-4/checkpoint iter_10000_model.ckpt baseline_step10k_semi_local_lr1e-4"
 # )
+# CKPT_LIST=(
+#     "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-23/baseline_step2k_quadratic/lr_3.33e-3/checkpoint iter_2000_model.ckpt baseline_step2k_quadratic_lr3.33e-3"
+#     "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-23/baseline_step2k_quadratic/lr_1e-4/checkpoint iter_2000_model.ckpt baseline_step2k_quadratic_lr1e-4"
+# )
 CKPT_LIST=(
-    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-23/baseline_step2k_quadratic/lr_3.33e-3/checkpoint iter_2000_model.ckpt baseline_step2k_quadratic_lr3.33e-3"
-    "/projectnb/aclab/qinziz/trainit/scheduler_outputs/2025-09-23/baseline_step2k_quadratic/lr_1e-4/checkpoint iter_2000_model.ckpt baseline_step2k_quadratic_lr1e-4"
+    "/projectnb/aclab/alee12/trainit3/trainit_project/trainit/scheduler_outputs/2025-07-28/seg20_10k_eps0.12_b7e26d/checkpoint/9500-10000/lr2:0.00e+00 iter_10000_model.ckpt step10k_semi_local_eps0.12"
+    "/projectnb/aclab/alee12/trainit3/trainit_project/trainit/scheduler_outputs/2025-09-06/seg20_10k_eps0.24_bfaae6/checkpoint/9500-10000/lr2:0.00e+00 iter_10000_model.ckpt step10k_semi_local_eps0.24"
 )
 
 # NO NEED TO CHANGE BELOW

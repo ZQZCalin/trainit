@@ -40,8 +40,9 @@ DEFAULT_LR2_DICT = {
     "baseline": [1e-3],                                 # hard code first segment to match baseline
     "baseline_better": [2e-3],                          # hard code baseline, but better
     "test": [0.1, 0.01],                                # for testing
+    "multi_grid": [1e-2, 3.33e-3, 1e-3, 3.33e-4, 1e-4]
 }
-DEFAULT_LR2_KEY = "baseline"                            # specify lr2 for the first segment
+DEFAULT_LR2_KEY = "log_grid"                            # specify lr2 for the first segment
 assert DEFAULT_LR2_KEY in DEFAULT_LR2_DICT
 DEFAULT_LR2 = DEFAULT_LR2_DICT[DEFAULT_LR2_KEY]
 
@@ -318,10 +319,11 @@ def main():
     parser.add_argument("--num_segs", type=int)
     args = parser.parse_args()
 
-    is_first = args.seg == 0
+    is_start = args.seg == 0
+    is_first = args.seg == 1
     is_last  = args.seg == args.num_segs
 
-    if is_first:
+    if is_start:
         return bash_format(get_default_lr1(), get_default_lr2())
 
     # Fetch losses using WandB API.
@@ -344,7 +346,7 @@ def main():
             logging.error(f"Failed to fetch run {run_id}:\n{e}")
 
     # Customized method to decide lrs in the next segment.
-    best_run = get_best_run(candidates, seg=args.seg, num_segs=args.num_segs, use_greedy=is_last)
+    best_run = get_best_run(candidates, seg=args.seg, num_segs=args.num_segs, use_greedy=is_first or is_last)
     lr1, lr2_candidates = get_next_lrs(best_run)
 
     # Store current best loss and lrs locally.
