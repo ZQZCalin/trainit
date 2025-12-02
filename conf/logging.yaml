@@ -15,22 +15,3 @@ logging:
   wandb_logs_per_sec: 10.0
   
   running_stats_window: 1000
-
-  log_fn: full_log
-  # ===============================================================================================
-  # NOTE: starting from here only matters if you use the default `full_log` LogFn.
-  # tracking additional metrics could incur additional computation and memory cost, and
-  # configs below allow you to save some costs by disabling certain metrics.
-  
-  # *In terms of memory cost:
-  # stores the last gradient g(n-1)
-  store_last_grads: True
-  # stores the sum of past gradients g(1:n-1)
-  store_past_grads: True
-  # stores the change in parameter x(n) - x(n-1)
-  store_last_params: True
-  # *In terms of computation cost:
-  # computes f(x(n-1), zn), which costs an additional forward pass
-  compute_last_loss: True
-  # computes g(x(n-1), zn), which costs an additional forward and backward pass
-  compute_last_grads: False

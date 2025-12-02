@@ -32,7 +32,8 @@ from _src.model import init_model
 from _src.dataset import init_dataloader
 from _src.optimizer import init_optimizer
 from _src.loss import init_loss_fn
-from _src.logger import init_logger
+# from _src.logger import init_logger
+from loggers import init_logger
 
 
 def init_pipeline(

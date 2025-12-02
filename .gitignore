@@ -47,6 +47,7 @@ test_logs/
 test.*
 new_test.py
 test_log.txt
+test_*.py
 
 # other directories
 opt/

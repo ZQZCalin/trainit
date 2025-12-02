@@ -12,23 +12,38 @@ from utils import tree_utils
 from loggers import base
 
 
-class SimpleLogState(NamedTuple):
+class EmptyLoggerState(NamedTuple):
+    """empty state"""
+
+
+def empty_logger(config: DictConfig = None) -> base.Logger:
+    """An empty logger."""
+    def init_fn(params):
+        return EmptyLoggerState, {}
+    
+    def update_fn(state, **kwargs):
+        return EmptyLoggerState, {}
+
+
+class MinimalLoggerState(NamedTuple):
     grads_prev: optax.Updates
     params_prev: optax.Params
     cumulatives: PyTree
 
 
-def simple_log() -> base.Logger:
+def minimal_logger(config: DictConfig = None) -> base.Logger:
     """A very minimal log function.
     
     Examples:
-        >>> from loggings import simple_log
-        >>> logger = simple_log()
+        >>> from loggings import minimal_logger
+        >>> logger = minimal_logger()
         >>> log_state = logger.init(params=...)
         >>> log_state, log_metrics = logger.update(log_state, loss_val=..., params=..., grads=...)
     """
+    del config
+
     def init_fn(params: optax.Params):
-        state = SimpleLogState(
+        state = MinimalLoggerState(
             grads_prev = jnp.zeros_like(params),
             params_prev = params,
             cumulatives = {
@@ -68,7 +83,7 @@ def simple_log() -> base.Logger:
         }
         metric.update(cumulatives)
 
-        state = SimpleLogState(
+        state = MinimalLoggerState(
             grads_prev = grads,
             params_prev = params,
             cumulatives = cumulatives,
@@ -78,8 +93,8 @@ def simple_log() -> base.Logger:
     return base.Logger(init_fn, update_fn)
 
 
-class FullLogState(NamedTuple):
-    """full_log state."""
+class DefaultLoggerState(NamedTuple):
+    """default_logger state."""
     params_prev: Optional[optax.Updates]        # x(n-1)
     grads_prev: Optional[optax.Updates]         # g(n-1)
     grads_hist: Optional[optax.Updates]         # g(1:n-1)
@@ -87,7 +102,7 @@ class FullLogState(NamedTuple):
     metrics_prev: base.LogMetrics
 
 
-def full_log(
+def default_logger(
         config: DictConfig,
 ) -> base.Logger:
     """A more comprehensive log function that tracks advanced statistics
@@ -97,16 +112,16 @@ def full_log(
     you can configure which metrics to track and reduce certain costs.
 
     Args:
-        config: global_config.logging 
+        config: global_config.logger 
 
     Examples:
-        >>> from loggings import full_log
-        >>> logger = full_log(config.logging)
+        >>> from loggings import default_logger
+        >>> logger = default_logger(config.logging)
         >>> log_state = logger.init(params=...)
         >>> log_state, log_metrics = logger.update(log_state, ...)
     """
 
-    log_callback_data = config.log_callback_data
+    # log_callback_data = config.log_callback_data
 
     has_params_prev = config.store_last_params  # stores x(n-1)
     has_grads_prev = config.store_last_grads    # stores g'(n-1) = \nabla f(x(n-1), z(n))
@@ -158,9 +173,9 @@ def full_log(
 
     def init_fn(params: optax.Params):
         """Initializes aux_state from confg."""
-        if not log_callback_data:
-            return None, {}
-        return FullLogState(
+        # if not log_callback_data:
+        #     return None, {}
+        return DefaultLoggerState(
             params_prev = params if has_params_prev else None,
             grads_prev = tree_utils.zeros_like(params) if has_grads_prev else None,
             grads_hist = tree_utils.zeros_like(params) if has_grads_hist else None,
@@ -186,8 +201,8 @@ def full_log(
             grads: g(x_n, z_n)
             updates: Delta_(n+1), dependent of g(x_n, z_n)
         """
-        if not log_callback_data:
-            return None, {}
+        # if not log_callback_data:
+        #     return None, {}
         
         # `apply_if_finite` wrapper.
         def reject_update(state):

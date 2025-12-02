@@ -4,6 +4,7 @@ from omegaconf import DictConfig
 import loggers
 
 
+# NOTE: deprecated. latest version uses logger.init_logger()
 def init_logger(config: DictConfig) -> loggers.Logger:
     """Initializes the logger function.
     

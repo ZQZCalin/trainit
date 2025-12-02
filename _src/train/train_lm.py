@@ -51,8 +51,13 @@ def train_step(
     use_amp = config.train.use_amp
     amp_precision = config.train.precision
     use_log_callback = config.logging.wandb_project != None and config.logging.log_callback_data
-    use_forward_prev = config.logging.compute_last_loss and use_log_callback
-    use_back_prev = config.logging.compute_last_grads and use_log_callback
+    # TODO: this only enables when using default logger; needs a better incorporation of logger
+    if config.logger.logger_name == "default":
+        use_forward_prev = config.logger.compute_last_loss and use_log_callback
+        use_back_prev = config.logger.compute_last_grads and use_log_callback
+    else:
+        use_forward_prev = False
+        use_back_prev = False
 
     model = train_state.model                                       # x_n
     opt_state = train_state.opt_state
@@ -95,20 +100,20 @@ def train_step(
             use_amp=use_amp, 
             amp_precision=amp_precision,
         )
-
-        optim_metrics = get_internal_logs(opt_state)
-        random_scaling = optim_metrics["update/random_scaling"] if "update/random_scaling" in optim_metrics else 1.0
-        if isinstance(logger, type(None)):
-            raise KeyboardInterrupt
-        log_state, log_metrics = logger.update(
-            log_state, loss=loss, loss_prev=loss_prev, 
-            params=eqx.filter(model, eqx.is_array),
-            grads=grads, updates=updates,
-            random_scaling=random_scaling,
-        )
-        log_metrics.update(optim_metrics)
     else:
-        log_metrics = {}
+        loss_prev=loss
+
+    optim_metrics = get_internal_logs(opt_state)
+    random_scaling = optim_metrics.get("update/random_scaling", 1.0)
+    if isinstance(logger, type(None)):
+        raise KeyboardInterrupt
+    log_state, log_metrics = logger.update(
+        log_state, loss=loss, loss_prev=loss_prev, 
+        params=eqx.filter(model, eqx.is_array),
+        grads=grads, updates=updates,
+        random_scaling=random_scaling,
+    )
+    log_metrics.update(optim_metrics)
 
     # Update new train_state.
     train_state = train_state._replace(
@@ -201,6 +206,12 @@ def lm_train_loop(
         pbar.set_description(
             f"train iter: {it}, tokens: {total_tokens}, loss: {loss:.2f}, accuracy: {accuracy:.4f}, running_loss: {running_loss/(1.0-beta**(it+1)):.2f}, running_accuracy: {running_accuracy/(1.0-beta**(it+1)):.4f}"
         )
+
+        # TODO: modular implementation using a stateless and configurable function, e.g., 
+        #   >>> early_stop_detector = average_outlier_detector(early_stop_config)
+        #   >>> check: bool = early_stop_detector(early_stop_state)
+        # This way, we can construct early_stop_detector from config and serialize its state for checkpoint.
+        # We can also stack multiple early stop conditions together.
 
         # Auto-terminate if there are too many consecutive nan losses.
         num_nans = train_state.num_nans

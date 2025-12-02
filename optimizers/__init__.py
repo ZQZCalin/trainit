@@ -44,3 +44,7 @@ from optimizers.preconditioners.combine import (
 )
 from optimizers.preconditioners.normalized_sgdm import normalized_sgdm
 from optimizers.optim_test import test_optimizer
+from optimizers.meta_grad import (
+    wrap_with_meta_gradient,
+    init_wrap_with_meta_gradient,
+)

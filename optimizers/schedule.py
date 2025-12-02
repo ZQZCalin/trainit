@@ -3,6 +3,7 @@
 import optax
 from jaxtyping import Array
 import jax.numpy as jnp
+from omegaconf import DictConfig
 
 
 def get_current_lr(
@@ -221,6 +222,70 @@ def semi_local_schedule(
         lr = base_schedule(10*count/total_steps) * peak_value
         return lr
     return schedule
+
+
+def warmup_constant_schedule(
+        peak_value: float,
+        warmup_steps: int,
+        init_value: float = 0.0,
+) -> optax.Schedule:
+    return optax.linear_schedule(
+        init_value=init_value,
+        end_value=peak_value,
+        transition_steps=warmup_steps,
+    )
+
+
+def init_constant_schedule(config: DictConfig) -> optax.Schedule:
+    return optax.constant_schedule(config.value)
+
+
+def init_warmup_constant_schedule(config: DictConfig) -> optax.Schedule:
+    return warmup_constant_schedule(
+        peak_value=config.value,
+        warmup_steps=config.warmup,
+    )
+
+
+def init_linear_decay_schedule(config: DictConfig) -> optax.Schedule:
+    return linear_decay_schedule(
+        init_value=config.value,
+        decay_steps=config.total_steps,
+    )
+
+
+def init_warmup_linear_decay_schedule(config: DictConfig) -> optax.Schedule:
+    return warmup_linear_decay_schedule(
+        init_value=0.0,
+        peak_value=config.value,
+        warmup_steps=config.warmup,
+        decay_steps=config.total_steps,
+    )
+
+
+def init_wsd_schedule(config: DictConfig) -> optax.Schedule:
+    return trapezoid_schedule(
+        peak_value=config.value,
+        total_steps=config.total_steps,
+        warmup_steps=config.warmup,
+        decay_steps=config.decay,
+    )
+
+
+def init_schedule(config: DictConfig) -> optax.ScalarOrSchedule:
+    """All-in-one init function for schedules."""
+    name = config.schedule_name
+    if name == "constant":
+        return init_constant_schedule(config)
+    if name == "warmup_constant":
+        return init_warmup_constant_schedule(config)
+    if name == "linear_decay":
+        return init_linear_decay_schedule(config)
+    if name == "warmup_linear_decay":
+        return init_warmup_linear_decay_schedule(config)
+    if name == "warmup_stable_decay":
+        return init_wsd_schedule(config)
+    raise ValueError(f"unsupported schedule '{name}'")
 
 
 if __name__ == "__main__":

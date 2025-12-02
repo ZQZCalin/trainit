@@ -5,7 +5,6 @@ from typing import Any, Dict, Tuple, NamedTuple, Protocol
 from jaxtyping import Array, PyTree
 from utils import merge_dicts, list_of_logs
 
-
 LogState = NamedTuple
 LogMetrics = dict[Array]
 

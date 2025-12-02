@@ -2,11 +2,14 @@ defaults:
   - model: gpt
   - dataset: pile
   - optimizer: adamw
+  - /optimizer/wrapper@optimizer.wrapper: null
+  - logger: null
   - train
   - logging
   - checkpoint
   - experimental
   - test
+  - _self_
 
 # NOTE: since v2.0, the global random_seed is deprecated 
 # and is replaced by specific seeds in each section.

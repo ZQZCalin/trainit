@@ -424,6 +424,8 @@ def init_optimizer(
         pass
     elif wrapper_name == "adamw_2dmask":
         optimizer = wrap_adamw_2dmask(optimizer, wrapper_config, opt_config.lr_config)
+    elif wrapper_name == "meta_grad":
+        optimizer = optimizers.init_wrap_with_meta_gradient(optimizer, wrapper_config)
     else:
         raise ValueError(f"invalid config: wrapper.name = '{wrapper_name}'.")
 
