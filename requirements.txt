@@ -18,3 +18,4 @@ equinox==0.11.3
 datasets==2.18.0
 transformers==4.38.2
 jaxamp
+jax[cuda12]==0.4.28

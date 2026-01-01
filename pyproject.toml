@@ -1,0 +1,26 @@
+[project]
+name = "trainit"
+version = "0.1.0"
+authors = [
+  { name="Qinzi Zhang", email="qinzi.zhang21@gmail.com" },
+]
+description = "training pipeline for easily running experiments with JAX."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "datasets==2.18.0",
+    "einops>=0.8.1",
+    "equinox==0.11.3",
+    "hydra-core>=1.3.2",
+    "jax[cuda12]==0.4.28",
+    "jaxamp>=0.0.4",
+    "loadit>=0.0.8",
+    "optax==0.2.2",
+    "scipy==1.12.0",
+    "torch==2.2.2",
+    "torchvision>=0.17.2",
+    "tqdm>=4.67.1",
+    "transformers==4.38.2",
+    "wandb>=0.23.1",
+    "watchdog==4.0.2",
+]

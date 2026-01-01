@@ -120,8 +120,8 @@ def wrap_with_meta_gradient(
     def get_log_state(lr, meta_grad, reg_grad):
         return log_utils.Log({
             "meta_grad_lr": lr,
-            "meta_grad": meta_grad,
-            "reg_grad": reg_grad,
+            "optim/meta_grad": meta_grad,
+            "optim/reg_grad": reg_grad,
         })
 
     def init_fn(params: optax.Params):

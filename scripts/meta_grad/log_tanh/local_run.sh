@@ -54,6 +54,13 @@ args=(
     "optimizer.use_nesterov=$NESTEROV"
 )
 
+# test logger
+args+=(
+    "logger.log_update_grad_corr=true"
+    "logger.log_ema_update_grad_corr=true"
+    "logger.update_ema_constant=0.9"
+)
+
 # optimizer with meta-gradient
 args+=(
     "optimizer/lr_config=constant"  # fix base optimizer schedule to constantly one
@@ -83,4 +90,6 @@ args+=(
 #-------------------------------------------------------------------------
 # __main__
 
-python main.py ${args[@]} 2>&1 | tee .log
+# python main.py ${args[@]} 2>&1 | tee .log
+
+uv run main.py ${args[@]} 2>&1 | tee .log

@@ -1,2 +1,4 @@
 logger_name: "meta_grad"
-
+log_update_grad_corr: false       # log <u_{t-1}, g_t>
+log_ema_update_grad_corr: false   # log <ema(u_i), g_t>
+update_ema_constant: 0.0

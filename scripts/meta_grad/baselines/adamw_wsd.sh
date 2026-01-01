@@ -9,8 +9,8 @@
 # Some global variables and the `submit_job()` function
 
 BASE_DIR=/projectnb/aclab/qinziz/trainit
-EXP=reg-WD_metagrad-SGDM
-PROJECT=meta_grad_with_reg
+EXP=adamw-wsd-baseline
+PROJECT=lr_baselines
 
 #-------------------------------------------------------------------------
 # Submit job function. No need to change.
@@ -95,55 +95,39 @@ base_args=(
     "optimizer.use_nesterov=$NESTEROV"
 )
 
+# add logger
+LOG_EMA=0.9
+base_args+=(
+    "logger.log_update_grad_corr=true"
+    "logger.log_ema_update_grad_corr=true"
+    "logger.update_ema_constant=$LOG_EMA"
+)
 
 
 #-------------------------------------------------------------------------
 # Batch submission
 
-# Since we observed the performance depends more on lr instead of base_lr,
-# we can use a smaller grid.
-base_lrs=(1e-8 1e-6 1e-4 1e-2)
+schedule=trapezoid
+warmup=200
+decays=(0 200 400 600 800 1000)
+# base_lrs=(0.1)
+base_lrs=(3.33e-2 1e-2 3.33e-3 1e-3 3.33e-4 1e-4 3.33e-5 1e-5)
 
-lr_schedule=constant
-lr_values=(1e-3 1e-4 1e-5 1e-6 1e-7 1e-8)
 
-momentums=(0.9 0.99 0.999)
-
-reg_schedule=warmup_linear_decay
-reg_value=1e-2
-reg_warmup=200
-
-decay_schedule=constant
-decay_value=0.2
-
-for momentum in "${momentums[@]}"; do
-    for lr_value in "${lr_values[@]}"; do
-        for base_lr in "${base_lrs[@]}"; do
-            name="m-${momentum}_base-${base_lr}_lr-${lr_value}"
-            runid="$(uuidgen)"
-            args="${base_args[@]}"
-            args+=(
-                "logging.wandb_name=$name"
-                "logging.wandb_runid=$runid"
-                "optimizer/lr_config=constant"  # fix base optimizer schedule to constantly one
-                "optimizer.lr_config.lr=1.0"
-                "optimizer/wrapper=meta_grad"
-                "optimizer.wrapper.base_lr=$base_lr"
-                "optimizer.wrapper.clip_min=1e-8"
-                "optimizer.wrapper.clip_max=null"
-                "optimizer.wrapper.momentum=$momentum"
-                "optimizer.wrapper.learning_rate.schedule_name=$lr_schedule"
-                "optimizer.wrapper.learning_rate.value=$lr_value"
-                "optimizer.wrapper.regularizer.name=log_tanh"
-                "optimizer.wrapper.regularizer.regularization.schedule_name=$reg_schedule"
-                "optimizer.wrapper.regularizer.regularization.value=$reg_value"
-                "optimizer.wrapper.regularizer.regularization.warmup=$reg_warmup"
-                "optimizer.wrapper.regularizer.regularization.total_steps=$TOTAL_STEPS"
-                "optimizer.wrapper.regularizer.decay.schedule_name=$decay_schedule"
-                "optimizer.wrapper.regularizer.decay.value=$decay_value"
-            )
-            submit_job $name $runid ${args[@]}
-            # echo "${args[@]}"
-        done
+for decay in "${decays[@]}"; do
+    for lr in "${base_lrs[@]}"; do
+        name="w-${warmup}_d-${decay}_lr-${lr}"
+        runid="$(uuidgen)"
+        args="${base_args[@]}"
+        args+=(
+            "logging.wandb_name=$name"
+            "logging.wandb_runid=$runid"
+            "optimizer/lr_config=$schedule"
+            "optimizer.lr_config.lr=$lr"
+            "optimizer.lr_config.warmup=$warmup"
+            "optimizer.lr_config.decay=$decay"
+            "optimizer.lr_config.max_steps=$TOTAL_STEPS"
+        )
+        submit_job $name $runid ${args[@]}
     done
 done
