@@ -66,3 +66,5 @@ loadit_iterator.py
 *.jpg
 *.jpeg
 *.json
+
+psub-data
