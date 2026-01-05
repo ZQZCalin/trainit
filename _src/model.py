@@ -16,7 +16,7 @@ def init_tokenizer(config: DictConfig):
         config: global_config.model. 
             if config.pad_token is true, adds pad_token as a special token.
     """
-    if config.name == "gpt":
+    if config.name in ["gpt", "modded_nanogpt"]:
         tokenizer = transformers.GPT2TokenizerFast.from_pretrained("gpt2")
         if config.pad_token:
             tokenizer.add_special_tokens({"pad_token": "<|pad|>"})
@@ -43,6 +43,10 @@ def init_language_model(
     if config.name == "gpt":
         vocab_size = len(tokenizer)
         model = models.GPT(vocab_size, config, key=key)
+        return model
+    if config.name == "modded_nanogpt":
+        vocab_size = len(tokenizer)
+        model = models.ModdedNanogpt(vocab_size, config, key=key)
         return model
     else:
         raise ValueError(f"invalid config: model.name '{config.name}' is not supported.")

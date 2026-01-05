@@ -4,6 +4,7 @@ language_models = [
     "gpt",
     "bert",
     "llama",
+    "modded_nanogpt",
 ]
 
 vision_models = [
