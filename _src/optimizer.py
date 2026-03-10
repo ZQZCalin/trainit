@@ -241,6 +241,25 @@ def init_optimizer(
             adam_wd=config.adam_wd
         )
     
+    def init_flip_muon(config: DictConfig):
+        muon_lr = wrap_scheduler(
+            init_schedule(config.lr_config), wandb_log=wandb_log)
+        adam_lr_config = OmegaConf.create(config.lr_config)     # creates a copy of lr_config
+        adam_lr_config.lr = config.adam_lr
+        adam_lr = wrap_scheduler(
+            init_schedule(adam_lr_config), wandb_log=wandb_log, schedule_title="adam_schedule")
+        return optimizers.flip_muon(
+            learning_rate=muon_lr,
+            momentum=config.momentum,
+            nesterov=config.nesterov,
+            ns_steps=config.ns_steps,
+            adam_lr=adam_lr,
+            adam_beta1=config.adam_beta1,
+            adam_beta2=config.adam_beta2,
+            adam_eps=config.adam_eps,
+            adam_wd=config.adam_wd
+        )
+    
     def init_muon_og(config: DictConfig):
         muon_lr = wrap_scheduler(
             init_schedule(config.lr_config), wandb_log=wandb_log)
@@ -380,6 +399,8 @@ def init_optimizer(
         optimizer = init_sgdm(opt_config)
     elif name == "muon":
         optimizer = init_muon(opt_config)
+    elif name == "flip_muon":
+        optimizer = init_flip_muon(opt_config)
     elif name == "muon_og":
         optimizer = init_muon_og(opt_config)
     elif name == "muon_adamw":

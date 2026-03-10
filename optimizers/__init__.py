@@ -28,6 +28,7 @@ from optimizers.schedule import (
 from optimizers.muon.muon import scale_by_muon
 from optimizers.muon.muon import (
     muon,
+    flip_muon,
     muon_og,
 )
 from optimizers.muon.muon_laprop import (
